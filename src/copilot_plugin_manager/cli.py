@@ -17,6 +17,7 @@ from .paths import ManagerPaths
 from .rendering import (
     build_target_tree,
     console,
+    render_mcps,
     render_overview,
     render_plugins,
     render_providers,
@@ -62,6 +63,7 @@ class ListSection(StrEnum):
     plugins = "plugins"
     skills = "skills"
     agents = "agents"
+    mcps = "mcps"
 
 
 class ManagedTarget(StrEnum):
@@ -69,6 +71,7 @@ class ManagedTarget(StrEnum):
     plugins = "plugins"
     skills = "skills"
     agents = "agents"
+    mcps = "mcps"
     thirdparty = "thirdparty"
 
 
@@ -201,6 +204,8 @@ def list_command(
             term.print(render_providers(manager.catalog, "skill"))
         case ListSection.agents:
             term.print(render_providers(manager.catalog, "agent"))
+        case ListSection.mcps:
+            term.print(render_mcps(manager.catalog))
         case ListSection.all:
             for renderable in render_overview(manager.catalog, active_target, repo_hint):
                 term.print(renderable)
@@ -208,6 +213,7 @@ def list_command(
             term.print(render_plugins(manager.catalog))
             term.print(render_providers(manager.catalog, "skill"))
             term.print(render_providers(manager.catalog, "agent"))
+            term.print(render_mcps(manager.catalog))
 
 
 @app.command(
@@ -408,6 +414,133 @@ def self_update_command(
     """Update this checkout from git and then run a repository refresh."""
     revisions = get_manager().self_update(_cwd(cwd))
     console().print(_revision_table("Updated revisions", revisions))
+
+
+def _mcp_results_table(title: str, results: dict[str, str]) -> None:
+    from rich import box
+    from rich.table import Table
+
+    table = Table(title=title, box=box.ROUNDED, expand=True)
+    table.add_column("MCP")
+    table.add_column("Action")
+    for name, action in results.items():
+        style = {"added": "green", "updated": "yellow", "removed": "red", "skipped": "dim"}.get(action, "")
+        table.add_row(name, action, style=style)
+    console().print(table)
+
+
+@app.command(
+    "mcp-sync",
+    short_help="Sync default and local MCP servers.",
+    help=(
+        "Reconcile the MCP server catalog with [cyan]~/.copilot/mcp-config.json[/cyan]. "
+        "Adds missing entries, updates outdated ones, and merges local MCP definitions "
+        "from [cyan].vscode/mcp.json[/cyan] in the current repository. "
+        "Uses npm version tags where available; falls back to pinned SHA if none exists."
+    ),
+    epilog=(
+        "\b\nExamples:\n"
+        "  copilot-plugin-manager mcp-sync\n"
+        "  copilot-plugin-manager mcp-sync --cwd /path/to/repo\n"
+        "  copilot-plugin-manager mcp-sync --no-probe-version\n"
+        "  copilot-plugin-manager mcp-sync --remove-unlisted"
+    ),
+)
+def mcp_sync_command(
+    cwd: Annotated[
+        Path | None,
+        typer.Option(
+            "--cwd",
+            help="Working directory used for local MCP discovery (.vscode/mcp.json).",
+            rich_help_panel="Repository context",
+        ),
+    ] = None,
+    probe_version: Annotated[
+        bool,
+        typer.Option(
+            "--probe-version/--no-probe-version",
+            help="Probe npm registry for the latest version tag before writing the config.",
+            rich_help_panel="Sync behaviour",
+        ),
+    ] = True,
+    remove_unlisted: Annotated[
+        bool,
+        typer.Option(
+            "--remove-unlisted/--keep-unlisted",
+            help="Remove MCP entries from the config that are not in the catalog or local definitions.",
+            rich_help_panel="Sync behaviour",
+        ),
+    ] = False,
+) -> None:
+    """Sync catalog and local MCP servers into ~/.copilot/mcp-config.json."""
+    manager = get_manager()
+    results = manager.reconcile_mcps(_cwd(cwd), probe_version=probe_version, remove_unlisted=remove_unlisted)
+    _mcp_results_table("MCP sync results", results)
+
+
+@app.command(
+    "mcp-add",
+    short_help="Add a single MCP server entry.",
+    help=(
+        "Add or overwrite a named MCP server entry in [cyan]~/.copilot/mcp-config.json[/cyan]. "
+        "For catalog MCPs, version is probed from npm automatically. "
+        "Pass [cyan]--no-probe-version[/cyan] to skip version probing."
+    ),
+    epilog=(
+        "\b\nExamples:\n"
+        "  copilot-plugin-manager mcp-add playwright\n"
+        "  copilot-plugin-manager mcp-add context7\n"
+        "  copilot-plugin-manager mcp-add my-custom --no-probe-version"
+    ),
+)
+def mcp_add_command(
+    name: Annotated[
+        str,
+        typer.Argument(help="Catalog MCP name to add (see 'list mcps')."),
+    ],
+    probe_version: Annotated[
+        bool,
+        typer.Option(
+            "--probe-version/--no-probe-version",
+            help="Probe npm registry for the latest version tag.",
+            rich_help_panel="Sync behaviour",
+        ),
+    ] = True,
+) -> None:
+    """Add or refresh a single MCP server entry from the catalog."""
+    manager = get_manager()
+    if name not in manager.catalog.mcps:
+        console().print(f"[red]Unknown MCP '{name}'. Run 'list mcps' to see available entries.[/red]")
+        raise typer.Exit(1)
+    record = manager.catalog.mcps[name]
+    state = manager.sync_mcp(name, record, probe_version=probe_version)
+    version_info = state.installed_version or state.installed_sha or "latest"
+    console().print(f"[green]Added MCP '{name}' ({record.kind}, {version_info})[/green]")
+
+
+@app.command(
+    "mcp-remove",
+    short_help="Remove a single MCP server entry.",
+    help=("Remove a named MCP server entry from [cyan]~/.copilot/mcp-config.json[/cyan]."),
+    epilog=(
+        "\b\nExamples:\n"
+        "  copilot-plugin-manager mcp-remove playwright\n"
+        "  copilot-plugin-manager mcp-remove context7"
+    ),
+)
+def mcp_remove_command(
+    name: Annotated[
+        str,
+        typer.Argument(help="MCP server name to remove."),
+    ],
+) -> None:
+    """Remove a named MCP server entry from ~/.copilot/mcp-config.json."""
+    manager = get_manager()
+    removed = manager.remove_mcp(name)
+    if removed:
+        console().print(f"[yellow]Removed MCP '{name}' from config.[/yellow]")
+    else:
+        console().print(f"[dim]MCP '{name}' was not present in config.[/dim]")
 
 
 @app.command(
