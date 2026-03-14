@@ -29,6 +29,38 @@ class FakeRunner(ShellRunner):
         )
 
 
+class GitCloneRunner(FakeRunner):
+    def __init__(self, clone_layouts: dict[str, dict[str, str]] | None = None) -> None:
+        super().__init__()
+        self.clone_layouts = clone_layouts or {}
+
+    def run(
+        self,
+        args: list[str],
+        cwd: Path | None = None,
+        check: bool = True,
+    ) -> CommandResult:
+        self.calls.append(tuple(args))
+        if args[:4] == ["git", "clone", "--depth", "1"]:
+            destination = Path(args[-1])
+            destination.mkdir(parents=True, exist_ok=True)
+            for relative_path, content in self.clone_layouts.get(destination.name, {}).items():
+                target = destination / relative_path
+                target.parent.mkdir(parents=True, exist_ok=True)
+                target.write_text(content)
+            return CommandResult(tuple(args), "", "", 0)
+        if args[:3] == ["git", "pull", "--ff-only"]:
+            return CommandResult(tuple(args), "", "", 0)
+        if args[:3] == ["git", "rev-parse", "HEAD"]:
+            return CommandResult(tuple(args), "abc123\n", "", 0)
+        return CommandResult(
+            tuple(args),
+            "Installed plugins:\n  • awesome-copilot@awesome-copilot (v1.0.0)\n",
+            "",
+            0,
+        )
+
+
 def test_plugin_actions_for_switch_non_exclusive() -> None:
     manager = PluginManager(
         load_catalog_bundle(),
@@ -53,8 +85,10 @@ def test_sync_skill_provider_from_submodule_layout(tmp_path: Path, monkeypatch) 
     monkeypatch.setenv("COPILOT_HOME", str(tmp_path / ".copilot"))
     bundle = load_catalog_bundle()
     paths = ManagerPaths.from_environment()
-    runner = FakeRunner()
+    runner = GitCloneRunner()
     manager = PluginManager(bundle, paths, runner=runner)
+    source = bundle.repositories["anthropics-skills"]
+    clone_call = ("git", "clone", "--depth", "1", f"https://github.com/{source.owner}/{source.repo}.git", str(paths.sources_dir / "anthropics-skills"))
 
     project = tmp_path / "repo"
     source_root = project / "external" / "anthropics-skills" / "skills" / "pdf" / "sample-skill"
@@ -64,6 +98,31 @@ def test_sync_skill_provider_from_submodule_layout(tmp_path: Path, monkeypatch) 
     manager.sync_skill_provider("anthropic-pdf", project)
 
     assert (paths.skills_dir / "anthropic-pdf__sample-skill").exists()
+    assert clone_call not in runner.calls
+
+
+def test_sync_skill_provider_bootstraps_missing_cached_checkout(tmp_path: Path, monkeypatch) -> None:
+    monkeypatch.setenv("COPILOT_HOME", str(tmp_path / ".copilot"))
+    bundle = load_catalog_bundle()
+    paths = ManagerPaths.from_environment()
+    source = bundle.repositories["anthropics-skills"]
+    clone_call = ("git", "clone", "--depth", "1", f"https://github.com/{source.owner}/{source.repo}.git", str(paths.sources_dir / "anthropics-skills"))
+    runner = GitCloneRunner(
+        {
+            "anthropics-skills": {
+                "skills/pdf/sample-skill/README.md": "sample",
+            }
+        }
+    )
+    manager = PluginManager(bundle, paths, runner=runner)
+
+    project = tmp_path / "repo"
+    project.mkdir()
+
+    manager.sync_skill_provider("anthropic-pdf", project)
+
+    assert (paths.skills_dir / "anthropic-pdf__sample-skill").exists()
+    assert clone_call in runner.calls
 
 
 def test_sync_agent_provider_normalizes_output_name_and_metadata(tmp_path: Path, monkeypatch) -> None:
@@ -146,3 +205,22 @@ def test_source_state_compares_by_revision_before_manifest_version() -> None:
     assert same_revision_newer_manifest.has_comparable_change(previous) is False
     assert changed_revision.has_comparable_change(previous) is True
     assert manifest_only_change.has_comparable_change(SourceState(manifest_version="1.0.0")) is True
+
+
+def test_repo_update_clones_cache_inside_regular_git_repository(tmp_path: Path, monkeypatch) -> None:
+    monkeypatch.setenv("COPILOT_HOME", str(tmp_path / ".copilot"))
+    bundle = load_catalog_bundle()
+    paths = ManagerPaths.from_environment()
+    runner = GitCloneRunner()
+    manager = PluginManager(bundle, paths, runner=runner)
+
+    project = tmp_path / "repo"
+    project.mkdir()
+    (project / ".git").mkdir()
+
+    revisions = manager.repo_update(project, remote=False)
+
+    clone_calls = [call for call in runner.calls if call[:4] == ("git", "clone", "--depth", "1")]
+    assert len(clone_calls) == len(bundle.repositories)
+    assert revisions["anthropics-skills"] == "abc123"
+    assert (paths.sources_dir / "anthropics-skills").exists()

@@ -181,6 +181,27 @@ class PluginManager:
         cached = self.paths.sources_dir / source_name
         if cached.exists():
             return cached
+        return self._clone_source_checkout(source_name)
+
+    def _clone_source_checkout(self, source_name: str) -> Path:
+        source = self.catalog.repository_details(source_name)
+        cache_dir = self.paths.sources_dir / source_name
+        if cache_dir.exists():
+            return cache_dir
+        self.paths.ensure_directories()
+        self.runner.require("git")
+        self.runner.run(
+            [
+                "git",
+                "clone",
+                "--depth",
+                "1",
+                f"https://github.com/{source.owner}/{source.repo}.git",
+                str(cache_dir),
+            ]
+        )
+        if cache_dir.exists():
+            return cache_dir
         raise RuntimeError(f"Source checkout missing for {source_name}. Initialize the configured submodules or run repo-update first.")
 
     def _copy_fs_path(self, source: Path, destination: Path) -> None:
@@ -530,20 +551,13 @@ class PluginManager:
             for name, source in self.catalog.repositories.items():
                 progress.update(task_id, description=f"Refreshing source {name}")
                 cache_dir = self.paths.sources_dir / name
+                submodule_checkout = project_root / source.submodule_path if project_root is not None else None
+                use_cache = submodule_checkout is None or not submodule_checkout.exists()
                 if cache_dir.exists():
                     self.runner.run(["git", "pull", "--ff-only"], cwd=cache_dir)
-                elif project_root is None:
-                    self.runner.run(
-                        [
-                            "git",
-                            "clone",
-                            "--depth",
-                            "1",
-                            f"https://github.com/{source.owner}/{source.repo}.git",
-                            str(cache_dir),
-                        ]
-                    )
-                if cache_dir.exists():
+                elif use_cache:
+                    self._clone_source_checkout(name)
+                if use_cache and cache_dir.exists():
                     observed = self.current_source_state(cache_dir)
                     revisions.setdefault(name, observed.revision)
                     self.state_store.mark_source_revision(
