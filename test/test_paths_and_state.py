@@ -1,6 +1,6 @@
 from pathlib import Path
 
-from copilot_plugin_manager.models import ActivationTarget
+from copilot_plugin_manager.models import ActivationTarget, SourceState
 from copilot_plugin_manager.paths import ManagerPaths, find_repo_profile
 from copilot_plugin_manager.state import StateStore
 
@@ -48,3 +48,29 @@ def test_state_store_persists_source_revision_and_manifest_version(tmp_path: Pat
     assert saved.measured_at is not None
     assert saved.last_seen_at is not None
     assert saved.updated_at is not None
+
+
+def test_state_store_persists_provider_sync_state(tmp_path: Path, monkeypatch) -> None:
+    monkeypatch.setenv("COPILOT_HOME", str(tmp_path / ".copilot"))
+    paths = ManagerPaths.from_environment()
+    store = StateStore(paths)
+
+    store.write_provider_state(
+        "skill",
+        "anthropic-pdf",
+        "anthropics-skills",
+        SourceState(revision="abc123", manifest_version="1.2.3", source_path="pyproject.toml"),
+        ["anthropic-pdf__sample-skill"],
+        "sig-123",
+    )
+    saved = store.read_provider_state("skill", "anthropic-pdf")
+
+    assert saved is not None
+    assert saved.source == "anthropics-skills"
+    assert saved.revision == "abc123"
+    assert saved.outputs == ["anthropic-pdf__sample-skill"]
+    assert saved.definition_signature == "sig-123"
+
+    store.clear_provider_state("skill", "anthropic-pdf")
+
+    assert store.read_provider_state("skill", "anthropic-pdf") is None

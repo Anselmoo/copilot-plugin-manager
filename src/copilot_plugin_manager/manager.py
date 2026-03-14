@@ -1,10 +1,12 @@
 from __future__ import annotations
 
+import hashlib
 import json
 import re
 import shutil
 import tomllib
 from pathlib import Path
+from typing import Literal
 
 from rich.progress import BarColumn, Progress, SpinnerColumn, TaskProgressColumn, TextColumn, TimeElapsedColumn
 
@@ -298,7 +300,7 @@ class PluginManager:
             return
         for prefix in prefixes:
             for child in root.iterdir():
-                if child.name.startswith(f"{prefix}__") or child.name.startswith(f"{prefix}-"):
+                if child.name.startswith(f"{prefix}__"):
                     if child.is_dir() and not child.is_symlink():
                         shutil.rmtree(child)
                     else:
@@ -318,12 +320,93 @@ class PluginManager:
     def _prefixed_content_exists(self, root: Path, prefix: str) -> bool:
         if not root.exists():
             return False
-        return any(child.name.startswith(f"{prefix}__") or child.name.startswith(f"{prefix}-") for child in root.iterdir())
+        return any(child.name.startswith(f"{prefix}__") for child in root.iterdir())
 
-    def sync_skill_provider(self, provider_name: str, cwd: Path) -> None:
+    def _existing_outputs(self, root: Path, outputs: list[str]) -> bool:
+        return bool(outputs) and all((root / output).exists() for output in outputs)
+
+    def _provider_definition_signature(self, kind: Literal["skill", "agent"], provider_name: str) -> str:
+        provider = self.catalog.provider_registry(kind)[provider_name]
+        payload: dict[str, object] = {
+            "kind": kind,
+            "source": provider.source,
+            "prefix": provider.prefix,
+            "roots": provider.roots,
+        }
+        if kind == "agent":
+            payload["entrypoints"] = [
+                {"source_path": entry.source_path, "local_output": entry.local_output}
+                for entry in sorted(
+                    self.catalog.entrypoint_records(kind, provider=provider_name),
+                    key=lambda entry: (entry.source_path, entry.local_output),
+                )
+            ]
+        return hashlib.sha256(json.dumps(payload, sort_keys=True).encode("utf-8")).hexdigest()
+
+    def _provider_outputs_current(
+        self,
+        kind: Literal["skill", "agent"],
+        provider_name: str,
+        provider_source: str,
+        observed: SourceState,
+        root: Path,
+        prefix: str,
+    ) -> bool:
+        stored = self.state_store.read_provider_state(kind, provider_name)
+        if stored is None or stored.source != provider_source:
+            return False
+        if stored.definition_signature != self._provider_definition_signature(kind, provider_name):
+            return False
+        previous = SourceState(
+            revision=stored.revision,
+            manifest_version=stored.manifest_version,
+            source_path=stored.source_path,
+        )
+        if observed.has_comparable_change(previous):
+            return False
+        return self._existing_outputs(root, stored.outputs) or (not stored.outputs and self._prefixed_content_exists(root, prefix))
+
+    def _record_provider_sync(
+        self,
+        kind: Literal["skill", "agent"],
+        provider_name: str,
+        provider_source: str,
+        observed: SourceState,
+        outputs: list[str],
+    ) -> None:
+        if outputs:
+            self.state_store.write_provider_state(
+                kind,
+                provider_name,
+                provider_source,
+                observed,
+                outputs,
+                self._provider_definition_signature(kind, provider_name),
+            )
+            return
+        self.state_store.clear_provider_state(kind, provider_name)
+
+    def _clear_provider_states(self, kind: Literal["skill", "agent"], provider_names: list[str]) -> None:
+        for provider_name in provider_names:
+            self.state_store.clear_provider_state(kind, provider_name)
+
+    def _claim_agent_source_paths(self, provider_name: str, claimed_source_paths: set[tuple[str, str]]) -> None:
+        for entry in self.catalog.entrypoint_records("agent", provider=provider_name):
+            claimed_source_paths.add((entry.source, entry.source_path))
+
+    def sync_skill_provider(
+        self,
+        provider_name: str,
+        cwd: Path,
+        *,
+        source_root: Path | None = None,
+        observed: SourceState | None = None,
+    ) -> list[str]:
         provider = self.catalog.skill_providers[provider_name]
-        source_root = self._resolve_source_checkout(provider.source, cwd)
+        source_root = source_root or self._resolve_source_checkout(provider.source, cwd)
+        observed = observed or self.current_source_state(source_root)
         self.paths.skills_dir.mkdir(parents=True, exist_ok=True)
+        outputs: list[str] = []
         for root in provider.roots:
             source = source_root / root
             if not source.exists():
@@ -331,10 +414,15 @@ class PluginManager:
             if source.is_file():
                 destination = self.paths.skills_dir / f"{provider.prefix}__{source.stem}"
                 self._copy_fs_path(source, destination)
+                outputs.append(destination.name)
                 continue
             for directory in sorted(item for item in source.iterdir() if item.is_dir()):
                 destination = self.paths.skills_dir / f"{provider.prefix}__{directory.name}"
                 self._copy_fs_path(directory, destination)
+                outputs.append(destination.name)
+        synced_outputs = list(dict.fromkeys(outputs))
+        self._record_provider_sync("skill", provider_name, provider.source, observed, synced_outputs)
+        return synced_outputs
 
     def sync_agent_provider(
         self,
@@ -342,10 +430,14 @@ class PluginManager:
         cwd: Path,
         *,
         claimed_source_paths: set[tuple[str, str]] | None = None,
-    ) -> None:
+        source_root: Path | None = None,
+        observed: SourceState | None = None,
+    ) -> list[str]:
         provider = self.catalog.agent_providers[provider_name]
-        source_root = self._resolve_source_checkout(provider.source, cwd)
+        source_root = source_root or self._resolve_source_checkout(provider.source, cwd)
+        observed = observed or self.current_source_state(source_root)
         self.paths.agents_dir.mkdir(parents=True, exist_ok=True)
+        outputs: list[str] = []
         for root in provider.roots:
             source = source_root / root
             if not source.exists():
@@ -370,6 +462,7 @@ class PluginManager:
                     source_path,
                     self._agent_entrypoint(provider_name, provider.source, source_path),
                 )
+                outputs.append(destination.name)
                 continue
             for file_path in sorted(source.rglob("*.md")):
                 if file_path.name == "README.md":
@@ -394,6 +487,34 @@ class PluginManager:
                     source_path,
                     self._agent_entrypoint(provider_name, provider.source, source_path),
                 )
+                outputs.append(destination.name)
+        synced_outputs = list(dict.fromkeys(outputs))
+        self._record_provider_sync("agent", provider_name, provider.source, observed, synced_outputs)
+        return synced_outputs
+
+    def _sync_skill_providers(
+        self,
+        provider_names: list[str],
+        cwd: Path,
+        *,
+        task_title: str,
+        item_label: str,
+    ) -> None:
+        if not provider_names:
+            return
+        with self._new_progress() as progress:
+            task_id = progress.add_task(task_title, total=len(provider_names))
+            for provider_name in provider_names:
+                provider = self.catalog.skill_providers[provider_name]
+                source_root = self._resolve_source_checkout(provider.source, cwd)
+                observed = self.current_source_state(source_root)
+                progress.update(task_id, description=f"{item_label} {provider_name}")
+                if self._provider_outputs_current("skill", provider_name, provider.source, observed, self.paths.skills_dir, provider.prefix):
+                    progress.advance(task_id)
+                    continue
+                self._remove_by_prefix(self.paths.skills_dir, [provider.prefix])
+                self.sync_skill_provider(provider_name, cwd, source_root=source_root, observed=observed)
+                progress.advance(task_id)
 
     def _sync_agent_providers(
         self,
@@ -411,31 +532,51 @@ class PluginManager:
         with self._new_progress() as progress:
             task_id = progress.add_task(task_title, total=len(ordered))
             for provider_name in ordered:
+                provider = self.catalog.agent_providers[provider_name]
+                source_root = self._resolve_source_checkout(provider.source, cwd)
+                observed = self.current_source_state(source_root)
+                entrypoints = self.catalog.entrypoint_records("agent", provider=provider_name)
+                has_claim_conflict = any((entry.source, entry.source_path) in claimed_source_paths for entry in entrypoints)
                 progress.update(task_id, description=f"{item_label} {provider_name}")
-                self.sync_agent_provider(provider_name, cwd, claimed_source_paths=claimed_source_paths)
+                if not has_claim_conflict and self._provider_outputs_current(
+                    "agent",
+                    provider_name,
+                    provider.source,
+                    observed,
+                    self.paths.agents_dir,
+                    provider.prefix,
+                ):
+                    self._claim_agent_source_paths(provider_name, claimed_source_paths)
+                    progress.advance(task_id)
+                    continue
+                self._remove_by_prefix(self.paths.agents_dir, [provider.prefix])
+                self.sync_agent_provider(
+                    provider_name,
+                    cwd,
+                    claimed_source_paths=claimed_source_paths,
+                    source_root=source_root,
+                    observed=observed,
+                )
                 progress.advance(task_id)
 
     def manage_skills(self, operation: str, cwd: Path) -> None:
-        prefixes = [provider.prefix for provider in self.catalog.skill_providers.values()]
         if operation in {"install", "update"}:
-            self._remove_by_prefix(self.paths.skills_dir, prefixes)
-            provider_names = list(self.catalog.skill_providers)
-            with self._new_progress() as progress:
-                task_id = progress.add_task("Syncing skill providers", total=len(provider_names))
-                for provider_name in provider_names:
-                    progress.update(task_id, description=f"Syncing skill provider {provider_name}")
-                    self.sync_skill_provider(provider_name, cwd)
-                    progress.advance(task_id)
+            self._sync_skill_providers(
+                list(self.catalog.skill_providers),
+                cwd,
+                task_title="Syncing skill providers",
+                item_label="Syncing skill provider",
+            )
             return
         if operation == "delete":
-            self._remove_by_prefix(self.paths.skills_dir, prefixes)
+            provider_names = list(self.catalog.skill_providers)
+            self._remove_by_prefix(self.paths.skills_dir, [provider.prefix for provider in self.catalog.skill_providers.values()])
+            self._clear_provider_states("skill", provider_names)
             return
         raise ValueError(f"Unknown skill operation: {operation}")
 
     def manage_agents(self, operation: str, cwd: Path) -> None:
-        prefixes = [provider.prefix for provider in self.catalog.agent_providers.values()]
         if operation in {"install", "update"}:
-            self._remove_by_prefix(self.paths.agents_dir, prefixes)
             self._sync_agent_providers(
                 list(self.catalog.agent_providers),
                 cwd,
@@ -444,7 +585,9 @@ class PluginManager:
             )
             return
         if operation == "delete":
-            self._remove_by_prefix(self.paths.agents_dir, prefixes)
+            provider_names = list(self.catalog.agent_providers)
+            self._remove_by_prefix(self.paths.agents_dir, [provider.prefix for provider in self.catalog.agent_providers.values()])
+            self._clear_provider_states("agent", provider_names)
             return
         raise ValueError(f"Unknown agent operation: {operation}")
 
@@ -469,31 +612,26 @@ class PluginManager:
             self.paths.legacy_active_target_file.write_text("")
 
     def _remove_unselected_skill_providers(self, desired: list[str]) -> None:
-        prefixes = [self.catalog.skill_providers[name].prefix for name in self.catalog.skill_providers if name not in set(desired)]
-        self._remove_by_prefix(self.paths.skills_dir, prefixes)
+        removed = [name for name in self.catalog.skill_providers if name not in set(desired)]
+        self._remove_by_prefix(self.paths.skills_dir, [self.catalog.skill_providers[name].prefix for name in removed])
+        self._clear_provider_states("skill", removed)
 
     def _remove_unselected_agent_providers(self, desired: list[str]) -> None:
-        prefixes = [self.catalog.agent_providers[name].prefix for name in self.catalog.agent_providers if name not in set(desired)]
-        self._remove_by_prefix(self.paths.agents_dir, prefixes)
+        removed = [name for name in self.catalog.agent_providers if name not in set(desired)]
+        self._remove_by_prefix(self.paths.agents_dir, [self.catalog.agent_providers[name].prefix for name in removed])
+        self._clear_provider_states("agent", removed)
 
     def _sync_missing_skill_providers(self, desired: list[str], cwd: Path) -> None:
-        pending = [name for name in desired if not self._prefixed_content_exists(self.paths.skills_dir, self.catalog.skill_providers[name].prefix)]
-        if not pending:
-            return
-        with self._new_progress() as progress:
-            task_id = progress.add_task("Downloading skill providers", total=len(pending))
-            for name in pending:
-                progress.update(task_id, description=f"Downloading skill provider {name}")
-                self.sync_skill_provider(name, cwd)
-                progress.advance(task_id)
+        self._sync_skill_providers(
+            desired,
+            cwd,
+            task_title="Downloading skill providers",
+            item_label="Downloading skill provider",
+        )
 
     def _sync_missing_agent_providers(self, desired: list[str], cwd: Path) -> None:
         if not desired:
             return
-        self._remove_by_prefix(
-            self.paths.agents_dir,
-            [self.catalog.agent_providers[name].prefix for name in desired],
-        )
         self._sync_agent_providers(
             desired,
             cwd,

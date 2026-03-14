@@ -69,6 +69,48 @@ uvx copilot-plugin-manager status
 
 `uvx` is convenient for direct execution, but persistent shell completion is easiest when the CLI is installed locally.
 
+## Catalog overview
+
+<!-- generated:catalog-overview:start -->
+_This section is generated from the bundled catalog data with `uv run poe generate-docs`._
+
+- `21` profiles
+- `20` themes
+- `53` plugins
+- `37` skill providers
+- `58` agent providers
+
+See also:
+- [`docs/THEMES.md`](docs/THEMES.md) for the full theme and profile composition reference.
+- [`docs/CREDITS.md`](docs/CREDITS.md) for upstream catalog credits.
+
+### Current profile compositions
+
+| Profile | Themes |
+| --- | --- |
+| `minimal` | `core` |
+| `docs` | `core`, `docs`, `python`, `testing` |
+| `docs-lite` | `core`, `docs` |
+| `docs-pro` | `core`, `docs`, `docs-design`, `planning`, `testing` |
+| `python-dev` | `core`, `python`, `testing`, `devops` |
+| `python-core` | `core`, `python`, `testing` |
+| `python-agents` | `core`, `python`, `testing`, `python-agents` |
+| `python-mcp` | `core`, `python`, `mcp`, `testing`, `python-agents`, `mcp-agents` |
+| `mcp-dev` | `core`, `mcp`, `python`, `testing` |
+| `frontend-design` | `core`, `frontend`, `docs-design`, `testing` |
+| `backend-api` | `core`, `python`, `openapi`, `data`, `testing`, `security` |
+| `fullstack` | `core`, `frontend`, `python`, `testing`, `data` |
+| `agentic-fullstack` | `core`, `frontend`, `python`, `testing`, `data`, `security`, `python-agents`, `mcp-agents` |
+| `science` | `core`, `science`, `python`, `data` |
+| `data-ai` | `core`, `data`, `science`, `research` |
+| `research` | `core`, `docs`, `science`, `research`, `planning` |
+| `devops-sec` | `core`, `devops`, `security`, `github` |
+| `planner` | `core`, `planning`, `github` |
+| `enterprise` | `core`, `enterprise`, `data`, `testing`, `devops` |
+| `enterprise-architect` | `core`, `enterprise`, `planning`, `security`, `github`, `testing` |
+| `everything` | `core`, `docs`, `docs-design`, `python`, `python-agents`, `frontend`, `mcp`, `mcp-agents`, `testing`, `science`, `openapi`, `enterprise`, `data`, `devops`, `security`, `planning`, `github`, `research`, `specialized`, `agents` |
+<!-- generated:catalog-overview:end -->
+
 ## Shell completion
 
 Quick shell-init snippets:
@@ -104,6 +146,8 @@ uv run copilot-plugin-manager --help
 | Document | Purpose |
 | --- | --- |
 | [`docs/USAGE.md`](docs/USAGE.md) | Managed content, state model, command reference, and shell setup. |
+| [`docs/THEMES.md`](docs/THEMES.md) | Generated overview of current themes and profile compositions. |
+| [`docs/CREDITS.md`](docs/CREDITS.md) | Generated credits for bundled upstream catalog sources. |
 | [`CONTRIBUTING.md`](CONTRIBUTING.md) | Local development setup, test/lint/build commands, and PR workflow. |
 | [`docs/RELEASING.md`](docs/RELEASING.md) | Build, TestPyPI, and PyPI publishing flow. |
 | [`SECURITY.md`](SECURITY.md) | Vulnerability reporting and supported versions. |

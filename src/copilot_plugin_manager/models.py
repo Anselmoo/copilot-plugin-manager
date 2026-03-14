@@ -117,9 +117,21 @@ class SourceState(BaseModel):
         return self.manifest_version != previous.manifest_version
 
 
+class ProviderSyncState(BaseModel):
+    kind: Literal["skill", "agent"]
+    source: str
+    revision: str | None = None
+    manifest_version: str | None = None
+    source_path: str | None = None
+    outputs: list[str] = Field(default_factory=list)
+    definition_signature: str | None = None
+    updated_at: str | None = None
+
+
 class ManagerState(BaseModel):
     repositories: dict[str, RepoState] = Field(default_factory=dict)
     sources: dict[str, SourceState] = Field(default_factory=dict)
+    providers: dict[str, ProviderSyncState] = Field(default_factory=dict)
 
 
 @dataclass(frozen=True)

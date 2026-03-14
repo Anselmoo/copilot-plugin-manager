@@ -1,6 +1,5 @@
 from __future__ import annotations
 
-import argparse
 import re
 import subprocess
 import time
@@ -9,6 +8,11 @@ from concurrent.futures import ThreadPoolExecutor
 from datetime import UTC, datetime
 from pathlib import Path, PurePosixPath
 
+import typer
+from rich.progress import BarColumn, Progress, SpinnerColumn, TaskProgressColumn, TextColumn, TimeElapsedColumn
+
+from copilot_plugin_manager.rendering import console
+
 ROOT = Path(__file__).resolve().parent.parent
 CATALOG_DIR = ROOT / "src" / "copilot_plugin_manager" / "catalog_data"
 PLUGINS_PATH = CATALOG_DIR / "plugins.toml"
@@ -16,6 +20,7 @@ ENTRYPOINTS_PATH = CATALOG_DIR / "entrypoints.toml"
 REPOSITORIES_PATH = CATALOG_DIR / "repositories.toml"
 SKILLS_PATH = CATALOG_DIR / "skills.toml"
 AGENTS_PATH = CATALOG_DIR / "agents.toml"
+app = typer.Typer(add_completion=False, help="Refresh bundled catalog metadata from the tracked upstream sources.")
 
 
 def load_toml(path: Path) -> dict[str, object]:
@@ -876,72 +881,86 @@ def write_entrypoints(records: list[dict[str, object]]) -> None:
     ENTRYPOINTS_PATH.write_text("\n".join(lines) + "\n")
 
 
-def parse_args() -> argparse.Namespace:
-    parser = argparse.ArgumentParser(description="Refresh bundled catalog metadata from upstream submodules.")
-    parser.add_argument(
-        "--hard-reset",
-        action="store_true",
-        help="Rebuild entrypoint history from scratch instead of preserving first-seen metadata.",
+def new_progress() -> Progress:
+    return Progress(
+        SpinnerColumn(),
+        TextColumn("[bold blue]{task.description}"),
+        BarColumn(),
+        TaskProgressColumn(),
+        TimeElapsedColumn(),
+        console=console(),
+        transient=False,
     )
-    return parser.parse_args()
 
 
-def main() -> None:
-    args = parse_args()
+@app.command()
+def main(
+    hard_reset: bool = typer.Option(
+        False,
+        "--hard-reset",
+        help="Rebuild entrypoint history from scratch instead of preserving first-seen metadata.",
+    ),
+) -> None:
     total_steps = 5
     total_start = time.perf_counter()
+    term = console()
     repositories = load_toml(REPOSITORIES_PATH).get("repositories", {})
     bootstrap_entrypoints = load_previous_entrypoints()
     skills = load_provider_catalog(SKILLS_PATH) or bootstrap_provider_catalog("skill", repositories, bootstrap_entrypoints)
     agents = load_provider_catalog(AGENTS_PATH) or bootstrap_provider_catalog("agent", repositories, bootstrap_entrypoints)
     existing_plugins = load_toml(PLUGINS_PATH).get("plugins", {})
-    previous = {} if args.hard_reset else bootstrap_entrypoints
+    previous = {} if hard_reset else bootstrap_entrypoints
 
-    print(progress_line(1, total_steps, "Refreshing plugin catalog..."), flush=True)
-    phase_start = time.perf_counter()
-    plugin_records, plugin_entrypoints = build_plugin_records(existing_plugins, previous)
-    print(
-        f"  plugins={len(plugin_records)} entrypoints={len(plugin_entrypoints)} duration={time.perf_counter() - phase_start:.2f}s",
-        flush=True,
-    )
+    term.print("[bold]Refreshing bundled catalog metadata[/bold]")
+    with new_progress() as progress:
+        task_id = progress.add_task("Refreshing plugin catalog...", total=total_steps)
 
-    print(progress_line(2, total_steps, "Refreshing skill entrypoints..."), flush=True)
-    phase_start = time.perf_counter()
-    skill_entrypoints = build_skill_entrypoints(skills, repositories, previous)
-    print(f"  skills={len(skill_entrypoints)} duration={time.perf_counter() - phase_start:.2f}s", flush=True)
+        phase_start = time.perf_counter()
+        plugin_records, plugin_entrypoints = build_plugin_records(existing_plugins, previous)
+        progress.advance(task_id)
+        term.print(f"[green]plugins[/green]={len(plugin_records)} entrypoints={len(plugin_entrypoints)} duration={time.perf_counter() - phase_start:.2f}s")
 
-    print(progress_line(3, total_steps, "Refreshing agent entrypoints..."), flush=True)
-    phase_start = time.perf_counter()
-    agent_entrypoints = build_agent_entrypoints(agents, repositories, previous)
-    print(f"  agents={len(agent_entrypoints)} duration={time.perf_counter() - phase_start:.2f}s", flush=True)
+        progress.update(task_id, description="Refreshing skill entrypoints...")
+        phase_start = time.perf_counter()
+        skill_entrypoints = build_skill_entrypoints(skills, repositories, previous)
+        progress.advance(task_id)
+        term.print(f"[green]skills[/green]={len(skill_entrypoints)} duration={time.perf_counter() - phase_start:.2f}s")
 
-    print(progress_line(4, total_steps, "Rebuilding provider catalogs..."), flush=True)
-    phase_start = time.perf_counter()
-    skill_provider_records = build_provider_records("skill", skills, repositories, skill_entrypoints)
-    agent_provider_records = build_provider_records("agent", agents, repositories, agent_entrypoints)
-    print(
-        f"  skill_providers={len(skill_provider_records)} agent_providers={len(agent_provider_records)} duration={time.perf_counter() - phase_start:.2f}s",
-        flush=True,
-    )
+        progress.update(task_id, description="Refreshing agent entrypoints...")
+        phase_start = time.perf_counter()
+        agent_entrypoints = build_agent_entrypoints(agents, repositories, previous)
+        progress.advance(task_id)
+        term.print(f"[green]agents[/green]={len(agent_entrypoints)} duration={time.perf_counter() - phase_start:.2f}s")
 
-    print(progress_line(5, total_steps, "Writing refreshed catalog files..."), flush=True)
-    phase_start = time.perf_counter()
-    write_plugins(plugin_records)
-    write_providers(SKILLS_PATH, skill_provider_records)
-    write_providers(AGENTS_PATH, agent_provider_records)
-    write_entrypoints([*plugin_entrypoints, *skill_entrypoints, *agent_entrypoints])
-    print(f"  wrote=4 files duration={time.perf_counter() - phase_start:.2f}s", flush=True)
+        progress.update(task_id, description="Rebuilding provider catalogs...")
+        phase_start = time.perf_counter()
+        skill_provider_records = build_provider_records("skill", skills, repositories, skill_entrypoints)
+        agent_provider_records = build_provider_records("agent", agents, repositories, agent_entrypoints)
+        progress.advance(task_id)
+        term.print(
+            f"[green]skill_providers[/green]={len(skill_provider_records)} "
+            f"[green]agent_providers[/green]={len(agent_provider_records)} duration={time.perf_counter() - phase_start:.2f}s"
+        )
 
-    print(
-        "Refreshed catalogs:",
-        f"plugins={len(plugin_records)}",
-        f"skills={len(skill_entrypoints)}",
-        f"agents={len(agent_entrypoints)}",
-        f"entrypoints={len(plugin_entrypoints) + len(skill_entrypoints) + len(agent_entrypoints)}",
-        f"total={time.perf_counter() - total_start:.2f}s",
-        "(hard-reset)" if args.hard_reset else "",
+        progress.update(task_id, description="Writing refreshed catalog files...")
+        phase_start = time.perf_counter()
+        write_plugins(plugin_records)
+        write_providers(SKILLS_PATH, skill_provider_records)
+        write_providers(AGENTS_PATH, agent_provider_records)
+        write_entrypoints([*plugin_entrypoints, *skill_entrypoints, *agent_entrypoints])
+        progress.advance(task_id)
+        term.print(f"[green]wrote[/green]=4 files duration={time.perf_counter() - phase_start:.2f}s")
+
+    term.print(
+        "[bold green]Refreshed catalogs[/bold green]: "
+        f"plugins={len(plugin_records)} "
+        f"skills={len(skill_entrypoints)} "
+        f"agents={len(agent_entrypoints)} "
+        f"entrypoints={len(plugin_entrypoints) + len(skill_entrypoints) + len(agent_entrypoints)} "
+        f"total={time.perf_counter() - total_start:.2f}s"
+        f"{' (hard-reset)' if hard_reset else ''}"
     )
 
 
 if __name__ == "__main__":
-    main()
+    app()

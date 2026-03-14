@@ -41,6 +41,7 @@ uv run poe lint
 uv run poe typecheck
 uv run poe check
 uv run poe build
+uv run poe generate-docs
 ```
 
 Equivalent direct commands are also available when needed:
@@ -63,6 +64,8 @@ Refresh generated catalog metadata from the current submodules:
 ```bash
 uv run poe refresh-catalog
 ```
+
+That task also refreshes the generated markdown docs derived from the bundled catalog.
 
 Hard-reset entrypoint provenance history and rebuild provider metadata from upstream target files:
 

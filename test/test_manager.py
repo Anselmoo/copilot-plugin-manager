@@ -125,6 +125,35 @@ def test_sync_skill_provider_bootstraps_missing_cached_checkout(tmp_path: Path, 
     assert clone_call in runner.calls
 
 
+def test_sync_missing_skill_providers_reuses_cached_outputs(tmp_path: Path, monkeypatch) -> None:
+    monkeypatch.setenv("COPILOT_HOME", str(tmp_path / ".copilot"))
+    bundle = load_catalog_bundle()
+    paths = ManagerPaths.from_environment()
+    runner = GitCloneRunner(
+        {
+            "anthropics-skills": {
+                "skills/pdf/sample-skill/README.md": "sample",
+            }
+        }
+    )
+    manager = PluginManager(bundle, paths, runner=runner)
+    project = tmp_path / "repo"
+    project.mkdir()
+
+    manager.sync_skill_provider("anthropic-pdf", project)
+    calls: list[str] = []
+    original = manager.sync_skill_provider
+
+    def tracked(provider_name: str, cwd: Path, *, source_root: Path | None = None, observed: SourceState | None = None) -> list[str]:
+        calls.append(provider_name)
+        return original(provider_name, cwd, source_root=source_root, observed=observed)
+
+    monkeypatch.setattr(manager, "sync_skill_provider", tracked)
+    manager._sync_missing_skill_providers(["anthropic-pdf"], project)
+
+    assert calls == []
+
+
 def test_sync_agent_provider_normalizes_output_name_and_metadata(tmp_path: Path, monkeypatch) -> None:
     monkeypatch.setenv("COPILOT_HOME", str(tmp_path / ".copilot"))
     bundle = load_catalog_bundle()
@@ -167,6 +196,44 @@ def test_sync_missing_agent_providers_dedupes_overlapping_sources(tmp_path: Path
     leaf_output = paths.agents_dir / "agency-design-brand-guardian__design__design-brand-guardian.agent.md"
     assert leaf_output.exists()
     assert not broad_output.exists()
+
+
+def test_sync_missing_agent_providers_reuses_cached_outputs(tmp_path: Path, monkeypatch) -> None:
+    monkeypatch.setenv("COPILOT_HOME", str(tmp_path / ".copilot"))
+    bundle = load_catalog_bundle()
+    paths = ManagerPaths.from_environment()
+    manager = PluginManager(bundle, paths, runner=FakeRunner())
+
+    project = tmp_path / "repo"
+    source_file = project / "external" / "agency-agents" / "design" / "design-brand-guardian.md"
+    source_file.parent.mkdir(parents=True)
+    source_file.write_text("# Design Brand Guardian\n\nHelps with brand systems.\n")
+
+    manager.sync_agent_provider("agency-design-brand-guardian", project)
+    calls: list[str] = []
+    original = manager.sync_agent_provider
+
+    def tracked(
+        provider_name: str,
+        cwd: Path,
+        *,
+        claimed_source_paths: set[tuple[str, str]] | None = None,
+        source_root: Path | None = None,
+        observed: SourceState | None = None,
+    ) -> list[str]:
+        calls.append(provider_name)
+        return original(
+            provider_name,
+            cwd,
+            claimed_source_paths=claimed_source_paths,
+            source_root=source_root,
+            observed=observed,
+        )
+
+    monkeypatch.setattr(manager, "sync_agent_provider", tracked)
+    manager._sync_missing_agent_providers(["agency-design-brand-guardian"], project)
+
+    assert calls == []
 
 
 def test_probe_manifest_version_supports_generic_manifests(tmp_path: Path) -> None:

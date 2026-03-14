@@ -59,4 +59,4 @@ themes = ["core", "enterprise", "data", "testing", "devops"]
 themes = ["core", "enterprise", "planning", "security", "github", "testing"]
 
 [profiles."everything"]
-themes = ["['core', 'docs', 'docs-design', 'python', 'python-agents', 'frontend', 'mcp', 'mcp-agents', 'testing', 'science', 'openapi', 'enterprise', 'data', 'devops', 'security', 'planning', 'github', 'research', 'specialized', 'agents']"]
+themes = ["core", "docs", "docs-design", "python", "python-agents", "frontend", "mcp", "mcp-agents", "testing", "science", "openapi", "enterprise", "data", "devops", "security", "planning", "github", "research", "specialized", "agents"]

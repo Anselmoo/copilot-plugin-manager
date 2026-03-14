@@ -4,9 +4,14 @@ import json
 from dataclasses import dataclass
 from datetime import UTC, datetime
 from pathlib import Path
+from typing import Literal
 
-from .models import ActivationTarget, ManagerState, RepoState, SourceState
+from .models import ActivationTarget, ManagerState, ProviderSyncState, RepoState, SourceState
 from .paths import ManagerPaths, repo_key
+
+
+def provider_key(kind: Literal["skill", "agent"], provider_name: str) -> str:
+    return f"{kind}:{provider_name}"
 
 
 @dataclass
@@ -30,6 +35,10 @@ class StateStore:
     def read_source_state(self, source_name: str) -> SourceState | None:
         state = self.load()
         return state.sources.get(source_name)
+
+    def read_provider_state(self, kind: Literal["skill", "agent"], provider_name: str) -> ProviderSyncState | None:
+        state = self.load()
+        return state.providers.get(provider_key(kind, provider_name))
 
     def source_has_changed(self, source_name: str, observed: SourceState) -> bool:
         return observed.has_comparable_change(self.read_source_state(source_name))
@@ -58,4 +67,33 @@ class StateStore:
         source_state.last_seen_at = observed_at
         source_state.updated_at = observed_at
         state.sources[source_name] = source_state
+        self.save(state)
+
+    def write_provider_state(
+        self,
+        kind: Literal["skill", "agent"],
+        provider_name: str,
+        source_name: str,
+        observed: SourceState,
+        outputs: list[str],
+        definition_signature: str,
+    ) -> None:
+        state = self.load()
+        state.providers[provider_key(kind, provider_name)] = ProviderSyncState(
+            kind=kind,
+            source=source_name,
+            revision=observed.revision,
+            manifest_version=observed.manifest_version,
+            source_path=observed.source_path,
+            outputs=list(dict.fromkeys(outputs)),
+            definition_signature=definition_signature,
+            updated_at=datetime.now(UTC).isoformat(),
+        )
+        self.save(state)
+
+    def clear_provider_state(self, kind: Literal["skill", "agent"], provider_name: str) -> None:
+        state = self.load()
+        if provider_key(kind, provider_name) not in state.providers:
+            return
+        del state.providers[provider_key(kind, provider_name)]
         self.save(state)
