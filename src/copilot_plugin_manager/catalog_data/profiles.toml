@@ -22,6 +22,24 @@ themes = ["core", "python", "testing", "python-agents"]
 [profiles."python-mcp"]
 themes = ["core", "python", "mcp", "testing", "python-agents", "mcp-agents"]
 
+[profiles."ts"]
+themes = ["core", "frontend", "testing"]
+
+[profiles."ts-mcp"]
+themes = ["core", "frontend", "mcp", "testing", "mcp-agents"]
+
+[profiles."python-plus-rust"]
+themes = ["core", "python", "data", "testing"]
+
+[profiles."pydantic"]
+themes = ["core", "python", "openapi", "testing"]
+
+[profiles."fastapi-typer"]
+themes = ["core", "python", "openapi", "testing"]
+
+[profiles."backend"]
+themes = ["core", "python", "openapi", "data", "testing", "security"]
+
 [profiles."mcp-dev"]
 themes = ["core", "mcp", "python", "testing"]
 
@@ -38,6 +56,9 @@ themes = ["core", "frontend", "python", "testing", "data"]
 themes = ["core", "frontend", "python", "testing", "data", "security", "python-agents", "mcp-agents"]
 
 [profiles."science"]
+themes = ["core", "science", "python", "data"]
+
+[profiles."scientific-programming"]
 themes = ["core", "science", "python", "data"]
 
 [profiles."data-ai"]

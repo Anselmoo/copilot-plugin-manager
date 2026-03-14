@@ -74,7 +74,7 @@ uvx copilot-plugin-manager status
 <!-- generated:catalog-overview:start -->
 _This section is generated from the bundled catalog data with `uv run poe generate-docs`._
 
-- `21` profiles
+- `28` profiles
 - `20` themes
 - `53` plugins
 - `37` skill providers
@@ -96,12 +96,19 @@ See also:
 | `python-core` | `core`, `python`, `testing` |
 | `python-agents` | `core`, `python`, `testing`, `python-agents` |
 | `python-mcp` | `core`, `python`, `mcp`, `testing`, `python-agents`, `mcp-agents` |
+| `ts` | `core`, `frontend`, `testing` |
+| `ts-mcp` | `core`, `frontend`, `mcp`, `testing`, `mcp-agents` |
+| `python-plus-rust` | `core`, `python`, `data`, `testing` |
+| `pydantic` | `core`, `python`, `openapi`, `testing` |
+| `fastapi-typer` | `core`, `python`, `openapi`, `testing` |
+| `backend` | `core`, `python`, `openapi`, `data`, `testing`, `security` |
 | `mcp-dev` | `core`, `mcp`, `python`, `testing` |
 | `frontend-design` | `core`, `frontend`, `docs-design`, `testing` |
 | `backend-api` | `core`, `python`, `openapi`, `data`, `testing`, `security` |
 | `fullstack` | `core`, `frontend`, `python`, `testing`, `data` |
 | `agentic-fullstack` | `core`, `frontend`, `python`, `testing`, `data`, `security`, `python-agents`, `mcp-agents` |
 | `science` | `core`, `science`, `python`, `data` |
+| `scientific-programming` | `core`, `science`, `python`, `data` |
 | `data-ai` | `core`, `data`, `science`, `research` |
 | `research` | `core`, `docs`, `science`, `research`, `planning` |
 | `devops-sec` | `core`, `devops`, `security`, `github` |
