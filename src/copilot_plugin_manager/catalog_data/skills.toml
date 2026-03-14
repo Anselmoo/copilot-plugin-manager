@@ -128,85 +128,1767 @@ homepage = "https://github.com/anthropics/skills/tree/main/skills"
 version_channel = "main"
 tags = ["skill", "general", "anthropic", "language", "frontend", "ui", "docs", "artifacts", "skills", "planning", "orchestration", "api", "mcp", "python"]
 
-[providers."kdense"]
+
+[providers."kdense-broad"]
 source = "kdense-science"
-prefix = "kdense"
-roots = ["scientific-skills"]
-description = "Kdense Science scientific skills skills such as adaptyv, aeon, alpha-vantage."
-use_when = "Use when you want local Kdense Science scientific skills skills such as adaptyv, aeon, alpha-vantage."
-homepage = "https://github.com/K-Dense-AI/claude-scientific-skills/tree/main/scientific-skills"
+prefix = "kdense-broad"
+roots = ["adaptyv", "aeon", "alpha-vantage", "alphafold-database", "anndata", "arboreto", "arxiv-database", "astropy", "benchling-integration", "bgpt-paper-search", "bindingdb-database", "biopython", "biorxiv-database", "bioservices", "brenda-database", "cbioportal-database", "cellxgene-census", "chembl-database", "cirq", "citation-management", "clinical-decision-support", "clinical-reports", "clinicaltrials-database", "clinpgx-database", "clinvar-database", "cobrapy", "consciousness-council", "cosmic-database", "dask", "datacommons-client", "datamol", "deepchem", "deeptools", "denario", "depmap", "dhdna-profiler", "diffdock", "dnanexus-integration", "docx", "drugbank-database", "edgartools", "ena-database", "ensembl-database", "esm", "etetoolkit", "exploratory-data-analysis", "fda-database", "flowio", "fluidsim", "fred-economic-data", "gene-database", "generate-image", "geniml", "geo-database", "geomaster", "geopandas", "get-available-resources", "gget", "ginkgo-cloud-lab", "glycoengineering", "gnomad-database", "gtars", "gtex-database", "gwas-database", "hedgefundmonitor", "histolab", "hmdb-database", "hypogenic", "hypothesis-generation", "imaging-data-commons", "infographics", "interpro-database", "iso-13485-certification", "jaspar-database", "kegg-database", "labarchive-integration", "lamindb", "latchbio-integration", "latex-posters", "literature-review", "markdown-mermaid-writing", "market-research-reports", "markitdown", "matchms", "matlab", "matplotlib", "medchem", "metabolomics-workbench-database", "modal", "molecular-dynamics", "molfeat", "monarch-database", "networkx", "neurokit2", "neuropixels-analysis", "offer-k-dense-web", "omero-integration", "open-notebook", "openalex-database", "opentargets-database", "opentrons-integration", "paper-2-web", "parallel-web", "pathml", "pdb-database", "pdf", "peer-review", "pennylane", "perplexity-search", "phylogenetics", "plotly", "polars", "pptx", "pptx-posters", "primekg", "protocolsio-integration", "pubchem-database", "pubmed-database", "pufferlib", "pydeseq2", "pydicom", "pyhealth", "pylabrobot", "pymatgen", "pymc", "pymoo", "pyopenms", "pysam", "pytdc", "pytorch-lightning", "pyzotero", "qiskit", "qutip", "rdkit", "reactome-database", "research-grants", "research-lookup", "rowan", "scanpy", "scholar-evaluation", "scientific-brainstorming", "scientific-critical-thinking", "scientific-schematics", "scientific-slides", "scientific-visualization", "scientific-writing", "scikit-bio", "scikit-learn", "scikit-survival", "scvelo", "scvi-tools", "seaborn", "shap", "simpy", "stable-baselines3", "statistical-analysis", "statsmodels", "string-database", "sympy", "tiledbvcf", "timesfm-forecasting", "torch-geometric", "torchdrug", "transformers", "treatment-plans", "umap-learn", "uniprot-database", "usfiscaldata", "uspto-database", "vaex", "venue-templates", "what-if-oracle", "xlsx", "zarr-python", "zinc-database"]
+description = "Complete K-Dense scientific skills collection (all 175 skills)."
+use_when = "Use when you want access to the full K-Dense scientific skills library."
+homepage = "https://github.com/K-Dense-AI/claude-scientific-skills"
 version_channel = "main"
-tags = ["skill", "general", "devops", "python", "language", "frontend", "ui", "data", "docs", "artifacts", "skills", "api", "mcp", "agents", "github", "planning", "orchestration"]
+tags = ["skill", "general", "science", "python", "data", "research"]
+
+[providers."kdense-adaptyv"]
+source = "kdense-science"
+prefix = "kdense-adaptyv"
+roots = ["adaptyv"]
+description = "K-Dense Adaptyv skill pack synced into the local skills catalog."
+use_when = "Use when you want the K-Dense Adaptyv skill pack available locally."
+homepage = "https://github.com/K-Dense-AI/claude-scientific-skills/tree/main/scientific-skills/adaptyv"
+version_channel = "main"
+tags = ["skill", "science", "python", "data", "research"]
+
+[providers."kdense-aeon"]
+source = "kdense-science"
+prefix = "kdense-aeon"
+roots = ["aeon"]
+description = "K-Dense Aeon skill pack synced into the local skills catalog."
+use_when = "Use when you want the K-Dense Aeon skill pack available locally."
+homepage = "https://github.com/K-Dense-AI/claude-scientific-skills/tree/main/scientific-skills/aeon"
+version_channel = "main"
+tags = ["skill", "science", "python", "data", "research"]
+
+[providers."kdense-alpha-vantage"]
+source = "kdense-science"
+prefix = "kdense-alpha-vantage"
+roots = ["alpha-vantage"]
+description = "K-Dense Alpha Vantage skill pack synced into the local skills catalog."
+use_when = "Use when you want the K-Dense Alpha Vantage skill pack available locally."
+homepage = "https://github.com/K-Dense-AI/claude-scientific-skills/tree/main/scientific-skills/alpha-vantage"
+version_channel = "main"
+tags = ["skill", "science", "python", "data", "research"]
+
+[providers."kdense-alphafold-database"]
+source = "kdense-science"
+prefix = "kdense-alphafold-database"
+roots = ["alphafold-database"]
+description = "K-Dense Alphafold Database skill pack synced into the local skills catalog."
+use_when = "Use when you want the K-Dense Alphafold Database skill pack available locally."
+homepage = "https://github.com/K-Dense-AI/claude-scientific-skills/tree/main/scientific-skills/alphafold-database"
+version_channel = "main"
+tags = ["skill", "science", "python", "data", "research"]
+
+[providers."kdense-anndata"]
+source = "kdense-science"
+prefix = "kdense-anndata"
+roots = ["anndata"]
+description = "K-Dense Anndata skill pack synced into the local skills catalog."
+use_when = "Use when you want the K-Dense Anndata skill pack available locally."
+homepage = "https://github.com/K-Dense-AI/claude-scientific-skills/tree/main/scientific-skills/anndata"
+version_channel = "main"
+tags = ["skill", "science", "python", "data", "research"]
+
+[providers."kdense-arboreto"]
+source = "kdense-science"
+prefix = "kdense-arboreto"
+roots = ["arboreto"]
+description = "K-Dense Arboreto skill pack synced into the local skills catalog."
+use_when = "Use when you want the K-Dense Arboreto skill pack available locally."
+homepage = "https://github.com/K-Dense-AI/claude-scientific-skills/tree/main/scientific-skills/arboreto"
+version_channel = "main"
+tags = ["skill", "science", "python", "data", "research"]
+
+[providers."kdense-arxiv-database"]
+source = "kdense-science"
+prefix = "kdense-arxiv-database"
+roots = ["arxiv-database"]
+description = "K-Dense Arxiv Database skill pack synced into the local skills catalog."
+use_when = "Use when you want the K-Dense Arxiv Database skill pack available locally."
+homepage = "https://github.com/K-Dense-AI/claude-scientific-skills/tree/main/scientific-skills/arxiv-database"
+version_channel = "main"
+tags = ["skill", "science", "python", "data", "research"]
+
+[providers."kdense-astropy"]
+source = "kdense-science"
+prefix = "kdense-astropy"
+roots = ["astropy"]
+description = "K-Dense Astropy skill pack synced into the local skills catalog."
+use_when = "Use when you want the K-Dense Astropy skill pack available locally."
+homepage = "https://github.com/K-Dense-AI/claude-scientific-skills/tree/main/scientific-skills/astropy"
+version_channel = "main"
+tags = ["skill", "science", "python", "data", "research"]
+
+[providers."kdense-benchling-integration"]
+source = "kdense-science"
+prefix = "kdense-benchling-integration"
+roots = ["benchling-integration"]
+description = "K-Dense Benchling Integration skill pack synced into the local skills catalog."
+use_when = "Use when you want the K-Dense Benchling Integration skill pack available locally."
+homepage = "https://github.com/K-Dense-AI/claude-scientific-skills/tree/main/scientific-skills/benchling-integration"
+version_channel = "main"
+tags = ["skill", "science", "python", "data", "research"]
+
+[providers."kdense-bgpt-paper-search"]
+source = "kdense-science"
+prefix = "kdense-bgpt-paper-search"
+roots = ["bgpt-paper-search"]
+description = "K-Dense Bgpt Paper Search skill pack synced into the local skills catalog."
+use_when = "Use when you want the K-Dense Bgpt Paper Search skill pack available locally."
+homepage = "https://github.com/K-Dense-AI/claude-scientific-skills/tree/main/scientific-skills/bgpt-paper-search"
+version_channel = "main"
+tags = ["skill", "science", "python", "data", "research"]
+
+[providers."kdense-bindingdb-database"]
+source = "kdense-science"
+prefix = "kdense-bindingdb-database"
+roots = ["bindingdb-database"]
+description = "K-Dense Bindingdb Database skill pack synced into the local skills catalog."
+use_when = "Use when you want the K-Dense Bindingdb Database skill pack available locally."
+homepage = "https://github.com/K-Dense-AI/claude-scientific-skills/tree/main/scientific-skills/bindingdb-database"
+version_channel = "main"
+tags = ["skill", "science", "python", "data", "research"]
 
 [providers."kdense-biopython"]
 source = "kdense-science"
 prefix = "kdense-biopython"
-roots = ["scientific-skills/biopython"]
-description = "Kdense Science Biopython skill pack synced into the local skills catalog."
-use_when = "Use when you want the Kdense Science Biopython skill pack available locally."
-homepage = "https://github.com/K-Dense-AI/claude-scientific-skills/tree/main/scientific-skills/biopython/references"
+roots = ["biopython"]
+description = "K-Dense Biopython skill pack synced into the local skills catalog."
+use_when = "Use when you want the K-Dense Biopython skill pack available locally."
+homepage = "https://github.com/K-Dense-AI/claude-scientific-skills/tree/main/scientific-skills/biopython"
 version_channel = "main"
-tags = ["skill", "python", "language", "data", "general"]
+tags = ["skill", "science", "python", "data", "research"]
+
+[providers."kdense-biorxiv-database"]
+source = "kdense-science"
+prefix = "kdense-biorxiv-database"
+roots = ["biorxiv-database"]
+description = "K-Dense Biorxiv Database skill pack synced into the local skills catalog."
+use_when = "Use when you want the K-Dense Biorxiv Database skill pack available locally."
+homepage = "https://github.com/K-Dense-AI/claude-scientific-skills/tree/main/scientific-skills/biorxiv-database"
+version_channel = "main"
+tags = ["skill", "science", "python", "data", "research"]
+
+[providers."kdense-bioservices"]
+source = "kdense-science"
+prefix = "kdense-bioservices"
+roots = ["bioservices"]
+description = "K-Dense Bioservices skill pack synced into the local skills catalog."
+use_when = "Use when you want the K-Dense Bioservices skill pack available locally."
+homepage = "https://github.com/K-Dense-AI/claude-scientific-skills/tree/main/scientific-skills/bioservices"
+version_channel = "main"
+tags = ["skill", "science", "python", "data", "research"]
+
+[providers."kdense-brenda-database"]
+source = "kdense-science"
+prefix = "kdense-brenda-database"
+roots = ["brenda-database"]
+description = "K-Dense Brenda Database skill pack synced into the local skills catalog."
+use_when = "Use when you want the K-Dense Brenda Database skill pack available locally."
+homepage = "https://github.com/K-Dense-AI/claude-scientific-skills/tree/main/scientific-skills/brenda-database"
+version_channel = "main"
+tags = ["skill", "science", "python", "data", "research"]
+
+[providers."kdense-cbioportal-database"]
+source = "kdense-science"
+prefix = "kdense-cbioportal-database"
+roots = ["cbioportal-database"]
+description = "K-Dense Cbioportal Database skill pack synced into the local skills catalog."
+use_when = "Use when you want the K-Dense Cbioportal Database skill pack available locally."
+homepage = "https://github.com/K-Dense-AI/claude-scientific-skills/tree/main/scientific-skills/cbioportal-database"
+version_channel = "main"
+tags = ["skill", "science", "python", "data", "research"]
+
+[providers."kdense-cellxgene-census"]
+source = "kdense-science"
+prefix = "kdense-cellxgene-census"
+roots = ["cellxgene-census"]
+description = "K-Dense Cellxgene Census skill pack synced into the local skills catalog."
+use_when = "Use when you want the K-Dense Cellxgene Census skill pack available locally."
+homepage = "https://github.com/K-Dense-AI/claude-scientific-skills/tree/main/scientific-skills/cellxgene-census"
+version_channel = "main"
+tags = ["skill", "science", "python", "data", "research"]
+
+[providers."kdense-chembl-database"]
+source = "kdense-science"
+prefix = "kdense-chembl-database"
+roots = ["chembl-database"]
+description = "K-Dense Chembl Database skill pack synced into the local skills catalog."
+use_when = "Use when you want the K-Dense Chembl Database skill pack available locally."
+homepage = "https://github.com/K-Dense-AI/claude-scientific-skills/tree/main/scientific-skills/chembl-database"
+version_channel = "main"
+tags = ["skill", "science", "python", "data", "research"]
+
+[providers."kdense-cirq"]
+source = "kdense-science"
+prefix = "kdense-cirq"
+roots = ["cirq"]
+description = "K-Dense Cirq skill pack synced into the local skills catalog."
+use_when = "Use when you want the K-Dense Cirq skill pack available locally."
+homepage = "https://github.com/K-Dense-AI/claude-scientific-skills/tree/main/scientific-skills/cirq"
+version_channel = "main"
+tags = ["skill", "science", "python", "data", "research"]
+
+[providers."kdense-citation-management"]
+source = "kdense-science"
+prefix = "kdense-citation-management"
+roots = ["citation-management"]
+description = "K-Dense Citation Management skill pack synced into the local skills catalog."
+use_when = "Use when you want the K-Dense Citation Management skill pack available locally."
+homepage = "https://github.com/K-Dense-AI/claude-scientific-skills/tree/main/scientific-skills/citation-management"
+version_channel = "main"
+tags = ["skill", "science", "python", "data", "research"]
+
+[providers."kdense-clinical-decision-support"]
+source = "kdense-science"
+prefix = "kdense-clinical-decision-support"
+roots = ["clinical-decision-support"]
+description = "K-Dense Clinical Decision Support skill pack synced into the local skills catalog."
+use_when = "Use when you want the K-Dense Clinical Decision Support skill pack available locally."
+homepage = "https://github.com/K-Dense-AI/claude-scientific-skills/tree/main/scientific-skills/clinical-decision-support"
+version_channel = "main"
+tags = ["skill", "science", "python", "data", "research"]
+
+[providers."kdense-clinical-reports"]
+source = "kdense-science"
+prefix = "kdense-clinical-reports"
+roots = ["clinical-reports"]
+description = "K-Dense Clinical Reports skill pack synced into the local skills catalog."
+use_when = "Use when you want the K-Dense Clinical Reports skill pack available locally."
+homepage = "https://github.com/K-Dense-AI/claude-scientific-skills/tree/main/scientific-skills/clinical-reports"
+version_channel = "main"
+tags = ["skill", "science", "python", "data", "research"]
+
+[providers."kdense-clinicaltrials-database"]
+source = "kdense-science"
+prefix = "kdense-clinicaltrials-database"
+roots = ["clinicaltrials-database"]
+description = "K-Dense Clinicaltrials Database skill pack synced into the local skills catalog."
+use_when = "Use when you want the K-Dense Clinicaltrials Database skill pack available locally."
+homepage = "https://github.com/K-Dense-AI/claude-scientific-skills/tree/main/scientific-skills/clinicaltrials-database"
+version_channel = "main"
+tags = ["skill", "science", "python", "data", "research"]
+
+[providers."kdense-clinpgx-database"]
+source = "kdense-science"
+prefix = "kdense-clinpgx-database"
+roots = ["clinpgx-database"]
+description = "K-Dense Clinpgx Database skill pack synced into the local skills catalog."
+use_when = "Use when you want the K-Dense Clinpgx Database skill pack available locally."
+homepage = "https://github.com/K-Dense-AI/claude-scientific-skills/tree/main/scientific-skills/clinpgx-database"
+version_channel = "main"
+tags = ["skill", "science", "python", "data", "research"]
+
+[providers."kdense-clinvar-database"]
+source = "kdense-science"
+prefix = "kdense-clinvar-database"
+roots = ["clinvar-database"]
+description = "K-Dense Clinvar Database skill pack synced into the local skills catalog."
+use_when = "Use when you want the K-Dense Clinvar Database skill pack available locally."
+homepage = "https://github.com/K-Dense-AI/claude-scientific-skills/tree/main/scientific-skills/clinvar-database"
+version_channel = "main"
+tags = ["skill", "science", "python", "data", "research"]
+
+[providers."kdense-cobrapy"]
+source = "kdense-science"
+prefix = "kdense-cobrapy"
+roots = ["cobrapy"]
+description = "K-Dense Cobrapy skill pack synced into the local skills catalog."
+use_when = "Use when you want the K-Dense Cobrapy skill pack available locally."
+homepage = "https://github.com/K-Dense-AI/claude-scientific-skills/tree/main/scientific-skills/cobrapy"
+version_channel = "main"
+tags = ["skill", "science", "python", "data", "research"]
+
+[providers."kdense-consciousness-council"]
+source = "kdense-science"
+prefix = "kdense-consciousness-council"
+roots = ["consciousness-council"]
+description = "K-Dense Consciousness Council skill pack synced into the local skills catalog."
+use_when = "Use when you want the K-Dense Consciousness Council skill pack available locally."
+homepage = "https://github.com/K-Dense-AI/claude-scientific-skills/tree/main/scientific-skills/consciousness-council"
+version_channel = "main"
+tags = ["skill", "science", "python", "data", "research"]
+
+[providers."kdense-cosmic-database"]
+source = "kdense-science"
+prefix = "kdense-cosmic-database"
+roots = ["cosmic-database"]
+description = "K-Dense Cosmic Database skill pack synced into the local skills catalog."
+use_when = "Use when you want the K-Dense Cosmic Database skill pack available locally."
+homepage = "https://github.com/K-Dense-AI/claude-scientific-skills/tree/main/scientific-skills/cosmic-database"
+version_channel = "main"
+tags = ["skill", "science", "python", "data", "research"]
+
+[providers."kdense-dask"]
+source = "kdense-science"
+prefix = "kdense-dask"
+roots = ["dask"]
+description = "K-Dense Dask skill pack synced into the local skills catalog."
+use_when = "Use when you want the K-Dense Dask skill pack available locally."
+homepage = "https://github.com/K-Dense-AI/claude-scientific-skills/tree/main/scientific-skills/dask"
+version_channel = "main"
+tags = ["skill", "science", "python", "data", "research"]
+
+[providers."kdense-datacommons-client"]
+source = "kdense-science"
+prefix = "kdense-datacommons-client"
+roots = ["datacommons-client"]
+description = "K-Dense Datacommons Client skill pack synced into the local skills catalog."
+use_when = "Use when you want the K-Dense Datacommons Client skill pack available locally."
+homepage = "https://github.com/K-Dense-AI/claude-scientific-skills/tree/main/scientific-skills/datacommons-client"
+version_channel = "main"
+tags = ["skill", "science", "python", "data", "research"]
+
+[providers."kdense-datamol"]
+source = "kdense-science"
+prefix = "kdense-datamol"
+roots = ["datamol"]
+description = "K-Dense Datamol skill pack synced into the local skills catalog."
+use_when = "Use when you want the K-Dense Datamol skill pack available locally."
+homepage = "https://github.com/K-Dense-AI/claude-scientific-skills/tree/main/scientific-skills/datamol"
+version_channel = "main"
+tags = ["skill", "science", "python", "data", "research"]
+
+[providers."kdense-deepchem"]
+source = "kdense-science"
+prefix = "kdense-deepchem"
+roots = ["deepchem"]
+description = "K-Dense Deepchem skill pack synced into the local skills catalog."
+use_when = "Use when you want the K-Dense Deepchem skill pack available locally."
+homepage = "https://github.com/K-Dense-AI/claude-scientific-skills/tree/main/scientific-skills/deepchem"
+version_channel = "main"
+tags = ["skill", "science", "python", "data", "research"]
+
+[providers."kdense-deeptools"]
+source = "kdense-science"
+prefix = "kdense-deeptools"
+roots = ["deeptools"]
+description = "K-Dense Deeptools skill pack synced into the local skills catalog."
+use_when = "Use when you want the K-Dense Deeptools skill pack available locally."
+homepage = "https://github.com/K-Dense-AI/claude-scientific-skills/tree/main/scientific-skills/deeptools"
+version_channel = "main"
+tags = ["skill", "science", "python", "data", "research"]
+
+[providers."kdense-denario"]
+source = "kdense-science"
+prefix = "kdense-denario"
+roots = ["denario"]
+description = "K-Dense Denario skill pack synced into the local skills catalog."
+use_when = "Use when you want the K-Dense Denario skill pack available locally."
+homepage = "https://github.com/K-Dense-AI/claude-scientific-skills/tree/main/scientific-skills/denario"
+version_channel = "main"
+tags = ["skill", "science", "python", "data", "research"]
+
+[providers."kdense-depmap"]
+source = "kdense-science"
+prefix = "kdense-depmap"
+roots = ["depmap"]
+description = "K-Dense Depmap skill pack synced into the local skills catalog."
+use_when = "Use when you want the K-Dense Depmap skill pack available locally."
+homepage = "https://github.com/K-Dense-AI/claude-scientific-skills/tree/main/scientific-skills/depmap"
+version_channel = "main"
+tags = ["skill", "science", "python", "data", "research"]
+
+[providers."kdense-dhdna-profiler"]
+source = "kdense-science"
+prefix = "kdense-dhdna-profiler"
+roots = ["dhdna-profiler"]
+description = "K-Dense Dhdna Profiler skill pack synced into the local skills catalog."
+use_when = "Use when you want the K-Dense Dhdna Profiler skill pack available locally."
+homepage = "https://github.com/K-Dense-AI/claude-scientific-skills/tree/main/scientific-skills/dhdna-profiler"
+version_channel = "main"
+tags = ["skill", "science", "python", "data", "research"]
+
+[providers."kdense-diffdock"]
+source = "kdense-science"
+prefix = "kdense-diffdock"
+roots = ["diffdock"]
+description = "K-Dense Diffdock skill pack synced into the local skills catalog."
+use_when = "Use when you want the K-Dense Diffdock skill pack available locally."
+homepage = "https://github.com/K-Dense-AI/claude-scientific-skills/tree/main/scientific-skills/diffdock"
+version_channel = "main"
+tags = ["skill", "science", "python", "data", "research"]
+
+[providers."kdense-dnanexus-integration"]
+source = "kdense-science"
+prefix = "kdense-dnanexus-integration"
+roots = ["dnanexus-integration"]
+description = "K-Dense Dnanexus Integration skill pack synced into the local skills catalog."
+use_when = "Use when you want the K-Dense Dnanexus Integration skill pack available locally."
+homepage = "https://github.com/K-Dense-AI/claude-scientific-skills/tree/main/scientific-skills/dnanexus-integration"
+version_channel = "main"
+tags = ["skill", "science", "python", "data", "research"]
+
+[providers."kdense-docx"]
+source = "kdense-science"
+prefix = "kdense-docx"
+roots = ["docx"]
+description = "K-Dense Docx skill pack synced into the local skills catalog."
+use_when = "Use when you want the K-Dense Docx skill pack available locally."
+homepage = "https://github.com/K-Dense-AI/claude-scientific-skills/tree/main/scientific-skills/docx"
+version_channel = "main"
+tags = ["skill", "science", "python", "data", "research"]
+
+[providers."kdense-drugbank-database"]
+source = "kdense-science"
+prefix = "kdense-drugbank-database"
+roots = ["drugbank-database"]
+description = "K-Dense Drugbank Database skill pack synced into the local skills catalog."
+use_when = "Use when you want the K-Dense Drugbank Database skill pack available locally."
+homepage = "https://github.com/K-Dense-AI/claude-scientific-skills/tree/main/scientific-skills/drugbank-database"
+version_channel = "main"
+tags = ["skill", "science", "python", "data", "research"]
+
+[providers."kdense-edgartools"]
+source = "kdense-science"
+prefix = "kdense-edgartools"
+roots = ["edgartools"]
+description = "K-Dense Edgartools skill pack synced into the local skills catalog."
+use_when = "Use when you want the K-Dense Edgartools skill pack available locally."
+homepage = "https://github.com/K-Dense-AI/claude-scientific-skills/tree/main/scientific-skills/edgartools"
+version_channel = "main"
+tags = ["skill", "science", "python", "data", "research"]
+
+[providers."kdense-ena-database"]
+source = "kdense-science"
+prefix = "kdense-ena-database"
+roots = ["ena-database"]
+description = "K-Dense Ena Database skill pack synced into the local skills catalog."
+use_when = "Use when you want the K-Dense Ena Database skill pack available locally."
+homepage = "https://github.com/K-Dense-AI/claude-scientific-skills/tree/main/scientific-skills/ena-database"
+version_channel = "main"
+tags = ["skill", "science", "python", "data", "research"]
+
+[providers."kdense-ensembl-database"]
+source = "kdense-science"
+prefix = "kdense-ensembl-database"
+roots = ["ensembl-database"]
+description = "K-Dense Ensembl Database skill pack synced into the local skills catalog."
+use_when = "Use when you want the K-Dense Ensembl Database skill pack available locally."
+homepage = "https://github.com/K-Dense-AI/claude-scientific-skills/tree/main/scientific-skills/ensembl-database"
+version_channel = "main"
+tags = ["skill", "science", "python", "data", "research"]
+
+[providers."kdense-esm"]
+source = "kdense-science"
+prefix = "kdense-esm"
+roots = ["esm"]
+description = "K-Dense Esm skill pack synced into the local skills catalog."
+use_when = "Use when you want the K-Dense Esm skill pack available locally."
+homepage = "https://github.com/K-Dense-AI/claude-scientific-skills/tree/main/scientific-skills/esm"
+version_channel = "main"
+tags = ["skill", "science", "python", "data", "research"]
+
+[providers."kdense-etetoolkit"]
+source = "kdense-science"
+prefix = "kdense-etetoolkit"
+roots = ["etetoolkit"]
+description = "K-Dense Etetoolkit skill pack synced into the local skills catalog."
+use_when = "Use when you want the K-Dense Etetoolkit skill pack available locally."
+homepage = "https://github.com/K-Dense-AI/claude-scientific-skills/tree/main/scientific-skills/etetoolkit"
+version_channel = "main"
+tags = ["skill", "science", "python", "data", "research"]
 
 [providers."kdense-exploratory-data-analysis"]
 source = "kdense-science"
 prefix = "kdense-exploratory-data-analysis"
-roots = ["scientific-skills/exploratory-data-analysis"]
-description = "Kdense Science exploratory data analysis skills such as Assets, References, Scripts."
-use_when = "Use when you want local Kdense Science exploratory data analysis skills such as Assets, References, Scripts."
+roots = ["exploratory-data-analysis"]
+description = "K-Dense Exploratory Data Analysis skill pack synced into the local skills catalog."
+use_when = "Use when you want the K-Dense Exploratory Data Analysis skill pack available locally."
 homepage = "https://github.com/K-Dense-AI/claude-scientific-skills/tree/main/scientific-skills/exploratory-data-analysis"
 version_channel = "main"
-tags = ["skill", "data", "general"]
+tags = ["skill", "science", "python", "data", "research"]
+
+[providers."kdense-fda-database"]
+source = "kdense-science"
+prefix = "kdense-fda-database"
+roots = ["fda-database"]
+description = "K-Dense Fda Database skill pack synced into the local skills catalog."
+use_when = "Use when you want the K-Dense Fda Database skill pack available locally."
+homepage = "https://github.com/K-Dense-AI/claude-scientific-skills/tree/main/scientific-skills/fda-database"
+version_channel = "main"
+tags = ["skill", "science", "python", "data", "research"]
+
+[providers."kdense-flowio"]
+source = "kdense-science"
+prefix = "kdense-flowio"
+roots = ["flowio"]
+description = "K-Dense Flowio skill pack synced into the local skills catalog."
+use_when = "Use when you want the K-Dense Flowio skill pack available locally."
+homepage = "https://github.com/K-Dense-AI/claude-scientific-skills/tree/main/scientific-skills/flowio"
+version_channel = "main"
+tags = ["skill", "science", "python", "data", "research"]
+
+[providers."kdense-fluidsim"]
+source = "kdense-science"
+prefix = "kdense-fluidsim"
+roots = ["fluidsim"]
+description = "K-Dense Fluidsim skill pack synced into the local skills catalog."
+use_when = "Use when you want the K-Dense Fluidsim skill pack available locally."
+homepage = "https://github.com/K-Dense-AI/claude-scientific-skills/tree/main/scientific-skills/fluidsim"
+version_channel = "main"
+tags = ["skill", "science", "python", "data", "research"]
+
+[providers."kdense-fred-economic-data"]
+source = "kdense-science"
+prefix = "kdense-fred-economic-data"
+roots = ["fred-economic-data"]
+description = "K-Dense Fred Economic Data skill pack synced into the local skills catalog."
+use_when = "Use when you want the K-Dense Fred Economic Data skill pack available locally."
+homepage = "https://github.com/K-Dense-AI/claude-scientific-skills/tree/main/scientific-skills/fred-economic-data"
+version_channel = "main"
+tags = ["skill", "science", "python", "data", "research"]
+
+[providers."kdense-gene-database"]
+source = "kdense-science"
+prefix = "kdense-gene-database"
+roots = ["gene-database"]
+description = "K-Dense Gene Database skill pack synced into the local skills catalog."
+use_when = "Use when you want the K-Dense Gene Database skill pack available locally."
+homepage = "https://github.com/K-Dense-AI/claude-scientific-skills/tree/main/scientific-skills/gene-database"
+version_channel = "main"
+tags = ["skill", "science", "python", "data", "research"]
+
+[providers."kdense-generate-image"]
+source = "kdense-science"
+prefix = "kdense-generate-image"
+roots = ["generate-image"]
+description = "K-Dense Generate Image skill pack synced into the local skills catalog."
+use_when = "Use when you want the K-Dense Generate Image skill pack available locally."
+homepage = "https://github.com/K-Dense-AI/claude-scientific-skills/tree/main/scientific-skills/generate-image"
+version_channel = "main"
+tags = ["skill", "science", "python", "data", "research"]
+
+[providers."kdense-geniml"]
+source = "kdense-science"
+prefix = "kdense-geniml"
+roots = ["geniml"]
+description = "K-Dense Geniml skill pack synced into the local skills catalog."
+use_when = "Use when you want the K-Dense Geniml skill pack available locally."
+homepage = "https://github.com/K-Dense-AI/claude-scientific-skills/tree/main/scientific-skills/geniml"
+version_channel = "main"
+tags = ["skill", "science", "python", "data", "research"]
+
+[providers."kdense-geo-database"]
+source = "kdense-science"
+prefix = "kdense-geo-database"
+roots = ["geo-database"]
+description = "K-Dense Geo Database skill pack synced into the local skills catalog."
+use_when = "Use when you want the K-Dense Geo Database skill pack available locally."
+homepage = "https://github.com/K-Dense-AI/claude-scientific-skills/tree/main/scientific-skills/geo-database"
+version_channel = "main"
+tags = ["skill", "science", "python", "data", "research"]
+
+[providers."kdense-geomaster"]
+source = "kdense-science"
+prefix = "kdense-geomaster"
+roots = ["geomaster"]
+description = "K-Dense Geomaster skill pack synced into the local skills catalog."
+use_when = "Use when you want the K-Dense Geomaster skill pack available locally."
+homepage = "https://github.com/K-Dense-AI/claude-scientific-skills/tree/main/scientific-skills/geomaster"
+version_channel = "main"
+tags = ["skill", "science", "python", "data", "research"]
+
+[providers."kdense-geopandas"]
+source = "kdense-science"
+prefix = "kdense-geopandas"
+roots = ["geopandas"]
+description = "K-Dense Geopandas skill pack synced into the local skills catalog."
+use_when = "Use when you want the K-Dense Geopandas skill pack available locally."
+homepage = "https://github.com/K-Dense-AI/claude-scientific-skills/tree/main/scientific-skills/geopandas"
+version_channel = "main"
+tags = ["skill", "science", "python", "data", "research"]
+
+[providers."kdense-get-available-resources"]
+source = "kdense-science"
+prefix = "kdense-get-available-resources"
+roots = ["get-available-resources"]
+description = "K-Dense Get Available Resources skill pack synced into the local skills catalog."
+use_when = "Use when you want the K-Dense Get Available Resources skill pack available locally."
+homepage = "https://github.com/K-Dense-AI/claude-scientific-skills/tree/main/scientific-skills/get-available-resources"
+version_channel = "main"
+tags = ["skill", "science", "python", "data", "research"]
+
+[providers."kdense-gget"]
+source = "kdense-science"
+prefix = "kdense-gget"
+roots = ["gget"]
+description = "K-Dense Gget skill pack synced into the local skills catalog."
+use_when = "Use when you want the K-Dense Gget skill pack available locally."
+homepage = "https://github.com/K-Dense-AI/claude-scientific-skills/tree/main/scientific-skills/gget"
+version_channel = "main"
+tags = ["skill", "science", "python", "data", "research"]
+
+[providers."kdense-ginkgo-cloud-lab"]
+source = "kdense-science"
+prefix = "kdense-ginkgo-cloud-lab"
+roots = ["ginkgo-cloud-lab"]
+description = "K-Dense Ginkgo Cloud Lab skill pack synced into the local skills catalog."
+use_when = "Use when you want the K-Dense Ginkgo Cloud Lab skill pack available locally."
+homepage = "https://github.com/K-Dense-AI/claude-scientific-skills/tree/main/scientific-skills/ginkgo-cloud-lab"
+version_channel = "main"
+tags = ["skill", "science", "python", "data", "research"]
+
+[providers."kdense-glycoengineering"]
+source = "kdense-science"
+prefix = "kdense-glycoengineering"
+roots = ["glycoengineering"]
+description = "K-Dense Glycoengineering skill pack synced into the local skills catalog."
+use_when = "Use when you want the K-Dense Glycoengineering skill pack available locally."
+homepage = "https://github.com/K-Dense-AI/claude-scientific-skills/tree/main/scientific-skills/glycoengineering"
+version_channel = "main"
+tags = ["skill", "science", "python", "data", "research"]
+
+[providers."kdense-gnomad-database"]
+source = "kdense-science"
+prefix = "kdense-gnomad-database"
+roots = ["gnomad-database"]
+description = "K-Dense Gnomad Database skill pack synced into the local skills catalog."
+use_when = "Use when you want the K-Dense Gnomad Database skill pack available locally."
+homepage = "https://github.com/K-Dense-AI/claude-scientific-skills/tree/main/scientific-skills/gnomad-database"
+version_channel = "main"
+tags = ["skill", "science", "python", "data", "research"]
+
+[providers."kdense-gtars"]
+source = "kdense-science"
+prefix = "kdense-gtars"
+roots = ["gtars"]
+description = "K-Dense Gtars skill pack synced into the local skills catalog."
+use_when = "Use when you want the K-Dense Gtars skill pack available locally."
+homepage = "https://github.com/K-Dense-AI/claude-scientific-skills/tree/main/scientific-skills/gtars"
+version_channel = "main"
+tags = ["skill", "science", "python", "data", "research"]
+
+[providers."kdense-gtex-database"]
+source = "kdense-science"
+prefix = "kdense-gtex-database"
+roots = ["gtex-database"]
+description = "K-Dense Gtex Database skill pack synced into the local skills catalog."
+use_when = "Use when you want the K-Dense Gtex Database skill pack available locally."
+homepage = "https://github.com/K-Dense-AI/claude-scientific-skills/tree/main/scientific-skills/gtex-database"
+version_channel = "main"
+tags = ["skill", "science", "python", "data", "research"]
+
+[providers."kdense-gwas-database"]
+source = "kdense-science"
+prefix = "kdense-gwas-database"
+roots = ["gwas-database"]
+description = "K-Dense Gwas Database skill pack synced into the local skills catalog."
+use_when = "Use when you want the K-Dense Gwas Database skill pack available locally."
+homepage = "https://github.com/K-Dense-AI/claude-scientific-skills/tree/main/scientific-skills/gwas-database"
+version_channel = "main"
+tags = ["skill", "science", "python", "data", "research"]
+
+[providers."kdense-hedgefundmonitor"]
+source = "kdense-science"
+prefix = "kdense-hedgefundmonitor"
+roots = ["hedgefundmonitor"]
+description = "K-Dense Hedgefundmonitor skill pack synced into the local skills catalog."
+use_when = "Use when you want the K-Dense Hedgefundmonitor skill pack available locally."
+homepage = "https://github.com/K-Dense-AI/claude-scientific-skills/tree/main/scientific-skills/hedgefundmonitor"
+version_channel = "main"
+tags = ["skill", "science", "python", "data", "research"]
+
+[providers."kdense-histolab"]
+source = "kdense-science"
+prefix = "kdense-histolab"
+roots = ["histolab"]
+description = "K-Dense Histolab skill pack synced into the local skills catalog."
+use_when = "Use when you want the K-Dense Histolab skill pack available locally."
+homepage = "https://github.com/K-Dense-AI/claude-scientific-skills/tree/main/scientific-skills/histolab"
+version_channel = "main"
+tags = ["skill", "science", "python", "data", "research"]
+
+[providers."kdense-hmdb-database"]
+source = "kdense-science"
+prefix = "kdense-hmdb-database"
+roots = ["hmdb-database"]
+description = "K-Dense Hmdb Database skill pack synced into the local skills catalog."
+use_when = "Use when you want the K-Dense Hmdb Database skill pack available locally."
+homepage = "https://github.com/K-Dense-AI/claude-scientific-skills/tree/main/scientific-skills/hmdb-database"
+version_channel = "main"
+tags = ["skill", "science", "python", "data", "research"]
+
+[providers."kdense-hypogenic"]
+source = "kdense-science"
+prefix = "kdense-hypogenic"
+roots = ["hypogenic"]
+description = "K-Dense Hypogenic skill pack synced into the local skills catalog."
+use_when = "Use when you want the K-Dense Hypogenic skill pack available locally."
+homepage = "https://github.com/K-Dense-AI/claude-scientific-skills/tree/main/scientific-skills/hypogenic"
+version_channel = "main"
+tags = ["skill", "science", "python", "data", "research"]
 
 [providers."kdense-hypothesis-generation"]
 source = "kdense-science"
 prefix = "kdense-hypothesis-generation"
-roots = ["scientific-skills/hypothesis-generation"]
-description = "Kdense Science hypothesis generation skills such as Assets, References."
-use_when = "Use when you want local Kdense Science hypothesis generation skills such as Assets, References."
+roots = ["hypothesis-generation"]
+description = "K-Dense Hypothesis Generation skill pack synced into the local skills catalog."
+use_when = "Use when you want the K-Dense Hypothesis Generation skill pack available locally."
 homepage = "https://github.com/K-Dense-AI/claude-scientific-skills/tree/main/scientific-skills/hypothesis-generation"
 version_channel = "main"
-tags = ["skill", "general"]
+tags = ["skill", "science", "python", "data", "research"]
+
+[providers."kdense-imaging-data-commons"]
+source = "kdense-science"
+prefix = "kdense-imaging-data-commons"
+roots = ["imaging-data-commons"]
+description = "K-Dense Imaging Data Commons skill pack synced into the local skills catalog."
+use_when = "Use when you want the K-Dense Imaging Data Commons skill pack available locally."
+homepage = "https://github.com/K-Dense-AI/claude-scientific-skills/tree/main/scientific-skills/imaging-data-commons"
+version_channel = "main"
+tags = ["skill", "science", "python", "data", "research"]
+
+[providers."kdense-infographics"]
+source = "kdense-science"
+prefix = "kdense-infographics"
+roots = ["infographics"]
+description = "K-Dense Infographics skill pack synced into the local skills catalog."
+use_when = "Use when you want the K-Dense Infographics skill pack available locally."
+homepage = "https://github.com/K-Dense-AI/claude-scientific-skills/tree/main/scientific-skills/infographics"
+version_channel = "main"
+tags = ["skill", "science", "python", "data", "research"]
+
+[providers."kdense-interpro-database"]
+source = "kdense-science"
+prefix = "kdense-interpro-database"
+roots = ["interpro-database"]
+description = "K-Dense Interpro Database skill pack synced into the local skills catalog."
+use_when = "Use when you want the K-Dense Interpro Database skill pack available locally."
+homepage = "https://github.com/K-Dense-AI/claude-scientific-skills/tree/main/scientific-skills/interpro-database"
+version_channel = "main"
+tags = ["skill", "science", "python", "data", "research"]
+
+[providers."kdense-iso-13485-certification"]
+source = "kdense-science"
+prefix = "kdense-iso-13485-certification"
+roots = ["iso-13485-certification"]
+description = "K-Dense Iso 13485 Certification skill pack synced into the local skills catalog."
+use_when = "Use when you want the K-Dense Iso 13485 Certification skill pack available locally."
+homepage = "https://github.com/K-Dense-AI/claude-scientific-skills/tree/main/scientific-skills/iso-13485-certification"
+version_channel = "main"
+tags = ["skill", "science", "python", "data", "research"]
+
+[providers."kdense-jaspar-database"]
+source = "kdense-science"
+prefix = "kdense-jaspar-database"
+roots = ["jaspar-database"]
+description = "K-Dense Jaspar Database skill pack synced into the local skills catalog."
+use_when = "Use when you want the K-Dense Jaspar Database skill pack available locally."
+homepage = "https://github.com/K-Dense-AI/claude-scientific-skills/tree/main/scientific-skills/jaspar-database"
+version_channel = "main"
+tags = ["skill", "science", "python", "data", "research"]
+
+[providers."kdense-kegg-database"]
+source = "kdense-science"
+prefix = "kdense-kegg-database"
+roots = ["kegg-database"]
+description = "K-Dense Kegg Database skill pack synced into the local skills catalog."
+use_when = "Use when you want the K-Dense Kegg Database skill pack available locally."
+homepage = "https://github.com/K-Dense-AI/claude-scientific-skills/tree/main/scientific-skills/kegg-database"
+version_channel = "main"
+tags = ["skill", "science", "python", "data", "research"]
+
+[providers."kdense-labarchive-integration"]
+source = "kdense-science"
+prefix = "kdense-labarchive-integration"
+roots = ["labarchive-integration"]
+description = "K-Dense Labarchive Integration skill pack synced into the local skills catalog."
+use_when = "Use when you want the K-Dense Labarchive Integration skill pack available locally."
+homepage = "https://github.com/K-Dense-AI/claude-scientific-skills/tree/main/scientific-skills/labarchive-integration"
+version_channel = "main"
+tags = ["skill", "science", "python", "data", "research"]
+
+[providers."kdense-lamindb"]
+source = "kdense-science"
+prefix = "kdense-lamindb"
+roots = ["lamindb"]
+description = "K-Dense Lamindb skill pack synced into the local skills catalog."
+use_when = "Use when you want the K-Dense Lamindb skill pack available locally."
+homepage = "https://github.com/K-Dense-AI/claude-scientific-skills/tree/main/scientific-skills/lamindb"
+version_channel = "main"
+tags = ["skill", "science", "python", "data", "research"]
+
+[providers."kdense-latchbio-integration"]
+source = "kdense-science"
+prefix = "kdense-latchbio-integration"
+roots = ["latchbio-integration"]
+description = "K-Dense Latchbio Integration skill pack synced into the local skills catalog."
+use_when = "Use when you want the K-Dense Latchbio Integration skill pack available locally."
+homepage = "https://github.com/K-Dense-AI/claude-scientific-skills/tree/main/scientific-skills/latchbio-integration"
+version_channel = "main"
+tags = ["skill", "science", "python", "data", "research"]
+
+[providers."kdense-latex-posters"]
+source = "kdense-science"
+prefix = "kdense-latex-posters"
+roots = ["latex-posters"]
+description = "K-Dense Latex Posters skill pack synced into the local skills catalog."
+use_when = "Use when you want the K-Dense Latex Posters skill pack available locally."
+homepage = "https://github.com/K-Dense-AI/claude-scientific-skills/tree/main/scientific-skills/latex-posters"
+version_channel = "main"
+tags = ["skill", "science", "python", "data", "research"]
 
 [providers."kdense-literature-review"]
 source = "kdense-science"
 prefix = "kdense-literature-review"
-roots = ["scientific-skills/literature-review"]
-description = "Kdense Science literature review skills such as Assets, References, Scripts."
-use_when = "Use when you want local Kdense Science literature review skills such as Assets, References, Scripts."
+roots = ["literature-review"]
+description = "K-Dense Literature Review skill pack synced into the local skills catalog."
+use_when = "Use when you want the K-Dense Literature Review skill pack available locally."
 homepage = "https://github.com/K-Dense-AI/claude-scientific-skills/tree/main/scientific-skills/literature-review"
 version_channel = "main"
-tags = ["skill", "general"]
+tags = ["skill", "science", "python", "data", "research"]
+
+[providers."kdense-markdown-mermaid-writing"]
+source = "kdense-science"
+prefix = "kdense-markdown-mermaid-writing"
+roots = ["markdown-mermaid-writing"]
+description = "K-Dense Markdown Mermaid Writing skill pack synced into the local skills catalog."
+use_when = "Use when you want the K-Dense Markdown Mermaid Writing skill pack available locally."
+homepage = "https://github.com/K-Dense-AI/claude-scientific-skills/tree/main/scientific-skills/markdown-mermaid-writing"
+version_channel = "main"
+tags = ["skill", "science", "python", "data", "research"]
+
+[providers."kdense-market-research-reports"]
+source = "kdense-science"
+prefix = "kdense-market-research-reports"
+roots = ["market-research-reports"]
+description = "K-Dense Market Research Reports skill pack synced into the local skills catalog."
+use_when = "Use when you want the K-Dense Market Research Reports skill pack available locally."
+homepage = "https://github.com/K-Dense-AI/claude-scientific-skills/tree/main/scientific-skills/market-research-reports"
+version_channel = "main"
+tags = ["skill", "science", "python", "data", "research"]
+
+[providers."kdense-markitdown"]
+source = "kdense-science"
+prefix = "kdense-markitdown"
+roots = ["markitdown"]
+description = "K-Dense Markitdown skill pack synced into the local skills catalog."
+use_when = "Use when you want the K-Dense Markitdown skill pack available locally."
+homepage = "https://github.com/K-Dense-AI/claude-scientific-skills/tree/main/scientific-skills/markitdown"
+version_channel = "main"
+tags = ["skill", "science", "python", "data", "research"]
+
+[providers."kdense-matchms"]
+source = "kdense-science"
+prefix = "kdense-matchms"
+roots = ["matchms"]
+description = "K-Dense Matchms skill pack synced into the local skills catalog."
+use_when = "Use when you want the K-Dense Matchms skill pack available locally."
+homepage = "https://github.com/K-Dense-AI/claude-scientific-skills/tree/main/scientific-skills/matchms"
+version_channel = "main"
+tags = ["skill", "science", "python", "data", "research"]
+
+[providers."kdense-matlab"]
+source = "kdense-science"
+prefix = "kdense-matlab"
+roots = ["matlab"]
+description = "K-Dense Matlab skill pack synced into the local skills catalog."
+use_when = "Use when you want the K-Dense Matlab skill pack available locally."
+homepage = "https://github.com/K-Dense-AI/claude-scientific-skills/tree/main/scientific-skills/matlab"
+version_channel = "main"
+tags = ["skill", "science", "python", "data", "research"]
+
+[providers."kdense-matplotlib"]
+source = "kdense-science"
+prefix = "kdense-matplotlib"
+roots = ["matplotlib"]
+description = "K-Dense Matplotlib skill pack synced into the local skills catalog."
+use_when = "Use when you want the K-Dense Matplotlib skill pack available locally."
+homepage = "https://github.com/K-Dense-AI/claude-scientific-skills/tree/main/scientific-skills/matplotlib"
+version_channel = "main"
+tags = ["skill", "science", "python", "data", "research"]
+
+[providers."kdense-medchem"]
+source = "kdense-science"
+prefix = "kdense-medchem"
+roots = ["medchem"]
+description = "K-Dense Medchem skill pack synced into the local skills catalog."
+use_when = "Use when you want the K-Dense Medchem skill pack available locally."
+homepage = "https://github.com/K-Dense-AI/claude-scientific-skills/tree/main/scientific-skills/medchem"
+version_channel = "main"
+tags = ["skill", "science", "python", "data", "research"]
+
+[providers."kdense-metabolomics-workbench-database"]
+source = "kdense-science"
+prefix = "kdense-metabolomics-workbench-database"
+roots = ["metabolomics-workbench-database"]
+description = "K-Dense Metabolomics Workbench Database skill pack synced into the local skills catalog."
+use_when = "Use when you want the K-Dense Metabolomics Workbench Database skill pack available locally."
+homepage = "https://github.com/K-Dense-AI/claude-scientific-skills/tree/main/scientific-skills/metabolomics-workbench-database"
+version_channel = "main"
+tags = ["skill", "science", "python", "data", "research"]
+
+[providers."kdense-modal"]
+source = "kdense-science"
+prefix = "kdense-modal"
+roots = ["modal"]
+description = "K-Dense Modal skill pack synced into the local skills catalog."
+use_when = "Use when you want the K-Dense Modal skill pack available locally."
+homepage = "https://github.com/K-Dense-AI/claude-scientific-skills/tree/main/scientific-skills/modal"
+version_channel = "main"
+tags = ["skill", "science", "python", "data", "research"]
+
+[providers."kdense-molecular-dynamics"]
+source = "kdense-science"
+prefix = "kdense-molecular-dynamics"
+roots = ["molecular-dynamics"]
+description = "K-Dense Molecular Dynamics skill pack synced into the local skills catalog."
+use_when = "Use when you want the K-Dense Molecular Dynamics skill pack available locally."
+homepage = "https://github.com/K-Dense-AI/claude-scientific-skills/tree/main/scientific-skills/molecular-dynamics"
+version_channel = "main"
+tags = ["skill", "science", "python", "data", "research"]
+
+[providers."kdense-molfeat"]
+source = "kdense-science"
+prefix = "kdense-molfeat"
+roots = ["molfeat"]
+description = "K-Dense Molfeat skill pack synced into the local skills catalog."
+use_when = "Use when you want the K-Dense Molfeat skill pack available locally."
+homepage = "https://github.com/K-Dense-AI/claude-scientific-skills/tree/main/scientific-skills/molfeat"
+version_channel = "main"
+tags = ["skill", "science", "python", "data", "research"]
+
+[providers."kdense-monarch-database"]
+source = "kdense-science"
+prefix = "kdense-monarch-database"
+roots = ["monarch-database"]
+description = "K-Dense Monarch Database skill pack synced into the local skills catalog."
+use_when = "Use when you want the K-Dense Monarch Database skill pack available locally."
+homepage = "https://github.com/K-Dense-AI/claude-scientific-skills/tree/main/scientific-skills/monarch-database"
+version_channel = "main"
+tags = ["skill", "science", "python", "data", "research"]
+
+[providers."kdense-networkx"]
+source = "kdense-science"
+prefix = "kdense-networkx"
+roots = ["networkx"]
+description = "K-Dense Networkx skill pack synced into the local skills catalog."
+use_when = "Use when you want the K-Dense Networkx skill pack available locally."
+homepage = "https://github.com/K-Dense-AI/claude-scientific-skills/tree/main/scientific-skills/networkx"
+version_channel = "main"
+tags = ["skill", "science", "python", "data", "research"]
+
+[providers."kdense-neurokit2"]
+source = "kdense-science"
+prefix = "kdense-neurokit2"
+roots = ["neurokit2"]
+description = "K-Dense Neurokit2 skill pack synced into the local skills catalog."
+use_when = "Use when you want the K-Dense Neurokit2 skill pack available locally."
+homepage = "https://github.com/K-Dense-AI/claude-scientific-skills/tree/main/scientific-skills/neurokit2"
+version_channel = "main"
+tags = ["skill", "science", "python", "data", "research"]
+
+[providers."kdense-neuropixels-analysis"]
+source = "kdense-science"
+prefix = "kdense-neuropixels-analysis"
+roots = ["neuropixels-analysis"]
+description = "K-Dense Neuropixels Analysis skill pack synced into the local skills catalog."
+use_when = "Use when you want the K-Dense Neuropixels Analysis skill pack available locally."
+homepage = "https://github.com/K-Dense-AI/claude-scientific-skills/tree/main/scientific-skills/neuropixels-analysis"
+version_channel = "main"
+tags = ["skill", "science", "python", "data", "research"]
+
+[providers."kdense-offer-k-dense-web"]
+source = "kdense-science"
+prefix = "kdense-offer-k-dense-web"
+roots = ["offer-k-dense-web"]
+description = "K-Dense Offer K Dense Web skill pack synced into the local skills catalog."
+use_when = "Use when you want the K-Dense Offer K Dense Web skill pack available locally."
+homepage = "https://github.com/K-Dense-AI/claude-scientific-skills/tree/main/scientific-skills/offer-k-dense-web"
+version_channel = "main"
+tags = ["skill", "science", "python", "data", "research"]
+
+[providers."kdense-omero-integration"]
+source = "kdense-science"
+prefix = "kdense-omero-integration"
+roots = ["omero-integration"]
+description = "K-Dense Omero Integration skill pack synced into the local skills catalog."
+use_when = "Use when you want the K-Dense Omero Integration skill pack available locally."
+homepage = "https://github.com/K-Dense-AI/claude-scientific-skills/tree/main/scientific-skills/omero-integration"
+version_channel = "main"
+tags = ["skill", "science", "python", "data", "research"]
+
+[providers."kdense-open-notebook"]
+source = "kdense-science"
+prefix = "kdense-open-notebook"
+roots = ["open-notebook"]
+description = "K-Dense Open Notebook skill pack synced into the local skills catalog."
+use_when = "Use when you want the K-Dense Open Notebook skill pack available locally."
+homepage = "https://github.com/K-Dense-AI/claude-scientific-skills/tree/main/scientific-skills/open-notebook"
+version_channel = "main"
+tags = ["skill", "science", "python", "data", "research"]
+
+[providers."kdense-openalex-database"]
+source = "kdense-science"
+prefix = "kdense-openalex-database"
+roots = ["openalex-database"]
+description = "K-Dense Openalex Database skill pack synced into the local skills catalog."
+use_when = "Use when you want the K-Dense Openalex Database skill pack available locally."
+homepage = "https://github.com/K-Dense-AI/claude-scientific-skills/tree/main/scientific-skills/openalex-database"
+version_channel = "main"
+tags = ["skill", "science", "python", "data", "research"]
+
+[providers."kdense-opentargets-database"]
+source = "kdense-science"
+prefix = "kdense-opentargets-database"
+roots = ["opentargets-database"]
+description = "K-Dense Opentargets Database skill pack synced into the local skills catalog."
+use_when = "Use when you want the K-Dense Opentargets Database skill pack available locally."
+homepage = "https://github.com/K-Dense-AI/claude-scientific-skills/tree/main/scientific-skills/opentargets-database"
+version_channel = "main"
+tags = ["skill", "science", "python", "data", "research"]
+
+[providers."kdense-opentrons-integration"]
+source = "kdense-science"
+prefix = "kdense-opentrons-integration"
+roots = ["opentrons-integration"]
+description = "K-Dense Opentrons Integration skill pack synced into the local skills catalog."
+use_when = "Use when you want the K-Dense Opentrons Integration skill pack available locally."
+homepage = "https://github.com/K-Dense-AI/claude-scientific-skills/tree/main/scientific-skills/opentrons-integration"
+version_channel = "main"
+tags = ["skill", "science", "python", "data", "research"]
+
+[providers."kdense-paper-2-web"]
+source = "kdense-science"
+prefix = "kdense-paper-2-web"
+roots = ["paper-2-web"]
+description = "K-Dense Paper 2 Web skill pack synced into the local skills catalog."
+use_when = "Use when you want the K-Dense Paper 2 Web skill pack available locally."
+homepage = "https://github.com/K-Dense-AI/claude-scientific-skills/tree/main/scientific-skills/paper-2-web"
+version_channel = "main"
+tags = ["skill", "science", "python", "data", "research"]
+
+[providers."kdense-parallel-web"]
+source = "kdense-science"
+prefix = "kdense-parallel-web"
+roots = ["parallel-web"]
+description = "K-Dense Parallel Web skill pack synced into the local skills catalog."
+use_when = "Use when you want the K-Dense Parallel Web skill pack available locally."
+homepage = "https://github.com/K-Dense-AI/claude-scientific-skills/tree/main/scientific-skills/parallel-web"
+version_channel = "main"
+tags = ["skill", "science", "python", "data", "research"]
+
+[providers."kdense-pathml"]
+source = "kdense-science"
+prefix = "kdense-pathml"
+roots = ["pathml"]
+description = "K-Dense Pathml skill pack synced into the local skills catalog."
+use_when = "Use when you want the K-Dense Pathml skill pack available locally."
+homepage = "https://github.com/K-Dense-AI/claude-scientific-skills/tree/main/scientific-skills/pathml"
+version_channel = "main"
+tags = ["skill", "science", "python", "data", "research"]
+
+[providers."kdense-pdb-database"]
+source = "kdense-science"
+prefix = "kdense-pdb-database"
+roots = ["pdb-database"]
+description = "K-Dense Pdb Database skill pack synced into the local skills catalog."
+use_when = "Use when you want the K-Dense Pdb Database skill pack available locally."
+homepage = "https://github.com/K-Dense-AI/claude-scientific-skills/tree/main/scientific-skills/pdb-database"
+version_channel = "main"
+tags = ["skill", "science", "python", "data", "research"]
+
+[providers."kdense-pdf"]
+source = "kdense-science"
+prefix = "kdense-pdf"
+roots = ["pdf"]
+description = "K-Dense Pdf skill pack synced into the local skills catalog."
+use_when = "Use when you want the K-Dense Pdf skill pack available locally."
+homepage = "https://github.com/K-Dense-AI/claude-scientific-skills/tree/main/scientific-skills/pdf"
+version_channel = "main"
+tags = ["skill", "science", "python", "data", "research"]
+
+[providers."kdense-peer-review"]
+source = "kdense-science"
+prefix = "kdense-peer-review"
+roots = ["peer-review"]
+description = "K-Dense Peer Review skill pack synced into the local skills catalog."
+use_when = "Use when you want the K-Dense Peer Review skill pack available locally."
+homepage = "https://github.com/K-Dense-AI/claude-scientific-skills/tree/main/scientific-skills/peer-review"
+version_channel = "main"
+tags = ["skill", "science", "python", "data", "research"]
+
+[providers."kdense-pennylane"]
+source = "kdense-science"
+prefix = "kdense-pennylane"
+roots = ["pennylane"]
+description = "K-Dense Pennylane skill pack synced into the local skills catalog."
+use_when = "Use when you want the K-Dense Pennylane skill pack available locally."
+homepage = "https://github.com/K-Dense-AI/claude-scientific-skills/tree/main/scientific-skills/pennylane"
+version_channel = "main"
+tags = ["skill", "science", "python", "data", "research"]
+
+[providers."kdense-perplexity-search"]
+source = "kdense-science"
+prefix = "kdense-perplexity-search"
+roots = ["perplexity-search"]
+description = "K-Dense Perplexity Search skill pack synced into the local skills catalog."
+use_when = "Use when you want the K-Dense Perplexity Search skill pack available locally."
+homepage = "https://github.com/K-Dense-AI/claude-scientific-skills/tree/main/scientific-skills/perplexity-search"
+version_channel = "main"
+tags = ["skill", "science", "python", "data", "research"]
+
+[providers."kdense-phylogenetics"]
+source = "kdense-science"
+prefix = "kdense-phylogenetics"
+roots = ["phylogenetics"]
+description = "K-Dense Phylogenetics skill pack synced into the local skills catalog."
+use_when = "Use when you want the K-Dense Phylogenetics skill pack available locally."
+homepage = "https://github.com/K-Dense-AI/claude-scientific-skills/tree/main/scientific-skills/phylogenetics"
+version_channel = "main"
+tags = ["skill", "science", "python", "data", "research"]
+
+[providers."kdense-plotly"]
+source = "kdense-science"
+prefix = "kdense-plotly"
+roots = ["plotly"]
+description = "K-Dense Plotly skill pack synced into the local skills catalog."
+use_when = "Use when you want the K-Dense Plotly skill pack available locally."
+homepage = "https://github.com/K-Dense-AI/claude-scientific-skills/tree/main/scientific-skills/plotly"
+version_channel = "main"
+tags = ["skill", "science", "python", "data", "research"]
+
+[providers."kdense-polars"]
+source = "kdense-science"
+prefix = "kdense-polars"
+roots = ["polars"]
+description = "K-Dense Polars skill pack synced into the local skills catalog."
+use_when = "Use when you want the K-Dense Polars skill pack available locally."
+homepage = "https://github.com/K-Dense-AI/claude-scientific-skills/tree/main/scientific-skills/polars"
+version_channel = "main"
+tags = ["skill", "science", "python", "data", "research"]
+
+[providers."kdense-pptx"]
+source = "kdense-science"
+prefix = "kdense-pptx"
+roots = ["pptx"]
+description = "K-Dense Pptx skill pack synced into the local skills catalog."
+use_when = "Use when you want the K-Dense Pptx skill pack available locally."
+homepage = "https://github.com/K-Dense-AI/claude-scientific-skills/tree/main/scientific-skills/pptx"
+version_channel = "main"
+tags = ["skill", "science", "python", "data", "research"]
+
+[providers."kdense-pptx-posters"]
+source = "kdense-science"
+prefix = "kdense-pptx-posters"
+roots = ["pptx-posters"]
+description = "K-Dense Pptx Posters skill pack synced into the local skills catalog."
+use_when = "Use when you want the K-Dense Pptx Posters skill pack available locally."
+homepage = "https://github.com/K-Dense-AI/claude-scientific-skills/tree/main/scientific-skills/pptx-posters"
+version_channel = "main"
+tags = ["skill", "science", "python", "data", "research"]
+
+[providers."kdense-primekg"]
+source = "kdense-science"
+prefix = "kdense-primekg"
+roots = ["primekg"]
+description = "K-Dense Primekg skill pack synced into the local skills catalog."
+use_when = "Use when you want the K-Dense Primekg skill pack available locally."
+homepage = "https://github.com/K-Dense-AI/claude-scientific-skills/tree/main/scientific-skills/primekg"
+version_channel = "main"
+tags = ["skill", "science", "python", "data", "research"]
+
+[providers."kdense-protocolsio-integration"]
+source = "kdense-science"
+prefix = "kdense-protocolsio-integration"
+roots = ["protocolsio-integration"]
+description = "K-Dense Protocolsio Integration skill pack synced into the local skills catalog."
+use_when = "Use when you want the K-Dense Protocolsio Integration skill pack available locally."
+homepage = "https://github.com/K-Dense-AI/claude-scientific-skills/tree/main/scientific-skills/protocolsio-integration"
+version_channel = "main"
+tags = ["skill", "science", "python", "data", "research"]
+
+[providers."kdense-pubchem-database"]
+source = "kdense-science"
+prefix = "kdense-pubchem-database"
+roots = ["pubchem-database"]
+description = "K-Dense Pubchem Database skill pack synced into the local skills catalog."
+use_when = "Use when you want the K-Dense Pubchem Database skill pack available locally."
+homepage = "https://github.com/K-Dense-AI/claude-scientific-skills/tree/main/scientific-skills/pubchem-database"
+version_channel = "main"
+tags = ["skill", "science", "python", "data", "research"]
 
 [providers."kdense-pubmed-database"]
 source = "kdense-science"
 prefix = "kdense-pubmed-database"
-roots = ["scientific-skills/pubmed-database"]
-description = "Kdense Science Pubmed Database skill pack synced into the local skills catalog."
-use_when = "Use when you want the Kdense Science Pubmed Database skill pack available locally."
-homepage = "https://github.com/K-Dense-AI/claude-scientific-skills/tree/main/scientific-skills/pubmed-database/references"
+roots = ["pubmed-database"]
+description = "K-Dense Pubmed Database skill pack synced into the local skills catalog."
+use_when = "Use when you want the K-Dense Pubmed Database skill pack available locally."
+homepage = "https://github.com/K-Dense-AI/claude-scientific-skills/tree/main/scientific-skills/pubmed-database"
 version_channel = "main"
-tags = ["skill", "data", "general"]
+tags = ["skill", "science", "python", "data", "research"]
+
+[providers."kdense-pufferlib"]
+source = "kdense-science"
+prefix = "kdense-pufferlib"
+roots = ["pufferlib"]
+description = "K-Dense Pufferlib skill pack synced into the local skills catalog."
+use_when = "Use when you want the K-Dense Pufferlib skill pack available locally."
+homepage = "https://github.com/K-Dense-AI/claude-scientific-skills/tree/main/scientific-skills/pufferlib"
+version_channel = "main"
+tags = ["skill", "science", "python", "data", "research"]
+
+[providers."kdense-pydeseq2"]
+source = "kdense-science"
+prefix = "kdense-pydeseq2"
+roots = ["pydeseq2"]
+description = "K-Dense Pydeseq2 skill pack synced into the local skills catalog."
+use_when = "Use when you want the K-Dense Pydeseq2 skill pack available locally."
+homepage = "https://github.com/K-Dense-AI/claude-scientific-skills/tree/main/scientific-skills/pydeseq2"
+version_channel = "main"
+tags = ["skill", "science", "python", "data", "research"]
+
+[providers."kdense-pydicom"]
+source = "kdense-science"
+prefix = "kdense-pydicom"
+roots = ["pydicom"]
+description = "K-Dense Pydicom skill pack synced into the local skills catalog."
+use_when = "Use when you want the K-Dense Pydicom skill pack available locally."
+homepage = "https://github.com/K-Dense-AI/claude-scientific-skills/tree/main/scientific-skills/pydicom"
+version_channel = "main"
+tags = ["skill", "science", "python", "data", "research"]
+
+[providers."kdense-pyhealth"]
+source = "kdense-science"
+prefix = "kdense-pyhealth"
+roots = ["pyhealth"]
+description = "K-Dense Pyhealth skill pack synced into the local skills catalog."
+use_when = "Use when you want the K-Dense Pyhealth skill pack available locally."
+homepage = "https://github.com/K-Dense-AI/claude-scientific-skills/tree/main/scientific-skills/pyhealth"
+version_channel = "main"
+tags = ["skill", "science", "python", "data", "research"]
+
+[providers."kdense-pylabrobot"]
+source = "kdense-science"
+prefix = "kdense-pylabrobot"
+roots = ["pylabrobot"]
+description = "K-Dense Pylabrobot skill pack synced into the local skills catalog."
+use_when = "Use when you want the K-Dense Pylabrobot skill pack available locally."
+homepage = "https://github.com/K-Dense-AI/claude-scientific-skills/tree/main/scientific-skills/pylabrobot"
+version_channel = "main"
+tags = ["skill", "science", "python", "data", "research"]
+
+[providers."kdense-pymatgen"]
+source = "kdense-science"
+prefix = "kdense-pymatgen"
+roots = ["pymatgen"]
+description = "K-Dense Pymatgen skill pack synced into the local skills catalog."
+use_when = "Use when you want the K-Dense Pymatgen skill pack available locally."
+homepage = "https://github.com/K-Dense-AI/claude-scientific-skills/tree/main/scientific-skills/pymatgen"
+version_channel = "main"
+tags = ["skill", "science", "python", "data", "research"]
+
+[providers."kdense-pymc"]
+source = "kdense-science"
+prefix = "kdense-pymc"
+roots = ["pymc"]
+description = "K-Dense Pymc skill pack synced into the local skills catalog."
+use_when = "Use when you want the K-Dense Pymc skill pack available locally."
+homepage = "https://github.com/K-Dense-AI/claude-scientific-skills/tree/main/scientific-skills/pymc"
+version_channel = "main"
+tags = ["skill", "science", "python", "data", "research"]
+
+[providers."kdense-pymoo"]
+source = "kdense-science"
+prefix = "kdense-pymoo"
+roots = ["pymoo"]
+description = "K-Dense Pymoo skill pack synced into the local skills catalog."
+use_when = "Use when you want the K-Dense Pymoo skill pack available locally."
+homepage = "https://github.com/K-Dense-AI/claude-scientific-skills/tree/main/scientific-skills/pymoo"
+version_channel = "main"
+tags = ["skill", "science", "python", "data", "research"]
+
+[providers."kdense-pyopenms"]
+source = "kdense-science"
+prefix = "kdense-pyopenms"
+roots = ["pyopenms"]
+description = "K-Dense Pyopenms skill pack synced into the local skills catalog."
+use_when = "Use when you want the K-Dense Pyopenms skill pack available locally."
+homepage = "https://github.com/K-Dense-AI/claude-scientific-skills/tree/main/scientific-skills/pyopenms"
+version_channel = "main"
+tags = ["skill", "science", "python", "data", "research"]
+
+[providers."kdense-pysam"]
+source = "kdense-science"
+prefix = "kdense-pysam"
+roots = ["pysam"]
+description = "K-Dense Pysam skill pack synced into the local skills catalog."
+use_when = "Use when you want the K-Dense Pysam skill pack available locally."
+homepage = "https://github.com/K-Dense-AI/claude-scientific-skills/tree/main/scientific-skills/pysam"
+version_channel = "main"
+tags = ["skill", "science", "python", "data", "research"]
+
+[providers."kdense-pytdc"]
+source = "kdense-science"
+prefix = "kdense-pytdc"
+roots = ["pytdc"]
+description = "K-Dense Pytdc skill pack synced into the local skills catalog."
+use_when = "Use when you want the K-Dense Pytdc skill pack available locally."
+homepage = "https://github.com/K-Dense-AI/claude-scientific-skills/tree/main/scientific-skills/pytdc"
+version_channel = "main"
+tags = ["skill", "science", "python", "data", "research"]
+
+[providers."kdense-pytorch-lightning"]
+source = "kdense-science"
+prefix = "kdense-pytorch-lightning"
+roots = ["pytorch-lightning"]
+description = "K-Dense Pytorch Lightning skill pack synced into the local skills catalog."
+use_when = "Use when you want the K-Dense Pytorch Lightning skill pack available locally."
+homepage = "https://github.com/K-Dense-AI/claude-scientific-skills/tree/main/scientific-skills/pytorch-lightning"
+version_channel = "main"
+tags = ["skill", "science", "python", "data", "research"]
+
+[providers."kdense-pyzotero"]
+source = "kdense-science"
+prefix = "kdense-pyzotero"
+roots = ["pyzotero"]
+description = "K-Dense Pyzotero skill pack synced into the local skills catalog."
+use_when = "Use when you want the K-Dense Pyzotero skill pack available locally."
+homepage = "https://github.com/K-Dense-AI/claude-scientific-skills/tree/main/scientific-skills/pyzotero"
+version_channel = "main"
+tags = ["skill", "science", "python", "data", "research"]
+
+[providers."kdense-qiskit"]
+source = "kdense-science"
+prefix = "kdense-qiskit"
+roots = ["qiskit"]
+description = "K-Dense Qiskit skill pack synced into the local skills catalog."
+use_when = "Use when you want the K-Dense Qiskit skill pack available locally."
+homepage = "https://github.com/K-Dense-AI/claude-scientific-skills/tree/main/scientific-skills/qiskit"
+version_channel = "main"
+tags = ["skill", "science", "python", "data", "research"]
+
+[providers."kdense-qutip"]
+source = "kdense-science"
+prefix = "kdense-qutip"
+roots = ["qutip"]
+description = "K-Dense Qutip skill pack synced into the local skills catalog."
+use_when = "Use when you want the K-Dense Qutip skill pack available locally."
+homepage = "https://github.com/K-Dense-AI/claude-scientific-skills/tree/main/scientific-skills/qutip"
+version_channel = "main"
+tags = ["skill", "science", "python", "data", "research"]
+
+[providers."kdense-rdkit"]
+source = "kdense-science"
+prefix = "kdense-rdkit"
+roots = ["rdkit"]
+description = "K-Dense Rdkit skill pack synced into the local skills catalog."
+use_when = "Use when you want the K-Dense Rdkit skill pack available locally."
+homepage = "https://github.com/K-Dense-AI/claude-scientific-skills/tree/main/scientific-skills/rdkit"
+version_channel = "main"
+tags = ["skill", "science", "python", "data", "research"]
+
+[providers."kdense-reactome-database"]
+source = "kdense-science"
+prefix = "kdense-reactome-database"
+roots = ["reactome-database"]
+description = "K-Dense Reactome Database skill pack synced into the local skills catalog."
+use_when = "Use when you want the K-Dense Reactome Database skill pack available locally."
+homepage = "https://github.com/K-Dense-AI/claude-scientific-skills/tree/main/scientific-skills/reactome-database"
+version_channel = "main"
+tags = ["skill", "science", "python", "data", "research"]
+
+[providers."kdense-research-grants"]
+source = "kdense-science"
+prefix = "kdense-research-grants"
+roots = ["research-grants"]
+description = "K-Dense Research Grants skill pack synced into the local skills catalog."
+use_when = "Use when you want the K-Dense Research Grants skill pack available locally."
+homepage = "https://github.com/K-Dense-AI/claude-scientific-skills/tree/main/scientific-skills/research-grants"
+version_channel = "main"
+tags = ["skill", "science", "python", "data", "research"]
+
+[providers."kdense-research-lookup"]
+source = "kdense-science"
+prefix = "kdense-research-lookup"
+roots = ["research-lookup"]
+description = "K-Dense Research Lookup skill pack synced into the local skills catalog."
+use_when = "Use when you want the K-Dense Research Lookup skill pack available locally."
+homepage = "https://github.com/K-Dense-AI/claude-scientific-skills/tree/main/scientific-skills/research-lookup"
+version_channel = "main"
+tags = ["skill", "science", "python", "data", "research"]
+
+[providers."kdense-rowan"]
+source = "kdense-science"
+prefix = "kdense-rowan"
+roots = ["rowan"]
+description = "K-Dense Rowan skill pack synced into the local skills catalog."
+use_when = "Use when you want the K-Dense Rowan skill pack available locally."
+homepage = "https://github.com/K-Dense-AI/claude-scientific-skills/tree/main/scientific-skills/rowan"
+version_channel = "main"
+tags = ["skill", "science", "python", "data", "research"]
+
+[providers."kdense-scanpy"]
+source = "kdense-science"
+prefix = "kdense-scanpy"
+roots = ["scanpy"]
+description = "K-Dense Scanpy skill pack synced into the local skills catalog."
+use_when = "Use when you want the K-Dense Scanpy skill pack available locally."
+homepage = "https://github.com/K-Dense-AI/claude-scientific-skills/tree/main/scientific-skills/scanpy"
+version_channel = "main"
+tags = ["skill", "science", "python", "data", "research"]
+
+[providers."kdense-scholar-evaluation"]
+source = "kdense-science"
+prefix = "kdense-scholar-evaluation"
+roots = ["scholar-evaluation"]
+description = "K-Dense Scholar Evaluation skill pack synced into the local skills catalog."
+use_when = "Use when you want the K-Dense Scholar Evaluation skill pack available locally."
+homepage = "https://github.com/K-Dense-AI/claude-scientific-skills/tree/main/scientific-skills/scholar-evaluation"
+version_channel = "main"
+tags = ["skill", "science", "python", "data", "research"]
+
+[providers."kdense-scientific-brainstorming"]
+source = "kdense-science"
+prefix = "kdense-scientific-brainstorming"
+roots = ["scientific-brainstorming"]
+description = "K-Dense Scientific Brainstorming skill pack synced into the local skills catalog."
+use_when = "Use when you want the K-Dense Scientific Brainstorming skill pack available locally."
+homepage = "https://github.com/K-Dense-AI/claude-scientific-skills/tree/main/scientific-skills/scientific-brainstorming"
+version_channel = "main"
+tags = ["skill", "science", "python", "data", "research"]
+
+[providers."kdense-scientific-critical-thinking"]
+source = "kdense-science"
+prefix = "kdense-scientific-critical-thinking"
+roots = ["scientific-critical-thinking"]
+description = "K-Dense Scientific Critical Thinking skill pack synced into the local skills catalog."
+use_when = "Use when you want the K-Dense Scientific Critical Thinking skill pack available locally."
+homepage = "https://github.com/K-Dense-AI/claude-scientific-skills/tree/main/scientific-skills/scientific-critical-thinking"
+version_channel = "main"
+tags = ["skill", "science", "python", "data", "research"]
+
+[providers."kdense-scientific-schematics"]
+source = "kdense-science"
+prefix = "kdense-scientific-schematics"
+roots = ["scientific-schematics"]
+description = "K-Dense Scientific Schematics skill pack synced into the local skills catalog."
+use_when = "Use when you want the K-Dense Scientific Schematics skill pack available locally."
+homepage = "https://github.com/K-Dense-AI/claude-scientific-skills/tree/main/scientific-skills/scientific-schematics"
+version_channel = "main"
+tags = ["skill", "science", "python", "data", "research"]
+
+[providers."kdense-scientific-slides"]
+source = "kdense-science"
+prefix = "kdense-scientific-slides"
+roots = ["scientific-slides"]
+description = "K-Dense Scientific Slides skill pack synced into the local skills catalog."
+use_when = "Use when you want the K-Dense Scientific Slides skill pack available locally."
+homepage = "https://github.com/K-Dense-AI/claude-scientific-skills/tree/main/scientific-skills/scientific-slides"
+version_channel = "main"
+tags = ["skill", "science", "python", "data", "research"]
 
 [providers."kdense-scientific-visualization"]
 source = "kdense-science"
 prefix = "kdense-scientific-visualization"
-roots = ["scientific-skills/scientific-visualization"]
-description = "Kdense Science scientific visualization skills such as Assets, References, Scripts."
-use_when = "Use when you want local Kdense Science scientific visualization skills such as Assets, References, Scripts."
+roots = ["scientific-visualization"]
+description = "K-Dense Scientific Visualization skill pack synced into the local skills catalog."
+use_when = "Use when you want the K-Dense Scientific Visualization skill pack available locally."
 homepage = "https://github.com/K-Dense-AI/claude-scientific-skills/tree/main/scientific-skills/scientific-visualization"
 version_channel = "main"
-tags = ["skill", "general"]
+tags = ["skill", "science", "python", "data", "research"]
 
 [providers."kdense-scientific-writing"]
 source = "kdense-science"
 prefix = "kdense-scientific-writing"
-roots = ["scientific-skills/scientific-writing"]
-description = "Kdense Science scientific writing skills such as Assets, References."
-use_when = "Use when you want local Kdense Science scientific writing skills such as Assets, References."
+roots = ["scientific-writing"]
+description = "K-Dense Scientific Writing skill pack synced into the local skills catalog."
+use_when = "Use when you want the K-Dense Scientific Writing skill pack available locally."
 homepage = "https://github.com/K-Dense-AI/claude-scientific-skills/tree/main/scientific-skills/scientific-writing"
 version_channel = "main"
-tags = ["skill", "general"]
+tags = ["skill", "science", "python", "data", "research"]
+
+[providers."kdense-scikit-bio"]
+source = "kdense-science"
+prefix = "kdense-scikit-bio"
+roots = ["scikit-bio"]
+description = "K-Dense Scikit Bio skill pack synced into the local skills catalog."
+use_when = "Use when you want the K-Dense Scikit Bio skill pack available locally."
+homepage = "https://github.com/K-Dense-AI/claude-scientific-skills/tree/main/scientific-skills/scikit-bio"
+version_channel = "main"
+tags = ["skill", "science", "python", "data", "research"]
+
+[providers."kdense-scikit-learn"]
+source = "kdense-science"
+prefix = "kdense-scikit-learn"
+roots = ["scikit-learn"]
+description = "K-Dense Scikit Learn skill pack synced into the local skills catalog."
+use_when = "Use when you want the K-Dense Scikit Learn skill pack available locally."
+homepage = "https://github.com/K-Dense-AI/claude-scientific-skills/tree/main/scientific-skills/scikit-learn"
+version_channel = "main"
+tags = ["skill", "science", "python", "data", "research"]
+
+[providers."kdense-scikit-survival"]
+source = "kdense-science"
+prefix = "kdense-scikit-survival"
+roots = ["scikit-survival"]
+description = "K-Dense Scikit Survival skill pack synced into the local skills catalog."
+use_when = "Use when you want the K-Dense Scikit Survival skill pack available locally."
+homepage = "https://github.com/K-Dense-AI/claude-scientific-skills/tree/main/scientific-skills/scikit-survival"
+version_channel = "main"
+tags = ["skill", "science", "python", "data", "research"]
+
+[providers."kdense-scvelo"]
+source = "kdense-science"
+prefix = "kdense-scvelo"
+roots = ["scvelo"]
+description = "K-Dense Scvelo skill pack synced into the local skills catalog."
+use_when = "Use when you want the K-Dense Scvelo skill pack available locally."
+homepage = "https://github.com/K-Dense-AI/claude-scientific-skills/tree/main/scientific-skills/scvelo"
+version_channel = "main"
+tags = ["skill", "science", "python", "data", "research"]
+
+[providers."kdense-scvi-tools"]
+source = "kdense-science"
+prefix = "kdense-scvi-tools"
+roots = ["scvi-tools"]
+description = "K-Dense Scvi Tools skill pack synced into the local skills catalog."
+use_when = "Use when you want the K-Dense Scvi Tools skill pack available locally."
+homepage = "https://github.com/K-Dense-AI/claude-scientific-skills/tree/main/scientific-skills/scvi-tools"
+version_channel = "main"
+tags = ["skill", "science", "python", "data", "research"]
+
+[providers."kdense-seaborn"]
+source = "kdense-science"
+prefix = "kdense-seaborn"
+roots = ["seaborn"]
+description = "K-Dense Seaborn skill pack synced into the local skills catalog."
+use_when = "Use when you want the K-Dense Seaborn skill pack available locally."
+homepage = "https://github.com/K-Dense-AI/claude-scientific-skills/tree/main/scientific-skills/seaborn"
+version_channel = "main"
+tags = ["skill", "science", "python", "data", "research"]
+
+[providers."kdense-shap"]
+source = "kdense-science"
+prefix = "kdense-shap"
+roots = ["shap"]
+description = "K-Dense Shap skill pack synced into the local skills catalog."
+use_when = "Use when you want the K-Dense Shap skill pack available locally."
+homepage = "https://github.com/K-Dense-AI/claude-scientific-skills/tree/main/scientific-skills/shap"
+version_channel = "main"
+tags = ["skill", "science", "python", "data", "research"]
+
+[providers."kdense-simpy"]
+source = "kdense-science"
+prefix = "kdense-simpy"
+roots = ["simpy"]
+description = "K-Dense Simpy skill pack synced into the local skills catalog."
+use_when = "Use when you want the K-Dense Simpy skill pack available locally."
+homepage = "https://github.com/K-Dense-AI/claude-scientific-skills/tree/main/scientific-skills/simpy"
+version_channel = "main"
+tags = ["skill", "science", "python", "data", "research"]
+
+[providers."kdense-stable-baselines3"]
+source = "kdense-science"
+prefix = "kdense-stable-baselines3"
+roots = ["stable-baselines3"]
+description = "K-Dense Stable Baselines3 skill pack synced into the local skills catalog."
+use_when = "Use when you want the K-Dense Stable Baselines3 skill pack available locally."
+homepage = "https://github.com/K-Dense-AI/claude-scientific-skills/tree/main/scientific-skills/stable-baselines3"
+version_channel = "main"
+tags = ["skill", "science", "python", "data", "research"]
+
+[providers."kdense-statistical-analysis"]
+source = "kdense-science"
+prefix = "kdense-statistical-analysis"
+roots = ["statistical-analysis"]
+description = "K-Dense Statistical Analysis skill pack synced into the local skills catalog."
+use_when = "Use when you want the K-Dense Statistical Analysis skill pack available locally."
+homepage = "https://github.com/K-Dense-AI/claude-scientific-skills/tree/main/scientific-skills/statistical-analysis"
+version_channel = "main"
+tags = ["skill", "science", "python", "data", "research"]
+
+[providers."kdense-statsmodels"]
+source = "kdense-science"
+prefix = "kdense-statsmodels"
+roots = ["statsmodels"]
+description = "K-Dense Statsmodels skill pack synced into the local skills catalog."
+use_when = "Use when you want the K-Dense Statsmodels skill pack available locally."
+homepage = "https://github.com/K-Dense-AI/claude-scientific-skills/tree/main/scientific-skills/statsmodels"
+version_channel = "main"
+tags = ["skill", "science", "python", "data", "research"]
+
+[providers."kdense-string-database"]
+source = "kdense-science"
+prefix = "kdense-string-database"
+roots = ["string-database"]
+description = "K-Dense String Database skill pack synced into the local skills catalog."
+use_when = "Use when you want the K-Dense String Database skill pack available locally."
+homepage = "https://github.com/K-Dense-AI/claude-scientific-skills/tree/main/scientific-skills/string-database"
+version_channel = "main"
+tags = ["skill", "science", "python", "data", "research"]
+
+[providers."kdense-sympy"]
+source = "kdense-science"
+prefix = "kdense-sympy"
+roots = ["sympy"]
+description = "K-Dense Sympy skill pack synced into the local skills catalog."
+use_when = "Use when you want the K-Dense Sympy skill pack available locally."
+homepage = "https://github.com/K-Dense-AI/claude-scientific-skills/tree/main/scientific-skills/sympy"
+version_channel = "main"
+tags = ["skill", "science", "python", "data", "research"]
+
+[providers."kdense-tiledbvcf"]
+source = "kdense-science"
+prefix = "kdense-tiledbvcf"
+roots = ["tiledbvcf"]
+description = "K-Dense Tiledbvcf skill pack synced into the local skills catalog."
+use_when = "Use when you want the K-Dense Tiledbvcf skill pack available locally."
+homepage = "https://github.com/K-Dense-AI/claude-scientific-skills/tree/main/scientific-skills/tiledbvcf"
+version_channel = "main"
+tags = ["skill", "science", "python", "data", "research"]
+
+[providers."kdense-timesfm-forecasting"]
+source = "kdense-science"
+prefix = "kdense-timesfm-forecasting"
+roots = ["timesfm-forecasting"]
+description = "K-Dense Timesfm Forecasting skill pack synced into the local skills catalog."
+use_when = "Use when you want the K-Dense Timesfm Forecasting skill pack available locally."
+homepage = "https://github.com/K-Dense-AI/claude-scientific-skills/tree/main/scientific-skills/timesfm-forecasting"
+version_channel = "main"
+tags = ["skill", "science", "python", "data", "research"]
+
+[providers."kdense-torch-geometric"]
+source = "kdense-science"
+prefix = "kdense-torch-geometric"
+roots = ["torch-geometric"]
+description = "K-Dense Torch Geometric skill pack synced into the local skills catalog."
+use_when = "Use when you want the K-Dense Torch Geometric skill pack available locally."
+homepage = "https://github.com/K-Dense-AI/claude-scientific-skills/tree/main/scientific-skills/torch-geometric"
+version_channel = "main"
+tags = ["skill", "science", "python", "data", "research"]
+
+[providers."kdense-torchdrug"]
+source = "kdense-science"
+prefix = "kdense-torchdrug"
+roots = ["torchdrug"]
+description = "K-Dense Torchdrug skill pack synced into the local skills catalog."
+use_when = "Use when you want the K-Dense Torchdrug skill pack available locally."
+homepage = "https://github.com/K-Dense-AI/claude-scientific-skills/tree/main/scientific-skills/torchdrug"
+version_channel = "main"
+tags = ["skill", "science", "python", "data", "research"]
+
+[providers."kdense-transformers"]
+source = "kdense-science"
+prefix = "kdense-transformers"
+roots = ["transformers"]
+description = "K-Dense Transformers skill pack synced into the local skills catalog."
+use_when = "Use when you want the K-Dense Transformers skill pack available locally."
+homepage = "https://github.com/K-Dense-AI/claude-scientific-skills/tree/main/scientific-skills/transformers"
+version_channel = "main"
+tags = ["skill", "science", "python", "data", "research"]
+
+[providers."kdense-treatment-plans"]
+source = "kdense-science"
+prefix = "kdense-treatment-plans"
+roots = ["treatment-plans"]
+description = "K-Dense Treatment Plans skill pack synced into the local skills catalog."
+use_when = "Use when you want the K-Dense Treatment Plans skill pack available locally."
+homepage = "https://github.com/K-Dense-AI/claude-scientific-skills/tree/main/scientific-skills/treatment-plans"
+version_channel = "main"
+tags = ["skill", "science", "python", "data", "research"]
+
+[providers."kdense-umap-learn"]
+source = "kdense-science"
+prefix = "kdense-umap-learn"
+roots = ["umap-learn"]
+description = "K-Dense Umap Learn skill pack synced into the local skills catalog."
+use_when = "Use when you want the K-Dense Umap Learn skill pack available locally."
+homepage = "https://github.com/K-Dense-AI/claude-scientific-skills/tree/main/scientific-skills/umap-learn"
+version_channel = "main"
+tags = ["skill", "science", "python", "data", "research"]
+
+[providers."kdense-uniprot-database"]
+source = "kdense-science"
+prefix = "kdense-uniprot-database"
+roots = ["uniprot-database"]
+description = "K-Dense Uniprot Database skill pack synced into the local skills catalog."
+use_when = "Use when you want the K-Dense Uniprot Database skill pack available locally."
+homepage = "https://github.com/K-Dense-AI/claude-scientific-skills/tree/main/scientific-skills/uniprot-database"
+version_channel = "main"
+tags = ["skill", "science", "python", "data", "research"]
+
+[providers."kdense-usfiscaldata"]
+source = "kdense-science"
+prefix = "kdense-usfiscaldata"
+roots = ["usfiscaldata"]
+description = "K-Dense Usfiscaldata skill pack synced into the local skills catalog."
+use_when = "Use when you want the K-Dense Usfiscaldata skill pack available locally."
+homepage = "https://github.com/K-Dense-AI/claude-scientific-skills/tree/main/scientific-skills/usfiscaldata"
+version_channel = "main"
+tags = ["skill", "science", "python", "data", "research"]
+
+[providers."kdense-uspto-database"]
+source = "kdense-science"
+prefix = "kdense-uspto-database"
+roots = ["uspto-database"]
+description = "K-Dense Uspto Database skill pack synced into the local skills catalog."
+use_when = "Use when you want the K-Dense Uspto Database skill pack available locally."
+homepage = "https://github.com/K-Dense-AI/claude-scientific-skills/tree/main/scientific-skills/uspto-database"
+version_channel = "main"
+tags = ["skill", "science", "python", "data", "research"]
+
+[providers."kdense-vaex"]
+source = "kdense-science"
+prefix = "kdense-vaex"
+roots = ["vaex"]
+description = "K-Dense Vaex skill pack synced into the local skills catalog."
+use_when = "Use when you want the K-Dense Vaex skill pack available locally."
+homepage = "https://github.com/K-Dense-AI/claude-scientific-skills/tree/main/scientific-skills/vaex"
+version_channel = "main"
+tags = ["skill", "science", "python", "data", "research"]
+
+[providers."kdense-venue-templates"]
+source = "kdense-science"
+prefix = "kdense-venue-templates"
+roots = ["venue-templates"]
+description = "K-Dense Venue Templates skill pack synced into the local skills catalog."
+use_when = "Use when you want the K-Dense Venue Templates skill pack available locally."
+homepage = "https://github.com/K-Dense-AI/claude-scientific-skills/tree/main/scientific-skills/venue-templates"
+version_channel = "main"
+tags = ["skill", "science", "python", "data", "research"]
+
+[providers."kdense-what-if-oracle"]
+source = "kdense-science"
+prefix = "kdense-what-if-oracle"
+roots = ["what-if-oracle"]
+description = "K-Dense What If Oracle skill pack synced into the local skills catalog."
+use_when = "Use when you want the K-Dense What If Oracle skill pack available locally."
+homepage = "https://github.com/K-Dense-AI/claude-scientific-skills/tree/main/scientific-skills/what-if-oracle"
+version_channel = "main"
+tags = ["skill", "science", "python", "data", "research"]
+
+[providers."kdense-xlsx"]
+source = "kdense-science"
+prefix = "kdense-xlsx"
+roots = ["xlsx"]
+description = "K-Dense Xlsx skill pack synced into the local skills catalog."
+use_when = "Use when you want the K-Dense Xlsx skill pack available locally."
+homepage = "https://github.com/K-Dense-AI/claude-scientific-skills/tree/main/scientific-skills/xlsx"
+version_channel = "main"
+tags = ["skill", "science", "python", "data", "research"]
+
+[providers."kdense-zarr-python"]
+source = "kdense-science"
+prefix = "kdense-zarr-python"
+roots = ["zarr-python"]
+description = "K-Dense Zarr Python skill pack synced into the local skills catalog."
+use_when = "Use when you want the K-Dense Zarr Python skill pack available locally."
+homepage = "https://github.com/K-Dense-AI/claude-scientific-skills/tree/main/scientific-skills/zarr-python"
+version_channel = "main"
+tags = ["skill", "science", "python", "data", "research"]
+
+[providers."kdense-zinc-database"]
+source = "kdense-science"
+prefix = "kdense-zinc-database"
+roots = ["zinc-database"]
+description = "K-Dense Zinc Database skill pack synced into the local skills catalog."
+use_when = "Use when you want the K-Dense Zinc Database skill pack available locally."
+homepage = "https://github.com/K-Dense-AI/claude-scientific-skills/tree/main/scientific-skills/zinc-database"
+version_channel = "main"
+tags = ["skill", "science", "python", "data", "research"]
+
 
 [providers."mskills-dotnet"]
 source = "microsoft-skills"
