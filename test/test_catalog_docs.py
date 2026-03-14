@@ -17,6 +17,7 @@ def test_render_readme_section_includes_profile_overview() -> None:
 
     assert "uv run poe generate-docs" in section
     assert "| `python-mcp` |" in section
+    assert "| `ts-mcp` |" in section
     assert "docs/THEMES.md" in section
     assert "docs/CREDITS.md" in section
 

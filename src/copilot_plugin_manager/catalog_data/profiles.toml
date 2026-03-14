@@ -22,32 +22,83 @@ themes = ["core", "python", "testing", "python-agents"]
 [profiles."python-mcp"]
 themes = ["core", "python", "mcp", "testing", "python-agents", "mcp-agents"]
 
+[profiles."ts"]
+themes = ["core", "frontend", "typescript", "testing"]
+
+[profiles."ts-mcp"]
+themes = ["core", "frontend", "typescript", "mcp", "testing", "mcp-agents"]
+
+[profiles."ts-fullstack"]
+themes = ["core", "frontend", "typescript", "mcp", "testing", "mcp-agents", "devops"]
+
+[profiles."python-plus-rust"]
+themes = ["core", "python", "data", "testing"]
+
+[profiles."pydantic"]
+themes = ["core", "python", "openapi", "testing"]
+
+[profiles."fastapi-typer"]
+themes = ["core", "python", "openapi", "testing"]
+
+[profiles."backend"]
+themes = ["core", "python", "openapi", "data", "testing", "security"]
+
 [profiles."mcp-dev"]
 themes = ["core", "mcp", "python", "testing"]
 
 [profiles."frontend-design"]
-themes = ["core", "frontend", "docs-design", "testing"]
+themes = ["core", "frontend", "typescript", "docs-design", "testing"]
 
 [profiles."backend-api"]
 themes = ["core", "python", "openapi", "data", "testing", "security"]
 
 [profiles."fullstack"]
-themes = ["core", "frontend", "python", "testing", "data"]
+themes = ["core", "frontend", "typescript", "python", "testing", "data"]
 
 [profiles."agentic-fullstack"]
-themes = ["core", "frontend", "python", "testing", "data", "security", "python-agents", "mcp-agents"]
+themes = ["core", "frontend", "typescript", "python", "testing", "data", "security", "python-agents", "mcp-agents"]
+
+[profiles."dotnet-dev"]
+themes = ["core", "dotnet", "testing", "devops"]
+
+[profiles."polyglot"]
+themes = ["core", "python", "typescript", "dotnet", "testing", "security"]
 
 [profiles."science"]
 themes = ["core", "science", "python", "data"]
 
+[profiles."scientific-programming"]
+themes = ["core", "science", "python", "data", "research"]
+
+[profiles."bioinformatics"]
+themes = ["core", "python", "bioinformatics", "science", "research", "data"]
+
+[profiles."drug-discovery"]
+themes = ["core", "python", "chemistry", "bioinformatics", "science", "research", "data"]
+
+[profiles."ml-engineering"]
+themes = ["core", "python", "ml-ai", "data", "testing", "science"]
+
+[profiles."quantum-computing"]
+themes = ["core", "python", "quantum", "science", "research"]
+
+[profiles."healthcare"]
+themes = ["core", "python", "clinical", "science", "research", "data", "planning"]
+
 [profiles."data-ai"]
-themes = ["core", "data", "science", "research"]
+themes = ["core", "data", "ml-ai", "science", "research"]
+
+[profiles."data-science"]
+themes = ["core", "data", "ml-ai", "python", "research", "science", "testing"]
 
 [profiles."research"]
 themes = ["core", "docs", "science", "research", "planning"]
 
 [profiles."devops-sec"]
 themes = ["core", "devops", "security", "github"]
+
+[profiles."infra-platform"]
+themes = ["core", "infra", "devops", "security", "github"]
 
 [profiles."planner"]
 themes = ["core", "planning", "github"]
@@ -59,4 +110,13 @@ themes = ["core", "enterprise", "data", "testing", "devops"]
 themes = ["core", "enterprise", "planning", "security", "github", "testing"]
 
 [profiles."everything"]
-themes = ["core", "docs", "docs-design", "python", "python-agents", "frontend", "mcp", "mcp-agents", "testing", "science", "openapi", "enterprise", "data", "devops", "security", "planning", "github", "research", "specialized", "agents"]
+themes = [
+  "core", "docs", "docs-design",
+  "python", "python-agents", "typescript", "dotnet",
+  "frontend", "mcp", "mcp-agents",
+  "testing",
+  "science", "bioinformatics", "ml-ai", "chemistry", "quantum", "clinical",
+  "openapi", "enterprise",
+  "data", "devops", "infra", "security",
+  "planning", "github", "research", "specialized", "agents",
+]

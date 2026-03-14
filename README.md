@@ -74,10 +74,10 @@ uvx copilot-plugin-manager status
 <!-- generated:catalog-overview:start -->
 _This section is generated from the bundled catalog data with `uv run poe generate-docs`._
 
-- `21` profiles
-- `20` themes
+- `38` profiles
+- `28` themes
 - `53` plugins
-- `37` skill providers
+- `210` skill providers
 - `58` agent providers
 
 See also:
@@ -96,19 +96,36 @@ See also:
 | `python-core` | `core`, `python`, `testing` |
 | `python-agents` | `core`, `python`, `testing`, `python-agents` |
 | `python-mcp` | `core`, `python`, `mcp`, `testing`, `python-agents`, `mcp-agents` |
+| `ts` | `core`, `frontend`, `typescript`, `testing` |
+| `ts-mcp` | `core`, `frontend`, `typescript`, `mcp`, `testing`, `mcp-agents` |
+| `ts-fullstack` | `core`, `frontend`, `typescript`, `mcp`, `testing`, `mcp-agents`, `devops` |
+| `python-plus-rust` | `core`, `python`, `data`, `testing` |
+| `pydantic` | `core`, `python`, `openapi`, `testing` |
+| `fastapi-typer` | `core`, `python`, `openapi`, `testing` |
+| `backend` | `core`, `python`, `openapi`, `data`, `testing`, `security` |
 | `mcp-dev` | `core`, `mcp`, `python`, `testing` |
-| `frontend-design` | `core`, `frontend`, `docs-design`, `testing` |
+| `frontend-design` | `core`, `frontend`, `typescript`, `docs-design`, `testing` |
 | `backend-api` | `core`, `python`, `openapi`, `data`, `testing`, `security` |
-| `fullstack` | `core`, `frontend`, `python`, `testing`, `data` |
-| `agentic-fullstack` | `core`, `frontend`, `python`, `testing`, `data`, `security`, `python-agents`, `mcp-agents` |
+| `fullstack` | `core`, `frontend`, `typescript`, `python`, `testing`, `data` |
+| `agentic-fullstack` | `core`, `frontend`, `typescript`, `python`, `testing`, `data`, `security`, `python-agents`, `mcp-agents` |
+| `dotnet-dev` | `core`, `dotnet`, `testing`, `devops` |
+| `polyglot` | `core`, `python`, `typescript`, `dotnet`, `testing`, `security` |
 | `science` | `core`, `science`, `python`, `data` |
-| `data-ai` | `core`, `data`, `science`, `research` |
+| `scientific-programming` | `core`, `science`, `python`, `data`, `research` |
+| `bioinformatics` | `core`, `python`, `bioinformatics`, `science`, `research`, `data` |
+| `drug-discovery` | `core`, `python`, `chemistry`, `bioinformatics`, `science`, `research`, `data` |
+| `ml-engineering` | `core`, `python`, `ml-ai`, `data`, `testing`, `science` |
+| `quantum-computing` | `core`, `python`, `quantum`, `science`, `research` |
+| `healthcare` | `core`, `python`, `clinical`, `science`, `research`, `data`, `planning` |
+| `data-ai` | `core`, `data`, `ml-ai`, `science`, `research` |
+| `data-science` | `core`, `data`, `ml-ai`, `python`, `research`, `science`, `testing` |
 | `research` | `core`, `docs`, `science`, `research`, `planning` |
 | `devops-sec` | `core`, `devops`, `security`, `github` |
+| `infra-platform` | `core`, `infra`, `devops`, `security`, `github` |
 | `planner` | `core`, `planning`, `github` |
 | `enterprise` | `core`, `enterprise`, `data`, `testing`, `devops` |
 | `enterprise-architect` | `core`, `enterprise`, `planning`, `security`, `github`, `testing` |
-| `everything` | `core`, `docs`, `docs-design`, `python`, `python-agents`, `frontend`, `mcp`, `mcp-agents`, `testing`, `science`, `openapi`, `enterprise`, `data`, `devops`, `security`, `planning`, `github`, `research`, `specialized`, `agents` |
+| `everything` | `core`, `docs`, `docs-design`, `python`, `python-agents`, `typescript`, `dotnet`, `frontend`, `mcp`, `mcp-agents`, `testing`, `science`, `bioinformatics`, `ml-ai`, `chemistry`, `quantum`, `clinical`, `openapi`, `enterprise`, `data`, `devops`, `infra`, `security`, `planning`, `github`, `research`, `specialized`, `agents` |
 <!-- generated:catalog-overview:end -->
 
 ## Shell completion

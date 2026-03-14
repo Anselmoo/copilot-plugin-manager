@@ -5,11 +5,11 @@ def test_catalog_bundle_counts() -> None:
     bundle = load_catalog_bundle()
     assert len(bundle.plugins) > 0
     assert len(bundle.repositories) == 7
-    assert len(bundle.skill_providers) == 37
+    assert len(bundle.skill_providers) == 210
     assert len(bundle.agent_providers) == 58
     assert len(bundle.entrypoints) > len(bundle.plugins)
-    assert len(bundle.themes) == 20
-    assert len(bundle.profiles) == 21
+    assert len(bundle.themes) == 28
+    assert len(bundle.profiles) == 38
 
 
 def test_resolve_known_profile() -> None:
@@ -17,6 +17,18 @@ def test_resolve_known_profile() -> None:
     target = bundle.resolve_target("python-mcp")
     assert target.kind == "profile"
     assert target.themes == ["core", "python", "mcp", "testing", "python-agents", "mcp-agents"]
+
+
+def test_resolve_added_curated_profiles() -> None:
+    bundle = load_catalog_bundle()
+
+    assert bundle.resolve_target("ts").themes == ["core", "frontend", "typescript", "testing"]
+    assert bundle.resolve_target("ts-mcp").themes == ["core", "frontend", "typescript", "mcp", "testing", "mcp-agents"]
+    assert bundle.resolve_target("python-plus-rust").themes == ["core", "python", "data", "testing"]
+    assert bundle.resolve_target("pydantic").themes == ["core", "python", "openapi", "testing"]
+    assert bundle.resolve_target("fastapi-typer").themes == ["core", "python", "openapi", "testing"]
+    assert bundle.resolve_target("backend").themes == bundle.resolve_target("backend-api").themes
+    assert bundle.resolve_target("scientific-programming").themes == ["core", "science", "python", "data", "research"]
 
 
 def test_plugin_and_repository_metadata_are_enriched() -> None:
