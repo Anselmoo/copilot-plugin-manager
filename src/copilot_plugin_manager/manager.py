@@ -918,17 +918,26 @@ class PluginManager:
 
         Returns the version string (e.g. ``"1.2.3"``) or ``None`` when pip is
         unavailable, the package is not found, or the output cannot be parsed.
+
+        The ``pip index versions`` command outputs a line like::
+
+            Available versions: 1.2.3, 1.2.2, ...
+
+        The first entry on that line is the latest available version.
         """
         pip_cmd = self.runner.which("pip") or self.runner.which("pip3")
         if pip_cmd is None:
             return None
         try:
             result = self.runner.run([pip_cmd, "index", "versions", package])
-            # Output format: "AVAILABLE VERSIONS:\n  1.2.3, 1.2.2, ..."
             for line in result.stdout.splitlines():
                 stripped = line.strip()
-                if stripped and not stripped.upper().startswith("AVAILABLE"):
-                    return stripped.split(",")[0].strip()
+                # Match "Available versions: 1.2.3, 1.2.2, ..." (case-insensitive)
+                if stripped.lower().startswith("available versions:"):
+                    versions_part = stripped.split(":", 1)[1].strip()
+                    first = versions_part.split(",")[0].strip()
+                    if first:
+                        return first
         except (CommandError, RuntimeError):
             pass
         return None
@@ -937,9 +946,15 @@ class PluginManager:
         return hashlib.sha256(json.dumps(entry, sort_keys=True).encode()).hexdigest()
 
     def build_mcp_server_entry(self, name: str, record: McpRecord, installed_version: str | None = None) -> dict[str, object]:
-        """Build the VS Code–compatible MCP server config entry for *record*."""
+        """Build the VS Code–compatible MCP server config entry for *record*.
+
+        Raises ``ValueError`` when the record is invalid, e.g. an HTTP MCP
+        without a ``url``.
+        """
         if record.kind == "http":
-            return {"type": "http", "url": record.url or ""}
+            if not record.url:
+                raise ValueError(f"MCP '{name}' has kind='http' but no url is set.")
+            return {"type": "http", "url": record.url}
         if record.kind == "local":
             entry: dict[str, object] = {"type": "stdio"}
             if record.command:
@@ -1126,20 +1141,40 @@ class PluginManager:
         self.state_store.write_mcp_state(mcp_state)
         return mcp_state
 
-    def _mcp_entry_current(self, name: str, record: McpRecord, servers: dict[str, object]) -> bool:
+    def _mcp_entry_current(
+        self,
+        name: str,
+        record: McpRecord,
+        servers: dict[str, object],
+        *,
+        probe_version: bool = False,
+        cwd: Path | None = None,
+    ) -> bool:
         """Return True when the existing config entry matches what we would write.
 
-        Entries that have been moved to local scope (``stored.scope == "local"``)
-        are always considered current so that ``reconcile_mcps`` does not move
-        them back into the global config.
+        When *probe_version* is True and the entry is an unversioned npm/pip
+        package, the registry is probed for the latest version; if that differs
+        from the stored version the entry is treated as stale and False is
+        returned so the caller will update it.
+
+        When *cwd* is provided, entries that were moved to local scope are
+        validated against the local ``.vscode/mcp.json``; if the entry is no
+        longer present there it is treated as needing a global add.
         """
         stored = self.state_store.read_mcp_state(name)
         if stored is None:
             return False
         # If the entry has been deliberately moved to local scope, skip it in
-        # global reconciliation.
+        # global reconciliation – but only if the local config still contains it.
         if stored.scope == "local":
-            return True
+            if cwd is not None:
+                local_servers = dict(self._servers_from_config(self.read_local_mcp_config(cwd)))
+                if name in local_servers:
+                    return True
+                # The local config no longer has this entry; fall through so
+                # reconcile_mcps re-adds it to the global config.
+            else:
+                return True
         if name not in servers:
             return False
         # HTTP MCPs are current as long as the URL hasn't changed.
@@ -1149,6 +1184,17 @@ class PluginManager:
                 return False
             existing_typed = cast(dict[str, object], existing)
             return existing_typed.get("url") == record.url
+        # For npm/pip: when probing is enabled and the package is not pinned,
+        # compare the stored version against the live registry version.  If
+        # a newer version is available, treat the entry as stale.
+        if probe_version and not record.pinned_tag and record.package:
+            latest: str | None = None
+            if record.kind == "npm":
+                latest = self.probe_mcp_npm_version(record.package)
+            elif record.kind == "pip":
+                latest = self.probe_mcp_pip_version(record.package)
+            if latest is not None and latest != stored.installed_version:
+                return False
         # For npm/pip/local: compare config signatures.
         expected_entry = self.build_mcp_server_entry(name, record, stored.installed_version)
         return stored.config_signature == self._mcp_config_signature(expected_entry)
@@ -1181,7 +1227,7 @@ class PluginManager:
 
             for mcp_name, record in self.catalog.mcps.items():
                 progress.update(task_id, description=f"Syncing MCP {mcp_name}")
-                if self._mcp_entry_current(mcp_name, record, servers):
+                if self._mcp_entry_current(mcp_name, record, servers, probe_version=probe_version, cwd=cwd):
                     results[mcp_name] = "skipped"
                 else:
                     action = "updated" if mcp_name in servers else "added"
@@ -1208,8 +1254,11 @@ class PluginManager:
                     progress.advance(task_id)
                     continue
                 typed_entry = cast(dict[str, object], local_entry)
+                # Strip env vars before merging into the global (user-wide) config
+                # to avoid persisting repo-specific secrets outside the repository.
+                safe_entry: dict[str, object] = {k: v for k, v in typed_entry.items() if k != "env"}
                 action = "updated" if local_name in servers else "added"
-                servers[local_name] = typed_entry
+                servers[local_name] = safe_entry
                 # Write the updated servers dict back to disk.
                 fresh_config = self.read_mcp_config()
                 fresh_config["servers"] = servers
@@ -1217,7 +1266,7 @@ class PluginManager:
                 mcp_state = McpSyncState(
                     kind="local",
                     name=local_name,
-                    config_signature=self._mcp_config_signature(typed_entry),
+                    config_signature=self._mcp_config_signature(safe_entry),
                     updated_at=datetime.now(UTC).isoformat(),
                 )
                 self.state_store.write_mcp_state(mcp_state)
@@ -1241,11 +1290,14 @@ class PluginManager:
         """Top-level MCP management dispatch.
 
         Supported operations: ``"install"`` / ``"update"`` (both call
-        ``reconcile_mcps``), and ``"delete"`` (removes all catalog MCPs from
-        both global and local configs).
+        ``reconcile_mcps`` with version probing enabled), and ``"delete"``
+        (removes all catalog MCPs from both global and local configs).
         """
         if operation in {"install", "update"}:
-            return self.reconcile_mcps(cwd, probe_version=(operation == "install"))
+            # Both install and update probe the registry for newer versions so
+            # that ``copilot-plugin-manager update mcps`` always refreshes to
+            # the latest available version.
+            return self.reconcile_mcps(cwd, probe_version=True)
         if operation == "delete":
             results: dict[str, str] = {}
             for name in list(self.catalog.mcps):

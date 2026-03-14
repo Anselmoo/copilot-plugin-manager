@@ -429,12 +429,12 @@ def _mcp_results_table(title: str, results: dict[str, str]) -> None:
     console().print(table)
 
 
-def _parse_mcp_scope(scope: str) -> "Literal['global', 'local']":
+def _parse_mcp_scope(scope: str) -> Literal["global", "local"]:
     """Validate and return a typed MCP scope literal, exiting on unknown values."""
     if scope not in {"global", "local"}:
         console().print(f"[red]Unknown scope '{scope}'. Use 'global' or 'local'.[/red]")
         raise typer.Exit(1)
-    return cast("Literal['global', 'local']", scope)
+    return cast(Literal["global", "local"], scope)
 
 
 @app.command(

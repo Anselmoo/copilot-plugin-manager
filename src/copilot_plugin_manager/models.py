@@ -44,7 +44,7 @@ class ProviderRecord(BaseModel):
 
 
 class EntrypointRecord(BaseModel):
-    kind: Literal["plugin", "skill", "agent"]
+    kind: Literal["plugin", "skill", "agent", "mcp"]
     source: str
     provider: str | None = None
     source_path: str

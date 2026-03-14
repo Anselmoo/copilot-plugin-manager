@@ -15288,3 +15288,248 @@ first_seen_at = "2026-03-14T07:20:22.629101+00:00"
 last_seen_at = "2026-03-14T07:20:22.629101+00:00"
 provider = "mskills-typescript"
 tags = ["skill", "frontend", "ui", "skills", "microsoft", "general"]
+
+# ── MCP server version snapshots ─────────────────────────────────────────────
+# These entries provide retractable version-tracking for each catalogued MCP.
+# commit_revision holds the npm/pypi version tag measured at measured_at.
+# source_path holds the canonical package identifier (package name or URL).
+
+[entrypoints."mcp:playwright:@playwright/mcp"]
+kind = "mcp"
+source = "@playwright/mcp"
+source_path = "@playwright/mcp"
+local_name = "playwright"
+local_output = ""
+title = "Playwright MCP"
+description = "Playwright MCP — browser automation and end-to-end testing via the Playwright framework."
+source_url = "https://github.com/microsoft/playwright-mcp"
+commit_revision = "0.0.68"
+commit_date = "2026-03-14T21:00:00+00:00"
+measured_revision = "0.0.68"
+measured_at = "2026-03-14T21:00:00+00:00"
+first_seen_at = "2026-03-14T21:00:00+00:00"
+last_seen_at = "2026-03-14T21:00:00+00:00"
+tags = ["mcp", "testing", "frontend"]
+
+[entrypoints."mcp:magic:@21st-dev/magic"]
+kind = "mcp"
+source = "@21st-dev/magic"
+source_path = "@21st-dev/magic"
+local_name = "magic"
+local_output = ""
+title = "Magic MCP"
+description = "Magic by 21st.dev — AI-assisted UI component generation and interactive design prototyping."
+source_url = "https://github.com/21st-dev/magic-mcp"
+commit_revision = "0.1.0"
+commit_date = "2026-03-14T21:00:00+00:00"
+measured_revision = "0.1.0"
+measured_at = "2026-03-14T21:00:00+00:00"
+first_seen_at = "2026-03-14T21:00:00+00:00"
+last_seen_at = "2026-03-14T21:00:00+00:00"
+tags = ["mcp", "frontend", "ui"]
+
+[entrypoints."mcp:chrome-devtools:chrome-devtools-mcp"]
+kind = "mcp"
+source = "chrome-devtools-mcp"
+source_path = "chrome-devtools-mcp"
+local_name = "chrome-devtools"
+local_output = ""
+title = "Chrome DevTools MCP"
+description = "Chrome DevTools MCP — exposes Chrome DevTools Protocol capabilities for browser debugging, performance profiling, and DOM inspection."
+source_url = "https://github.com/ChromeDevTools/chrome-devtools-mcp"
+commit_revision = "0.20.0"
+commit_date = "2026-03-14T21:00:00+00:00"
+measured_revision = "0.20.0"
+measured_at = "2026-03-14T21:00:00+00:00"
+first_seen_at = "2026-03-14T21:00:00+00:00"
+last_seen_at = "2026-03-14T21:00:00+00:00"
+tags = ["mcp", "frontend", "testing"]
+
+[entrypoints."mcp:azure:@azure/mcp"]
+kind = "mcp"
+source = "@azure/mcp"
+source_path = "@azure/mcp"
+local_name = "azure"
+local_output = ""
+title = "Azure MCP"
+description = "Azure MCP Server — official Microsoft Azure integration covering 40+ Azure services."
+source_url = "https://github.com/microsoft/mcp"
+commit_revision = "2.0.0-beta.27"
+commit_date = "2026-03-14T21:00:00+00:00"
+measured_revision = "2.0.0-beta.27"
+measured_at = "2026-03-14T21:00:00+00:00"
+first_seen_at = "2026-03-14T21:00:00+00:00"
+last_seen_at = "2026-03-14T21:00:00+00:00"
+tags = ["mcp", "devops"]
+
+[entrypoints."mcp:markitdown:markitdown-mcp"]
+kind = "mcp"
+source = "markitdown-mcp"
+source_path = "markitdown-mcp"
+local_name = "markitdown"
+local_output = ""
+title = "MarkItDown MCP"
+description = "MarkItDown MCP — converts PDF, Word, Excel, PowerPoint, HTML, and other formats to Markdown."
+source_url = "https://github.com/microsoft/markitdown"
+commit_revision = "0.0.1a4"
+commit_date = "2026-03-14T21:00:00+00:00"
+measured_revision = "0.0.1a4"
+measured_at = "2026-03-14T21:00:00+00:00"
+first_seen_at = "2026-03-14T21:00:00+00:00"
+last_seen_at = "2026-03-14T21:00:00+00:00"
+tags = ["mcp", "docs", "general"]
+
+[entrypoints."mcp:filesystem:@modelcontextprotocol/server-filesystem"]
+kind = "mcp"
+source = "@modelcontextprotocol/server-filesystem"
+source_path = "@modelcontextprotocol/server-filesystem"
+local_name = "filesystem"
+local_output = ""
+title = "Filesystem MCP"
+description = "Filesystem MCP — secure file-system access for reading, writing, and navigating local project files."
+source_url = "https://github.com/modelcontextprotocol/servers"
+commit_revision = "2026.1.14"
+commit_date = "2026-01-14T00:00:00+00:00"
+measured_revision = "2026.1.14"
+measured_at = "2026-03-14T21:00:00+00:00"
+first_seen_at = "2026-03-14T21:00:00+00:00"
+last_seen_at = "2026-03-14T21:00:00+00:00"
+tags = ["mcp", "general", "devops"]
+
+[entrypoints."mcp:memory:@modelcontextprotocol/server-memory"]
+kind = "mcp"
+source = "@modelcontextprotocol/server-memory"
+source_path = "@modelcontextprotocol/server-memory"
+local_name = "memory"
+local_output = ""
+title = "Memory MCP"
+description = "Memory MCP — persistent entity and relationship graph for long-running AI assistant sessions."
+source_url = "https://github.com/modelcontextprotocol/servers"
+commit_revision = "2026.1.26"
+commit_date = "2026-01-26T00:00:00+00:00"
+measured_revision = "2026.1.26"
+measured_at = "2026-03-14T21:00:00+00:00"
+first_seen_at = "2026-03-14T21:00:00+00:00"
+last_seen_at = "2026-03-14T21:00:00+00:00"
+tags = ["mcp", "general", "planning"]
+
+[entrypoints."mcp:sequential-thinking:@modelcontextprotocol/server-sequential-thinking"]
+kind = "mcp"
+source = "@modelcontextprotocol/server-sequential-thinking"
+source_path = "@modelcontextprotocol/server-sequential-thinking"
+local_name = "sequential-thinking"
+local_output = ""
+title = "Sequential Thinking MCP"
+description = "Sequential Thinking MCP — structured reasoning scaffold that breaks complex problems into sequential thoughts."
+source_url = "https://github.com/modelcontextprotocol/servers"
+commit_revision = "2025.12.18"
+commit_date = "2025-12-18T00:00:00+00:00"
+measured_revision = "2025.12.18"
+measured_at = "2026-03-14T21:00:00+00:00"
+first_seen_at = "2026-03-14T21:00:00+00:00"
+last_seen_at = "2026-03-14T21:00:00+00:00"
+tags = ["mcp", "planning", "orchestration"]
+
+[entrypoints."mcp:postgres:@modelcontextprotocol/server-postgres"]
+kind = "mcp"
+source = "@modelcontextprotocol/server-postgres"
+source_path = "@modelcontextprotocol/server-postgres"
+local_name = "postgres"
+local_output = ""
+title = "PostgreSQL MCP"
+description = "PostgreSQL MCP — natural-language query and schema introspection for PostgreSQL databases."
+source_url = "https://github.com/modelcontextprotocol/servers"
+commit_revision = "0.6.2"
+commit_date = "2026-03-14T21:00:00+00:00"
+measured_revision = "0.6.2"
+measured_at = "2026-03-14T21:00:00+00:00"
+first_seen_at = "2026-03-14T21:00:00+00:00"
+last_seen_at = "2026-03-14T21:00:00+00:00"
+tags = ["mcp", "data", "backend"]
+
+[entrypoints."mcp:brave-search:@modelcontextprotocol/server-brave-search"]
+kind = "mcp"
+source = "@modelcontextprotocol/server-brave-search"
+source_path = "@modelcontextprotocol/server-brave-search"
+local_name = "brave-search"
+local_output = ""
+title = "Brave Search MCP"
+description = "Brave Search MCP — private web and local search via the Brave Search API."
+source_url = "https://github.com/modelcontextprotocol/servers"
+commit_revision = "0.6.2"
+commit_date = "2026-03-14T21:00:00+00:00"
+measured_revision = "0.6.2"
+measured_at = "2026-03-14T21:00:00+00:00"
+first_seen_at = "2026-03-14T21:00:00+00:00"
+last_seen_at = "2026-03-14T21:00:00+00:00"
+tags = ["mcp", "general", "planning"]
+
+[entrypoints."mcp:context7:https://mcp.context7.com/mcp"]
+kind = "mcp"
+source = "https://mcp.context7.com/mcp"
+source_path = "https://mcp.context7.com/mcp"
+local_name = "context7"
+local_output = ""
+title = "Context7 MCP"
+description = "Context7 — live library documentation and curated code examples, always up to date."
+source_url = "https://github.com/upstash/context7"
+measured_at = "2026-03-14T21:00:00+00:00"
+first_seen_at = "2026-03-14T21:00:00+00:00"
+last_seen_at = "2026-03-14T21:00:00+00:00"
+tags = ["mcp", "docs", "planning"]
+
+[entrypoints."mcp:zen-of-languages:@Anselmoo/mcp-zen-of-languages"]
+kind = "mcp"
+source = "@Anselmoo/mcp-zen-of-languages"
+source_path = "@Anselmoo/mcp-zen-of-languages"
+local_name = "zen-of-languages"
+local_output = ""
+title = "Zen of Languages MCP"
+description = "Zen of Languages — philosophy-inspired guidance on idiomatic coding across programming languages and runtimes."
+source_url = "https://github.com/Anselmoo/mcp-zen-of-languages"
+measured_at = "2026-03-14T21:00:00+00:00"
+first_seen_at = "2026-03-14T21:00:00+00:00"
+last_seen_at = "2026-03-14T21:00:00+00:00"
+tags = ["mcp", "language", "general"]
+
+[entrypoints."mcp:ai-agent-guidelines:@Anselmoo/mcp-ai-agent-guidelines"]
+kind = "mcp"
+source = "@Anselmoo/mcp-ai-agent-guidelines"
+source_path = "@Anselmoo/mcp-ai-agent-guidelines"
+local_name = "ai-agent-guidelines"
+local_output = ""
+title = "AI Agent Guidelines MCP"
+description = "AI Agent Guidelines — curated best practices and quality criteria for building reliable AI agents."
+source_url = "https://github.com/Anselmoo/mcp-ai-agent-guidelines"
+measured_at = "2026-03-14T21:00:00+00:00"
+first_seen_at = "2026-03-14T21:00:00+00:00"
+last_seen_at = "2026-03-14T21:00:00+00:00"
+tags = ["mcp", "agents", "general"]
+
+[entrypoints."mcp:serena:@oraios/serena"]
+kind = "mcp"
+source = "@oraios/serena"
+source_path = "@oraios/serena"
+local_name = "serena"
+local_output = ""
+title = "Serena MCP"
+description = "Serena — software engineering agent specialised in deep code navigation, large-scale refactoring, and multi-file reasoning."
+source_url = "https://github.com/oraios/serena"
+measured_at = "2026-03-14T21:00:00+00:00"
+first_seen_at = "2026-03-14T21:00:00+00:00"
+last_seen_at = "2026-03-14T21:00:00+00:00"
+tags = ["mcp", "agents", "general"]
+
+[entrypoints."mcp:github:@github/github-mcp-server"]
+kind = "mcp"
+source = "@github/github-mcp-server"
+source_path = "@github/github-mcp-server"
+local_name = "github"
+local_output = ""
+title = "GitHub MCP"
+description = "GitHub MCP Server — official GitHub integration for issues, pull requests, repositories, code search, and workflow automation."
+source_url = "https://github.com/github/github-mcp-server"
+measured_at = "2026-03-14T21:00:00+00:00"
+first_seen_at = "2026-03-14T21:00:00+00:00"
+last_seen_at = "2026-03-14T21:00:00+00:00"
+tags = ["mcp", "github", "devops"]

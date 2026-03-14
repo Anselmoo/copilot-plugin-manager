@@ -154,15 +154,22 @@ def test_write_and_read_mcp_config_roundtrip(tmp_path: Path) -> None:
 # ─── build_mcp_server_entry ──────────────────────────────────────────────────
 
 
-def test_build_mcp_server_entry_http() -> None:
-    manager = _make_manager(Path("/tmp"))
+def test_build_mcp_server_entry_http(tmp_path: Path) -> None:
+    manager = _make_manager(tmp_path)
     record = McpRecord(kind="http", url="https://mcp.context7.com/mcp")
     entry = manager.build_mcp_server_entry("context7", record)
     assert entry == {"type": "http", "url": "https://mcp.context7.com/mcp"}
 
 
-def test_build_mcp_server_entry_npm_with_pinned_tag() -> None:
-    manager = _make_manager(Path("/tmp"))
+def test_build_mcp_server_entry_http_raises_when_no_url(tmp_path: Path) -> None:
+    manager = _make_manager(tmp_path)
+    record = McpRecord(kind="http")
+    with pytest.raises(ValueError, match="no url is set"):
+        manager.build_mcp_server_entry("missing-url", record)
+
+
+def test_build_mcp_server_entry_npm_with_pinned_tag(tmp_path: Path) -> None:
+    manager = _make_manager(tmp_path)
     record = McpRecord(kind="npm", package="@playwright/mcp", pinned_tag="1.2.3")
     entry = manager.build_mcp_server_entry("playwright", record)
     assert entry["type"] == "stdio"
@@ -171,24 +178,24 @@ def test_build_mcp_server_entry_npm_with_pinned_tag() -> None:
     assert "@playwright/mcp@1.2.3" in args
 
 
-def test_build_mcp_server_entry_npm_with_probed_version() -> None:
-    manager = _make_manager(Path("/tmp"))
+def test_build_mcp_server_entry_npm_with_probed_version(tmp_path: Path) -> None:
+    manager = _make_manager(tmp_path)
     record = McpRecord(kind="npm", package="@playwright/mcp")
     entry = manager.build_mcp_server_entry("playwright", record, installed_version="2.0.0")
     args = cast(list[object], entry["args"])
     assert "@playwright/mcp@2.0.0" in args
 
 
-def test_build_mcp_server_entry_npm_latest_when_no_version() -> None:
-    manager = _make_manager(Path("/tmp"))
+def test_build_mcp_server_entry_npm_latest_when_no_version(tmp_path: Path) -> None:
+    manager = _make_manager(tmp_path)
     record = McpRecord(kind="npm", package="@playwright/mcp")
     entry = manager.build_mcp_server_entry("playwright", record)
     args = cast(list[object], entry["args"])
     assert "@playwright/mcp" in args
 
 
-def test_build_mcp_server_entry_npm_custom_env() -> None:
-    manager = _make_manager(Path("/tmp"))
+def test_build_mcp_server_entry_npm_custom_env(tmp_path: Path) -> None:
+    manager = _make_manager(tmp_path)
     record = McpRecord(kind="npm", package="my-pkg", env={"API_KEY": "secret"})
     entry = manager.build_mcp_server_entry("my-pkg", record)
     assert entry.get("env") == {"API_KEY": "secret"}
@@ -549,8 +556,8 @@ def test_mcp_state_clear_removes_entry(tmp_path: Path) -> None:
 # ─── pip kind ────────────────────────────────────────────────────────────────
 
 
-def test_build_mcp_server_entry_pip_no_version() -> None:
-    manager = _make_manager(Path("/tmp"))
+def test_build_mcp_server_entry_pip_no_version(tmp_path: Path) -> None:
+    manager = _make_manager(tmp_path)
     record = McpRecord(kind="pip", package="markitdown-mcp")
     entry = manager.build_mcp_server_entry("markitdown", record)
     assert entry["type"] == "stdio"
@@ -559,20 +566,44 @@ def test_build_mcp_server_entry_pip_no_version() -> None:
     assert "markitdown-mcp" in args
 
 
-def test_build_mcp_server_entry_pip_with_pinned_tag() -> None:
-    manager = _make_manager(Path("/tmp"))
+def test_build_mcp_server_entry_pip_with_pinned_tag(tmp_path: Path) -> None:
+    manager = _make_manager(tmp_path)
     record = McpRecord(kind="pip", package="markitdown-mcp", pinned_tag="0.1.2")
     entry = manager.build_mcp_server_entry("markitdown", record)
     args = cast(list[object], entry["args"])
     assert "markitdown-mcp==0.1.2" in args
 
 
-def test_build_mcp_server_entry_pip_with_probed_version() -> None:
-    manager = _make_manager(Path("/tmp"))
+def test_build_mcp_server_entry_pip_with_probed_version(tmp_path: Path) -> None:
+    manager = _make_manager(tmp_path)
     record = McpRecord(kind="pip", package="markitdown-mcp")
     entry = manager.build_mcp_server_entry("markitdown", record, installed_version="0.2.0")
     args = cast(list[object], entry["args"])
     assert "markitdown-mcp==0.2.0" in args
+
+
+def test_probe_mcp_pip_version_parses_available_versions_line(tmp_path: Path) -> None:
+    """Regression: probe_mcp_pip_version must parse 'Available versions: X, Y, ...' correctly."""
+
+    class PipRunner(FakeRunner):
+        def which(self, name: str) -> str | None:
+            return "/usr/bin/pip" if name in {"pip", "pip3"} else None
+
+        def run(self, args: list[str], cwd: Path | None = None, check: bool = True) -> CommandResult:
+            if args[:1] == ["/usr/bin/pip"] and "index" in args and "versions" in args:
+                # Simulate actual pip output format.
+                stdout = (
+                    "markitdown-mcp (0.1.0)\n"
+                    "Available versions: 0.1.0, 0.0.9, 0.0.8\n"
+                    "  INSTALLED: 0.0.9\n"
+                    "  LATEST:    0.1.0\n"
+                )
+                return CommandResult(tuple(args), stdout, "", 0)
+            return CommandResult(tuple(args), "", "", 0)
+
+    manager = _make_manager(tmp_path, runner=PipRunner())
+    result = manager.probe_mcp_pip_version("markitdown-mcp")
+    assert result == "0.1.0"
 
 
 def test_probe_mcp_pip_version_returns_none_when_pip_absent(tmp_path: Path) -> None:
@@ -742,3 +773,101 @@ def test_scope_persists_in_state(tmp_path: Path) -> None:
     stored2 = manager.state_store.read_mcp_state("playwright")
     assert stored2 is not None
     assert stored2.scope == "global"
+
+
+# ─── local scope repo-awareness ──────────────────────────────────────────────
+
+
+def test_reconcile_adds_globally_when_local_config_deleted(tmp_path: Path) -> None:
+    """After a local .vscode/mcp.json is deleted, mcp-sync should re-add globally."""
+    manager = _make_manager(tmp_path, runner=NoNpmRunner())
+    record = McpRecord(kind="http", url="https://mcp.context7.com/mcp")
+    # Sync context7 as local scope.
+    manager.sync_mcp("context7", record, probe_version=False, scope="local", cwd=tmp_path)
+
+    # Simulate the local config being deleted.
+    local_cfg = tmp_path / ".vscode" / "mcp.json"
+    local_cfg.unlink()
+
+    # reconcile_mcps should see scope==local but no local config → add globally.
+    results = manager.reconcile_mcps(tmp_path, probe_version=False)
+    assert results.get("context7") in {"added", "updated"}
+    assert "context7" in _get_servers(manager)
+
+
+def test_reconcile_adds_globally_when_entry_missing_from_local_config(tmp_path: Path) -> None:
+    """If a locally-scoped MCP is removed from .vscode/mcp.json, re-add globally."""
+    manager = _make_manager(tmp_path, runner=NoNpmRunner())
+    # First sync as local.
+    record = McpRecord(kind="http", url="https://mcp.context7.com/mcp")
+    manager.sync_mcp("context7", record, probe_version=False, scope="local", cwd=tmp_path)
+
+    # Wipe only context7 from the local config.
+    manager.write_local_mcp_config(tmp_path, {"servers": {}})
+
+    # reconcile_mcps should detect the missing entry and add it to global.
+    results = manager.reconcile_mcps(tmp_path, probe_version=False)
+    assert results.get("context7") in {"added", "updated"}
+    assert "context7" in _get_servers(manager)
+
+
+# ─── reconcile: local env not copied to global ───────────────────────────────
+
+
+def test_reconcile_strips_env_from_local_entries_in_global(tmp_path: Path) -> None:
+    """Env vars from .vscode/mcp.json must not be copied into the global config."""
+    manager = _make_manager(tmp_path, runner=NoNpmRunner())
+    vscode_dir = tmp_path / ".vscode"
+    vscode_dir.mkdir()
+    # Write a local MCP with a secret env var.
+    (vscode_dir / "mcp.json").write_text(
+        json.dumps(
+            {
+                "servers": {
+                    "secret-tool": {
+                        "type": "stdio",
+                        "command": "node",
+                        "args": ["./server.js"],
+                        "env": {"SECRET_TOKEN": "hunter2"},
+                    }
+                }
+            }
+        )
+    )
+
+    manager.reconcile_mcps(tmp_path, probe_version=False)
+
+    servers = _get_servers(manager)
+    assert "secret-tool" in servers
+    entry = _get_entry(servers, "secret-tool")
+    # env must NOT be present in the global config.
+    assert "env" not in entry
+
+
+# ─── probe_version staleness detection ───────────────────────────────────────
+
+
+def test_reconcile_detects_newer_npm_version_when_probe_enabled(tmp_path: Path) -> None:
+    """When a newer npm version is available, reconcile must update the entry."""
+
+    class NewVersionRunner(FakeRunner):
+        """Always returns version 3.0.0 regardless of which package is asked."""
+
+        def __init__(self) -> None:
+            super().__init__(npm_versions={"@myco/test-mcp": "3.0.0"})
+
+    manager = _make_manager(tmp_path, runner=NewVersionRunner())
+    # Use a record with no pinned_tag so version probing is triggered.
+    record = McpRecord(kind="npm", package="@myco/test-mcp")
+    # Sync once without probing so the stored version is None (stale).
+    manager.sync_mcp("test-mcp", record, probe_version=False)
+
+    # Directly inject this record into the catalog so reconcile_mcps picks it up.
+    manager.catalog.mcps["test-mcp"] = record
+
+    # Now reconcile with probe enabled – should detect 3.0.0 ≠ stored None.
+    results = manager.reconcile_mcps(tmp_path, probe_version=True)
+    assert results.get("test-mcp") in {"added", "updated"}
+    stored = manager.state_store.read_mcp_state("test-mcp")
+    assert stored is not None
+    assert stored.installed_version == "3.0.0"
