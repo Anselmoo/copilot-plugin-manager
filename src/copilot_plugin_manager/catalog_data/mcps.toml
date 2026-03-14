@@ -131,3 +131,22 @@ use_when = "Use when the assistant needs to perform web research or look up curr
 source_url = "https://github.com/modelcontextprotocol/servers"
 version_channel = "latest"
 tags = ["general", "planning"]
+
+[mcps."azure"]
+kind = "npm"
+package = "@azure/mcp"
+args = ["server", "start"]
+description = "Azure MCP Server — official Microsoft Azure integration covering 40+ Azure services including storage, databases, AI, and cloud infrastructure."
+use_when = "Use when working with Azure resources, deploying to Azure, or automating Azure service interactions from an AI assistant."
+source_url = "https://github.com/microsoft/mcp"
+version_channel = "latest"
+tags = ["devops", "github"]
+
+[mcps."markitdown"]
+kind = "pip"
+package = "markitdown-mcp"
+description = "MarkItDown MCP — converts PDF, Word, Excel, PowerPoint, HTML, and other formats to Markdown, enabling AI assistants to read rich document content."
+use_when = "Use when you need to read, summarise, or extract information from documents in non-text formats such as PDF, DOCX, XLSX, or PPTX."
+source_url = "https://github.com/microsoft/markitdown"
+version_channel = "latest"
+tags = ["docs", "general"]

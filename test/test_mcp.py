@@ -224,12 +224,9 @@ def test_sync_mcp_writes_http_entry(tmp_path: Path) -> None:
     record = McpRecord(kind="http", url="https://mcp.context7.com/mcp", source_url="https://github.com/upstash/context7")
     state = manager.sync_mcp("context7", record, probe_version=False)
 
-    config = manager.read_mcp_config()
-    servers = config["servers"]
-    assert isinstance(servers, dict)
+    servers = _get_servers(manager)
     assert "context7" in servers
-    entry = servers["context7"]
-    assert isinstance(entry, dict)
+    entry = _get_entry(servers, "context7")
     assert entry["type"] == "http"
     assert entry["url"] == "https://mcp.context7.com/mcp"
     assert state.kind == "http"
@@ -242,11 +239,9 @@ def test_sync_mcp_writes_npm_entry_with_probed_version(tmp_path: Path) -> None:
     record = McpRecord(kind="npm", package="@playwright/mcp")
     state = manager.sync_mcp("playwright", record, probe_version=True)
 
-    servers = manager.read_mcp_config()["servers"]
-    assert isinstance(servers, dict)
-    entry = servers["playwright"]
-    assert isinstance(entry, dict)
-    assert "@playwright/mcp@2.1.0" in entry["args"]
+    servers = _get_servers(manager)
+    entry = _get_entry(servers, "playwright")
+    assert "@playwright/mcp@2.1.0" in cast(list[object], entry["args"])
     assert state.installed_version == "2.1.0"
 
 
@@ -256,10 +251,9 @@ def test_sync_mcp_uses_pinned_tag_over_probe(tmp_path: Path) -> None:
     record = McpRecord(kind="npm", package="@playwright/mcp", pinned_tag="1.0.0")
     state = manager.sync_mcp("playwright", record, probe_version=True)
 
-    servers = manager.read_mcp_config()["servers"]
-    assert isinstance(servers, dict)
-    entry = servers["playwright"]
-    assert "@playwright/mcp@1.0.0" in entry["args"]
+    servers = _get_servers(manager)
+    entry = _get_entry(servers, "playwright")
+    assert "@playwright/mcp@1.0.0" in cast(list[object], entry["args"])
     assert state.installed_version == "1.0.0"
 
 
@@ -270,12 +264,9 @@ def test_sync_mcp_falls_back_to_pinned_sha(tmp_path: Path) -> None:
     state = manager.sync_mcp("new-mcp", record, probe_version=True)
 
     assert state.installed_sha == "abc123def456"
-    servers = manager.read_mcp_config()["servers"]
-    assert isinstance(servers, dict)
-    # No version pin when npm is unavailable and no tag
-    entry = servers["new-mcp"]
-    assert isinstance(entry, dict)
-    assert "@new/mcp" in entry["args"]
+    servers = _get_servers(manager)
+    entry = _get_entry(servers, "new-mcp")
+    assert "@new/mcp" in cast(list[object], entry["args"])
 
 
 def test_sync_mcp_persists_state(tmp_path: Path) -> None:
@@ -293,7 +284,7 @@ def test_sync_mcp_persists_state(tmp_path: Path) -> None:
 
 def test_sync_mcp_preserves_existing_unrelated_entries(tmp_path: Path) -> None:
     manager = _make_manager(tmp_path)
-    existing = {"servers": {"existing-mcp": {"type": "http", "url": "https://other.example"}}}
+    existing: dict[str, object] = {"servers": {"existing-mcp": {"type": "http", "url": "https://other.example"}}}
     manager.write_mcp_config(existing)
 
     record = McpRecord(kind="http", url="https://mcp.context7.com/mcp")
@@ -316,8 +307,7 @@ def test_remove_mcp_removes_existing_entry(tmp_path: Path) -> None:
     removed = manager.remove_mcp("context7")
 
     assert removed is True
-    servers = manager.read_mcp_config().get("servers", {})
-    assert isinstance(servers, dict)
+    servers = _get_servers(manager)
     assert "context7" not in servers
     assert manager.state_store.read_mcp_state("context7") is None
 
@@ -340,8 +330,7 @@ def test_remove_mcp_preserves_other_entries(tmp_path: Path) -> None:
     )
     manager.remove_mcp("a")
 
-    servers = manager.read_mcp_config()["servers"]
-    assert isinstance(servers, dict)
+    servers = _get_servers(manager)
     assert "a" not in servers
     assert "b" in servers
 
@@ -353,8 +342,7 @@ def test_reconcile_mcps_adds_all_catalog_entries(tmp_path: Path) -> None:
     manager = _make_manager(tmp_path, runner=NoNpmRunner())
     results = manager.reconcile_mcps(tmp_path, probe_version=False)
 
-    servers = manager.read_mcp_config().get("servers", {})
-    assert isinstance(servers, dict)
+    servers = _get_servers(manager)
     for name in manager.catalog.mcps:
         assert name in servers, f"Expected {name!r} in servers"
     assert all(action in {"added", "updated", "skipped"} for action in results.values())
@@ -378,9 +366,9 @@ def test_reconcile_mcps_updates_stale_entries(tmp_path: Path) -> None:
 
     # Tamper with a config entry to simulate staleness.
     config = manager.read_mcp_config()
-    servers = config["servers"]
-    assert isinstance(servers, dict)
+    servers = _get_servers(manager)
     servers["playwright"] = {"type": "stdio", "command": "npx", "args": ["-y", "@playwright/mcp@OLD"]}
+    config["servers"] = servers
     manager.write_mcp_config(config)
     manager.state_store.clear_mcp_state("playwright")
 
@@ -400,8 +388,7 @@ def test_reconcile_mcps_remove_unlisted(tmp_path: Path) -> None:
 
     manager.reconcile_mcps(tmp_path, probe_version=False, remove_unlisted=True)
 
-    servers = manager.read_mcp_config().get("servers", {})
-    assert isinstance(servers, dict)
+    servers = _get_servers(manager)
     assert "should-be-removed" not in servers
 
 
@@ -417,8 +404,7 @@ def test_reconcile_mcps_keep_unlisted_by_default(tmp_path: Path) -> None:
 
     manager.reconcile_mcps(tmp_path, probe_version=False, remove_unlisted=False)
 
-    servers = manager.read_mcp_config().get("servers", {})
-    assert isinstance(servers, dict)
+    servers = _get_servers(manager)
     assert "keep-me" in servers
 
 
@@ -447,7 +433,8 @@ def test_discover_local_mcps_from_vscode_mcp_json(tmp_path: Path) -> None:
     local = manager.discover_local_mcps(tmp_path)
 
     assert "local-tool" in local
-    assert local["local-tool"]["command"] == "node"
+    local_tool = cast(dict[str, object], local["local-tool"])
+    assert local_tool["command"] == "node"
 
 
 def test_discover_local_mcps_accepts_mcpservers_key(tmp_path: Path) -> None:
@@ -492,8 +479,7 @@ def test_reconcile_mcps_merges_local_definitions(tmp_path: Path) -> None:
 
     manager.reconcile_mcps(tmp_path, probe_version=False)
 
-    servers = manager.read_mcp_config().get("servers", {})
-    assert isinstance(servers, dict)
+    servers = _get_servers(manager)
     assert "repo-local" in servers
 
 
@@ -512,8 +498,7 @@ def test_manage_mcps_delete_removes_catalog_entries(tmp_path: Path) -> None:
     manager.manage_mcps("install", tmp_path)
     results = manager.manage_mcps("delete", tmp_path)
 
-    servers = manager.read_mcp_config().get("servers", {})
-    assert isinstance(servers, dict)
+    servers = _get_servers(manager)
     for name in manager.catalog.mcps:
         assert name not in servers
         assert results.get(name) in {"removed", "skipped"}
@@ -533,8 +518,7 @@ def test_manage_target_mcps_dispatches_correctly(tmp_path: Path, monkeypatch: py
     manager = _make_manager(tmp_path, runner=NoNpmRunner())
     manager.manage_target("install", "mcps", tmp_path)
 
-    servers = manager.read_mcp_config().get("servers", {})
-    assert isinstance(servers, dict)
+    servers = _get_servers(manager)
     assert len(servers) >= len(manager.catalog.mcps)
 
 
@@ -560,3 +544,201 @@ def test_mcp_state_clear_removes_entry(tmp_path: Path) -> None:
 
     manager.state_store.clear_mcp_state("context7")
     assert manager.state_store.read_mcp_state("context7") is None
+
+
+# ─── pip kind ────────────────────────────────────────────────────────────────
+
+
+def test_build_mcp_server_entry_pip_no_version() -> None:
+    manager = _make_manager(Path("/tmp"))
+    record = McpRecord(kind="pip", package="markitdown-mcp")
+    entry = manager.build_mcp_server_entry("markitdown", record)
+    assert entry["type"] == "stdio"
+    assert entry["command"] == "uvx"
+    args = cast(list[object], entry["args"])
+    assert "markitdown-mcp" in args
+
+
+def test_build_mcp_server_entry_pip_with_pinned_tag() -> None:
+    manager = _make_manager(Path("/tmp"))
+    record = McpRecord(kind="pip", package="markitdown-mcp", pinned_tag="0.1.2")
+    entry = manager.build_mcp_server_entry("markitdown", record)
+    args = cast(list[object], entry["args"])
+    assert "markitdown-mcp==0.1.2" in args
+
+
+def test_build_mcp_server_entry_pip_with_probed_version() -> None:
+    manager = _make_manager(Path("/tmp"))
+    record = McpRecord(kind="pip", package="markitdown-mcp")
+    entry = manager.build_mcp_server_entry("markitdown", record, installed_version="0.2.0")
+    args = cast(list[object], entry["args"])
+    assert "markitdown-mcp==0.2.0" in args
+
+
+def test_probe_mcp_pip_version_returns_none_when_pip_absent(tmp_path: Path) -> None:
+    runner = NoNpmRunner()
+    manager = _make_manager(tmp_path, runner=runner)
+    assert manager.probe_mcp_pip_version("markitdown-mcp") is None
+
+
+def test_sync_pip_mcp_writes_uvx_entry(tmp_path: Path) -> None:
+    manager = _make_manager(tmp_path, runner=NoNpmRunner())
+    record = McpRecord(kind="pip", package="markitdown-mcp", pinned_tag="0.1.0")
+    state = manager.sync_mcp("markitdown", record, probe_version=False)
+
+    servers = _get_servers(manager)
+    entry = _get_entry(servers, "markitdown")
+    assert entry["command"] == "uvx"
+    assert "markitdown-mcp==0.1.0" in cast(list[object], entry["args"])
+    assert state.installed_version == "0.1.0"
+
+
+# ─── catalog: azure + markitdown ─────────────────────────────────────────────
+
+
+def test_catalog_contains_azure_mcp() -> None:
+    bundle = load_catalog_bundle()
+    assert "azure" in bundle.mcps
+    record = bundle.mcps["azure"]
+    assert record.kind == "npm"
+    assert record.package == "@azure/mcp"
+    assert "server" in record.args
+    assert "start" in record.args
+
+
+def test_catalog_contains_markitdown_mcp() -> None:
+    bundle = load_catalog_bundle()
+    assert "markitdown" in bundle.mcps
+    record = bundle.mcps["markitdown"]
+    assert record.kind == "pip"
+    assert record.package == "markitdown-mcp"
+
+
+def test_azure_mcp_entry_includes_server_start_args(tmp_path: Path) -> None:
+    manager = _make_manager(tmp_path, runner=NoNpmRunner())
+    record = manager.catalog.mcps["azure"]
+    entry = manager.build_mcp_server_entry("azure", record)
+    args = cast(list[object], entry["args"])
+    assert "server" in args
+    assert "start" in args
+
+
+# ─── scope: global vs local ──────────────────────────────────────────────────
+
+
+def test_sync_mcp_defaults_to_global_scope(tmp_path: Path) -> None:
+    manager = _make_manager(tmp_path)
+    record = McpRecord(kind="http", url="https://mcp.context7.com/mcp")
+    state = manager.sync_mcp("context7", record, probe_version=False)
+
+    assert state.scope == "global"
+    servers = _get_servers(manager)
+    assert "context7" in servers
+    # Should NOT appear in local config (no .vscode/mcp.json written).
+    assert not (tmp_path / ".vscode" / "mcp.json").exists()
+
+
+def test_sync_mcp_local_scope_writes_vscode_mcp_json(tmp_path: Path) -> None:
+    manager = _make_manager(tmp_path)
+    record = McpRecord(kind="http", url="https://mcp.context7.com/mcp")
+    state = manager.sync_mcp("context7", record, probe_version=False, scope="local", cwd=tmp_path)
+
+    assert state.scope == "local"
+    # Should NOT be in global config.
+    assert "context7" not in _get_servers(manager)
+    # Should be in local config.
+    local_config = manager.read_local_mcp_config(tmp_path)
+    local_servers = cast(dict[str, object], local_config.get("servers", {}))
+    assert "context7" in local_servers
+
+
+def test_sync_mcp_local_scope_requires_cwd(tmp_path: Path) -> None:
+    manager = _make_manager(tmp_path)
+    record = McpRecord(kind="http", url="https://mcp.context7.com/mcp")
+    with pytest.raises(ValueError, match="cwd must be provided"):
+        manager.sync_mcp("context7", record, probe_version=False, scope="local")
+
+
+# ─── move_mcp_to_scope ───────────────────────────────────────────────────────
+
+
+def test_move_global_to_local(tmp_path: Path) -> None:
+    manager = _make_manager(tmp_path)
+    record = McpRecord(kind="http", url="https://mcp.context7.com/mcp")
+    manager.sync_mcp("context7", record, probe_version=False, scope="global")
+
+    # Confirm it's in global config.
+    assert "context7" in _get_servers(manager)
+
+    # Move to local.
+    state = manager.move_mcp_to_scope("context7", "local", tmp_path)
+
+    assert state.scope == "local"
+    # Removed from global.
+    assert "context7" not in _get_servers(manager)
+    # Present in local.
+    local_config = manager.read_local_mcp_config(tmp_path)
+    local_servers = cast(dict[str, object], local_config.get("servers", {}))
+    assert "context7" in local_servers
+
+
+def test_move_local_to_global(tmp_path: Path) -> None:
+    manager = _make_manager(tmp_path)
+    record = McpRecord(kind="http", url="https://mcp.context7.com/mcp")
+    manager.sync_mcp("context7", record, probe_version=False, scope="local", cwd=tmp_path)
+
+    # Confirm it's in local config only.
+    assert "context7" not in _get_servers(manager)
+
+    # Move back to global.
+    state = manager.move_mcp_to_scope("context7", "global", tmp_path)
+
+    assert state.scope == "global"
+    # Present in global.
+    assert "context7" in _get_servers(manager)
+    # Removed from local.
+    local_config = manager.read_local_mcp_config(tmp_path)
+    local_servers = cast(dict[str, object], local_config.get("servers", {}))
+    assert "context7" not in local_servers
+
+
+def test_move_global_to_local_raises_when_not_in_global(tmp_path: Path) -> None:
+    manager = _make_manager(tmp_path)
+    with pytest.raises(KeyError, match="not found in global config"):
+        manager.move_mcp_to_scope("nonexistent", "local", tmp_path)
+
+
+def test_move_local_to_global_raises_when_not_in_local(tmp_path: Path) -> None:
+    manager = _make_manager(tmp_path)
+    with pytest.raises(KeyError, match="not found in local config"):
+        manager.move_mcp_to_scope("nonexistent", "global", tmp_path)
+
+
+def test_reconcile_skips_locally_scoped_entries(tmp_path: Path) -> None:
+    manager = _make_manager(tmp_path, runner=NoNpmRunner())
+    record = McpRecord(kind="http", url="https://mcp.context7.com/mcp")
+    # Add context7 as local; state.scope == "local".
+    manager.sync_mcp("context7", record, probe_version=False, scope="local", cwd=tmp_path)
+
+    # Reconcile global should skip context7 because it's locally scoped.
+    results = manager.reconcile_mcps(tmp_path, probe_version=False)
+
+    assert results.get("context7") == "skipped"
+    # Should NOT appear in global config.
+    assert "context7" not in _get_servers(manager)
+
+
+def test_scope_persists_in_state(tmp_path: Path) -> None:
+    manager = _make_manager(tmp_path)
+    record = McpRecord(kind="npm", package="@playwright/mcp", pinned_tag="1.0.0")
+    manager.sync_mcp("playwright", record, probe_version=False, scope="local", cwd=tmp_path)
+
+    stored = manager.state_store.read_mcp_state("playwright")
+    assert stored is not None
+    assert stored.scope == "local"
+
+    # Move back to global; scope in state should update.
+    manager.move_mcp_to_scope("playwright", "global", tmp_path)
+    stored2 = manager.state_store.read_mcp_state("playwright")
+    assert stored2 is not None
+    assert stored2.scope == "global"

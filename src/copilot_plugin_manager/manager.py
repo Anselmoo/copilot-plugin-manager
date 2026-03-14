@@ -856,10 +856,32 @@ class PluginManager:
             return {}
         return cast(dict[str, object], servers)
 
+    def _local_mcp_config_path(self, cwd: Path) -> Path:
+        return cwd / ".vscode" / "mcp.json"
+
+    def read_local_mcp_config(self, cwd: Path) -> dict[str, object]:
+        """Read .vscode/mcp.json from *cwd*, returning an empty dict on missing/invalid file."""
+        config_path = self._local_mcp_config_path(cwd)
+        if not config_path.exists():
+            return {}
+        try:
+            data = json.loads(config_path.read_text())
+        except (OSError, json.JSONDecodeError):
+            return {}
+        if not isinstance(data, dict):
+            return {}
+        return cast(dict[str, object], data)
+
+    def write_local_mcp_config(self, cwd: Path, config: dict[str, object]) -> None:
+        """Write *config* to .vscode/mcp.json inside *cwd*."""
+        config_path = self._local_mcp_config_path(cwd)
+        config_path.parent.mkdir(parents=True, exist_ok=True)
+        config_path.write_text(json.dumps(config, indent=2) + "\n")
+
     def discover_local_mcps(self, cwd: Path) -> dict[str, object]:
         """Discover MCP server definitions from .vscode/mcp.json in the repo."""
         candidates = [
-            cwd / ".vscode" / "mcp.json",
+            self._local_mcp_config_path(cwd),
             cwd / ".vscode" / "mcp" / "mcp.json",
         ]
         for candidate in candidates:
@@ -873,7 +895,7 @@ class PluginManager:
                 continue
             servers = data.get("servers", data.get("mcpServers", {}))
             if isinstance(servers, dict):
-                return servers
+                return cast(dict[str, object], servers)
         return {}
 
     def probe_mcp_npm_version(self, package: str) -> str | None:
@@ -891,6 +913,26 @@ class PluginManager:
         except (CommandError, RuntimeError):
             return None
 
+    def probe_mcp_pip_version(self, package: str) -> str | None:
+        """Probe PyPI for the latest version of a pip package via ``pip index versions``.
+
+        Returns the version string (e.g. ``"1.2.3"``) or ``None`` when pip is
+        unavailable, the package is not found, or the output cannot be parsed.
+        """
+        pip_cmd = self.runner.which("pip") or self.runner.which("pip3")
+        if pip_cmd is None:
+            return None
+        try:
+            result = self.runner.run([pip_cmd, "index", "versions", package])
+            # Output format: "AVAILABLE VERSIONS:\n  1.2.3, 1.2.2, ..."
+            for line in result.stdout.splitlines():
+                stripped = line.strip()
+                if stripped and not stripped.upper().startswith("AVAILABLE"):
+                    return stripped.split(",")[0].strip()
+        except (CommandError, RuntimeError):
+            pass
+        return None
+
     def _mcp_config_signature(self, entry: dict[str, object]) -> str:
         return hashlib.sha256(json.dumps(entry, sort_keys=True).encode()).hexdigest()
 
@@ -907,6 +949,22 @@ class PluginManager:
             if record.env:
                 entry["env"] = dict(record.env)
             return entry
+        if record.kind == "pip":
+            # Python packages are run via uvx (uv's tool runner); version is
+            # pinned with pip-style ``package==version`` syntax.
+            package = record.package or name
+            version_suffix = ""
+            if record.pinned_tag:
+                version_suffix = f"=={record.pinned_tag}"
+            elif installed_version:
+                version_suffix = f"=={installed_version}"
+            versioned_package = f"{package}{version_suffix}"
+            command = record.command or "uvx"
+            pip_args: list[object] = [versioned_package, *record.args]
+            pip_entry: dict[str, object] = {"type": "stdio", "command": command, "args": pip_args}
+            if record.env:
+                pip_entry["env"] = dict(record.env)
+            return pip_entry
         # npm (and docker treated similarly via command override)
         package = record.package or name
         version_suffix = ""
@@ -922,8 +980,21 @@ class PluginManager:
             npm_entry["env"] = dict(record.env)
         return npm_entry
 
-    def sync_mcp(self, name: str, record: McpRecord, *, probe_version: bool = True) -> McpSyncState:
-        """Add or update a single MCP entry in the config and record its state."""
+    def sync_mcp(
+        self,
+        name: str,
+        record: McpRecord,
+        *,
+        probe_version: bool = True,
+        scope: Literal["global", "local"] = "global",
+        cwd: Path | None = None,
+    ) -> McpSyncState:
+        """Add or update a single MCP entry in the config and record its state.
+
+        When *scope* is ``"local"`` the entry is written to
+        ``.vscode/mcp.json`` inside *cwd* instead of the global config.
+        *cwd* must be provided when *scope* is ``"local"``.
+        """
         installed_version: str | None = None
         installed_sha: str | None = None
 
@@ -932,13 +1003,28 @@ class PluginManager:
                 installed_version = self.probe_mcp_npm_version(record.package)
             if installed_version is None and record.pinned_sha:
                 installed_sha = record.pinned_sha
+        elif record.kind == "pip" and not record.pinned_tag:
+            if probe_version and record.package:
+                installed_version = self.probe_mcp_pip_version(record.package)
+            if installed_version is None and record.pinned_sha:
+                installed_sha = record.pinned_sha
 
-        config = self.read_mcp_config()
-        servers = dict(self._servers_from_config(config))
         entry = self.build_mcp_server_entry(name, record, installed_version)
-        servers[name] = entry
-        config["servers"] = servers
-        self.write_mcp_config(config)
+
+        if scope == "local":
+            if cwd is None:
+                raise ValueError("cwd must be provided when scope='local'")
+            local_config = self.read_local_mcp_config(cwd)
+            local_servers = dict(self._servers_from_config(local_config))
+            local_servers[name] = entry
+            local_config["servers"] = local_servers
+            self.write_local_mcp_config(cwd, local_config)
+        else:
+            global_config = self.read_mcp_config()
+            global_servers = dict(self._servers_from_config(global_config))
+            global_servers[name] = entry
+            global_config["servers"] = global_servers
+            self.write_mcp_config(global_config)
 
         mcp_state = McpSyncState(
             kind=record.kind,
@@ -948,29 +1034,112 @@ class PluginManager:
             installed_version=record.pinned_tag or installed_version,
             installed_sha=installed_sha,
             config_signature=self._mcp_config_signature(entry),
+            scope=scope,
             updated_at=datetime.now(UTC).isoformat(),
         )
         self.state_store.write_mcp_state(mcp_state)
         return mcp_state
 
-    def remove_mcp(self, name: str) -> bool:
-        """Remove an MCP entry from the config. Returns True if it was present."""
-        config = self.read_mcp_config()
-        servers = dict(self._servers_from_config(config))
-        if name not in servers:
-            self.state_store.clear_mcp_state(name)
-            return False
-        del servers[name]
-        config["servers"] = servers
-        self.write_mcp_config(config)
+    def remove_mcp(self, name: str, cwd: Path | None = None) -> bool:
+        """Remove an MCP entry from the global config (and local config if *cwd* given).
+
+        Returns True if the entry was present in either config.
+        """
+        removed = False
+        # Remove from global config.
+        global_config = self.read_mcp_config()
+        global_servers = dict(self._servers_from_config(global_config))
+        if name in global_servers:
+            del global_servers[name]
+            global_config["servers"] = global_servers
+            self.write_mcp_config(global_config)
+            removed = True
+        # Remove from local config if cwd is given.
+        if cwd is not None:
+            local_config = self.read_local_mcp_config(cwd)
+            local_servers = dict(self._servers_from_config(local_config))
+            if name in local_servers:
+                del local_servers[name]
+                local_config["servers"] = local_servers
+                self.write_local_mcp_config(cwd, local_config)
+                removed = True
         self.state_store.clear_mcp_state(name)
-        return True
+        return removed
+
+    def move_mcp_to_scope(
+        self,
+        name: str,
+        target_scope: Literal["global", "local"],
+        cwd: Path,
+    ) -> McpSyncState:
+        """Move an MCP server entry between global and local scope.
+
+        - ``"local"``  — removes from ``~/.copilot/mcp-config.json``, writes to
+          ``.vscode/mcp.json`` inside *cwd*.
+        - ``"global"`` — removes from ``.vscode/mcp.json`` inside *cwd*, writes
+          to ``~/.copilot/mcp-config.json``.
+
+        Raises ``KeyError`` when the entry is not found in the source config.
+        """
+        global_config = self.read_mcp_config()
+        global_servers = dict(self._servers_from_config(global_config))
+        local_config = self.read_local_mcp_config(cwd)
+        local_servers = dict(self._servers_from_config(local_config))
+
+        if target_scope == "local":
+            if name not in global_servers:
+                raise KeyError(f"MCP '{name}' not found in global config (~/.copilot/mcp-config.json).")
+            entry = global_servers.pop(name)
+            global_config["servers"] = global_servers
+            self.write_mcp_config(global_config)
+            local_servers[name] = entry
+            local_config["servers"] = local_servers
+            self.write_local_mcp_config(cwd, local_config)
+        else:
+            if name not in local_servers:
+                raise KeyError(f"MCP '{name}' not found in local config ({self._local_mcp_config_path(cwd)}).")
+            entry = local_servers.pop(name)
+            local_config["servers"] = local_servers
+            self.write_local_mcp_config(cwd, local_config)
+            global_servers[name] = entry
+            global_config["servers"] = global_servers
+            self.write_mcp_config(global_config)
+
+        # Update or create state entry with the new scope.
+        stored = self.state_store.read_mcp_state(name)
+        if not isinstance(entry, dict):
+            # The entry in the config was malformed; this should not happen with
+            # valid VS Code MCP config files, but guard against it explicitly.
+            raise ValueError(f"MCP entry '{name}' in config is not a JSON object; cannot compute signature.")
+        entry_typed = cast(dict[str, object], entry)
+        mcp_state = McpSyncState(
+            kind=stored.kind if stored else "npm",
+            name=name,
+            package=stored.package if stored else None,
+            url=stored.url if stored else None,
+            installed_version=stored.installed_version if stored else None,
+            installed_sha=stored.installed_sha if stored else None,
+            config_signature=self._mcp_config_signature(entry_typed),
+            scope=target_scope,
+            updated_at=datetime.now(UTC).isoformat(),
+        )
+        self.state_store.write_mcp_state(mcp_state)
+        return mcp_state
 
     def _mcp_entry_current(self, name: str, record: McpRecord, servers: dict[str, object]) -> bool:
-        """Return True when the existing config entry matches what we would write."""
+        """Return True when the existing config entry matches what we would write.
+
+        Entries that have been moved to local scope (``stored.scope == "local"``)
+        are always considered current so that ``reconcile_mcps`` does not move
+        them back into the global config.
+        """
         stored = self.state_store.read_mcp_state(name)
         if stored is None:
             return False
+        # If the entry has been deliberately moved to local scope, skip it in
+        # global reconciliation.
+        if stored.scope == "local":
+            return True
         if name not in servers:
             return False
         # HTTP MCPs are current as long as the URL hasn't changed.
@@ -980,7 +1149,7 @@ class PluginManager:
                 return False
             existing_typed = cast(dict[str, object], existing)
             return existing_typed.get("url") == record.url
-        # For npm/local: compare config signatures.
+        # For npm/pip/local: compare config signatures.
         expected_entry = self.build_mcp_server_entry(name, record, stored.installed_version)
         return stored.config_signature == self._mcp_config_signature(expected_entry)
 
@@ -1025,6 +1194,15 @@ class PluginManager:
             for local_name, local_entry in local_servers.items():
                 progress.update(task_id, description=f"Syncing local MCP {local_name}")
                 desired_names.add(local_name)
+                # If a catalog MCP has been deliberately moved to local scope,
+                # it was already handled (skipped) in the catalog loop above.
+                # Don't re-add it to the global config here.
+                if local_name in self.catalog.mcps:
+                    stored_for_local = self.state_store.read_mcp_state(local_name)
+                    if stored_for_local is not None and stored_for_local.scope == "local":
+                        results.setdefault(local_name, "skipped")
+                        progress.advance(task_id)
+                        continue
                 if not isinstance(local_entry, dict):
                     results[local_name] = "skipped"
                     progress.advance(task_id)
@@ -1063,14 +1241,15 @@ class PluginManager:
         """Top-level MCP management dispatch.
 
         Supported operations: ``"install"`` / ``"update"`` (both call
-        ``reconcile_mcps``), and ``"delete"`` (removes all catalog MCPs).
+        ``reconcile_mcps``), and ``"delete"`` (removes all catalog MCPs from
+        both global and local configs).
         """
         if operation in {"install", "update"}:
             return self.reconcile_mcps(cwd, probe_version=(operation == "install"))
         if operation == "delete":
             results: dict[str, str] = {}
             for name in list(self.catalog.mcps):
-                removed = self.remove_mcp(name)
+                removed = self.remove_mcp(name, cwd)
                 results[name] = "removed" if removed else "skipped"
             return results
         raise ValueError(f"Unknown MCP operation: {operation}")

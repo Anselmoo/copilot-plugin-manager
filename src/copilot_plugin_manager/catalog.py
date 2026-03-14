@@ -251,6 +251,8 @@ class CatalogBundle(BaseModel):
         version = record.pinned_tag or record.version_channel or "latest"
         if record.kind == "http":
             version = record.url or "http"
+        elif record.kind == "pip":
+            version = record.pinned_tag or record.version_channel or "latest"
         return {
             "name": name,
             "kind": record.kind,

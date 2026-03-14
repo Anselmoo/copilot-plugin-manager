@@ -66,7 +66,7 @@ class EntrypointRecord(BaseModel):
 class McpRecord(BaseModel):
     """Defines a single MCP server entry in the catalog."""
 
-    kind: Literal["npm", "http", "local", "docker"] = "npm"
+    kind: Literal["npm", "pip", "http", "local", "docker"] = "npm"
     package: str | None = None
     url: str | None = None
     local_path: str | None = None
@@ -85,13 +85,14 @@ class McpRecord(BaseModel):
 class McpSyncState(BaseModel):
     """Persisted tracking state for a reconciled MCP server."""
 
-    kind: Literal["npm", "http", "local", "docker"] = "npm"
+    kind: Literal["npm", "pip", "http", "local", "docker"] = "npm"
     name: str
     package: str | None = None
     url: str | None = None
     installed_version: str | None = None
     installed_sha: str | None = None
     config_signature: str | None = None
+    scope: Literal["global", "local"] = "global"
     updated_at: str | None = None
 
 

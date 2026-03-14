@@ -2,7 +2,7 @@ from __future__ import annotations
 
 from enum import StrEnum
 from pathlib import Path
-from typing import Annotated
+from typing import Annotated, Literal, cast
 
 import typer
 from rich import box
@@ -429,6 +429,14 @@ def _mcp_results_table(title: str, results: dict[str, str]) -> None:
     console().print(table)
 
 
+def _parse_mcp_scope(scope: str) -> "Literal['global', 'local']":
+    """Validate and return a typed MCP scope literal, exiting on unknown values."""
+    if scope not in {"global", "local"}:
+        console().print(f"[red]Unknown scope '{scope}'. Use 'global' or 'local'.[/red]")
+        raise typer.Exit(1)
+    return cast("Literal['global', 'local']", scope)
+
+
 @app.command(
     "mcp-sync",
     short_help="Sync default and local MCP servers.",
@@ -502,30 +510,49 @@ def mcp_add_command(
         bool,
         typer.Option(
             "--probe-version/--no-probe-version",
-            help="Probe npm registry for the latest version tag.",
+            help="Probe package registry for the latest version tag.",
             rich_help_panel="Sync behaviour",
         ),
     ] = True,
+    scope: Annotated[
+        str,
+        typer.Option(
+            "--scope",
+            help="Where to write the entry: 'global' (~/.copilot/mcp-config.json) or 'local' (.vscode/mcp.json).",
+            rich_help_panel="Scope",
+        ),
+    ] = "global",
+    cwd: Annotated[
+        Path | None,
+        typer.Option(
+            "--cwd",
+            help="Working directory (required when --scope local).",
+            rich_help_panel="Repository context",
+        ),
+    ] = None,
 ) -> None:
     """Add or refresh a single MCP server entry from the catalog."""
+    resolved_scope = _parse_mcp_scope(scope)
+    current = _cwd(cwd)
     manager = get_manager()
     if name not in manager.catalog.mcps:
         console().print(f"[red]Unknown MCP '{name}'. Run 'list mcps' to see available entries.[/red]")
         raise typer.Exit(1)
     record = manager.catalog.mcps[name]
-    state = manager.sync_mcp(name, record, probe_version=probe_version)
+    state = manager.sync_mcp(name, record, probe_version=probe_version, scope=resolved_scope, cwd=current)
     version_info = state.installed_version or state.installed_sha or "latest"
-    console().print(f"[green]Added MCP '{name}' ({record.kind}, {version_info})[/green]")
+    dest = ".vscode/mcp.json" if resolved_scope == "local" else "~/.copilot/mcp-config.json"
+    console().print(f"[green]Added MCP '{name}' ({record.kind}, {version_info}) → {dest}[/green]")
 
 
 @app.command(
     "mcp-remove",
     short_help="Remove a single MCP server entry.",
-    help=("Remove a named MCP server entry from [cyan]~/.copilot/mcp-config.json[/cyan]."),
+    help=("Remove a named MCP server entry from [cyan]~/.copilot/mcp-config.json[/cyan] and/or [cyan].vscode/mcp.json[/cyan]."),
     epilog=(
         "\b\nExamples:\n"
         "  copilot-plugin-manager mcp-remove playwright\n"
-        "  copilot-plugin-manager mcp-remove context7"
+        "  copilot-plugin-manager mcp-remove context7 --cwd /path/to/repo"
     ),
 )
 def mcp_remove_command(
@@ -533,14 +560,78 @@ def mcp_remove_command(
         str,
         typer.Argument(help="MCP server name to remove."),
     ],
+    cwd: Annotated[
+        Path | None,
+        typer.Option(
+            "--cwd",
+            help="Working directory; when provided, also removes from .vscode/mcp.json.",
+            rich_help_panel="Repository context",
+        ),
+    ] = None,
 ) -> None:
-    """Remove a named MCP server entry from ~/.copilot/mcp-config.json."""
+    """Remove a named MCP server entry from global and/or local config."""
+    current = _cwd(cwd) if cwd is not None else None
     manager = get_manager()
-    removed = manager.remove_mcp(name)
+    removed = manager.remove_mcp(name, current)
     if removed:
         console().print(f"[yellow]Removed MCP '{name}' from config.[/yellow]")
     else:
         console().print(f"[dim]MCP '{name}' was not present in config.[/dim]")
+
+
+@app.command(
+    "mcp-move",
+    short_help="Move an MCP entry between global and local scope.",
+    help=(
+        "Move a named MCP server entry between the global config "
+        "([cyan]~/.copilot/mcp-config.json[/cyan]) and the local repo config "
+        "([cyan].vscode/mcp.json[/cyan]).\n\n"
+        "Use [cyan]--to local[/cyan] to restrict an MCP to the current repository, "
+        "and [cyan]--to global[/cyan] to promote it back to the user-wide config.\n\n"
+        "After moving to local scope, [cyan]mcp-sync[/cyan] will not overwrite the "
+        "entry in the global config until you move it back with [cyan]--to global[/cyan]."
+    ),
+    epilog=(
+        "\b\nExamples:\n"
+        "  copilot-plugin-manager mcp-move playwright --to local\n"
+        "  copilot-plugin-manager mcp-move playwright --to global\n"
+        "  copilot-plugin-manager mcp-move context7 --to local --cwd /path/to/repo"
+    ),
+)
+def mcp_move_command(
+    name: Annotated[
+        str,
+        typer.Argument(help="MCP server name to move."),
+    ],
+    to: Annotated[
+        str,
+        typer.Option(
+            "--to",
+            help="Target scope: 'global' or 'local'.",
+            rich_help_panel="Scope",
+        ),
+    ],
+    cwd: Annotated[
+        Path | None,
+        typer.Option(
+            "--cwd",
+            help="Working directory (used to locate .vscode/mcp.json).",
+            rich_help_panel="Repository context",
+        ),
+    ] = None,
+) -> None:
+    """Move an MCP entry between global (~/.copilot/mcp-config.json) and local (.vscode/mcp.json) scope."""
+    resolved_scope = _parse_mcp_scope(to)
+    current = _cwd(cwd)
+    manager = get_manager()
+    try:
+        manager.move_mcp_to_scope(name, resolved_scope, current)
+    except KeyError as exc:
+        console().print(f"[red]{exc}[/red]")
+        raise typer.Exit(1)
+    src = ".vscode/mcp.json" if resolved_scope == "global" else "~/.copilot/mcp-config.json"
+    dst = "~/.copilot/mcp-config.json" if resolved_scope == "global" else ".vscode/mcp.json"
+    console().print(f"[green]Moved MCP '{name}' from {src} → {dst}[/green]")
 
 
 @app.command(
