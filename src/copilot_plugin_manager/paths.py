@@ -1,0 +1,61 @@
+from __future__ import annotations
+
+import os
+from dataclasses import dataclass
+from pathlib import Path
+
+PROFILE_HINT_PATHS = (Path(".copilot-profile"), Path(".github/copilot-profile"))
+
+
+@dataclass(frozen=True)
+class ManagerPaths:
+    copilot_home: Path
+    manager_home: Path
+    skills_dir: Path
+    agents_dir: Path
+    legacy_active_target_file: Path
+    state_file: Path
+    sources_dir: Path
+
+    @classmethod
+    def from_environment(cls) -> "ManagerPaths":
+        copilot_home = Path(os.environ.get("COPILOT_HOME", Path.home() / ".copilot")).expanduser()
+        manager_home = Path(os.environ.get("COPILOT_PLUGIN_MANAGER_HOME", copilot_home / "copilot-plugin-manager")).expanduser()
+        return cls(
+            copilot_home=copilot_home,
+            manager_home=manager_home,
+            skills_dir=copilot_home / "skills",
+            agents_dir=copilot_home / "agents",
+            legacy_active_target_file=copilot_home / "active-profile",
+            state_file=manager_home / "state.json",
+            sources_dir=manager_home / "sources",
+        )
+
+    def ensure_directories(self) -> None:
+        self.manager_home.mkdir(parents=True, exist_ok=True)
+        self.sources_dir.mkdir(parents=True, exist_ok=True)
+
+
+def repo_key(path: Path) -> str:
+    return str(path.resolve())
+
+
+def find_repo_profile(start: Path, home: Path | None = None) -> str:
+    current = start.resolve()
+    stop = (home or Path.home()).resolve()
+    while current != current.parent and current != stop:
+        for hint in PROFILE_HINT_PATHS:
+            candidate = current / hint
+            if candidate.exists():
+                return candidate.read_text().strip()
+        current = current.parent
+    return ""
+
+
+def find_project_root(start: Path) -> Path | None:
+    current = start.resolve()
+    while current != current.parent:
+        if (current / ".git").exists() or (current / ".gitmodules").exists():
+            return current
+        current = current.parent
+    return None

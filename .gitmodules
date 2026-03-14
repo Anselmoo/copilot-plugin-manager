@@ -1,0 +1,30 @@
+[submodule "external/awesome-copilot"]
+	path = external/awesome-copilot
+	url = https://github.com/github/awesome-copilot.git
+
+[submodule "external/anthropics-skills"]
+	path = external/anthropics-skills
+	url = https://github.com/anthropics/skills.git
+
+[submodule "external/kdense-science"]
+	path = external/kdense-science
+	url = https://github.com/K-Dense-AI/claude-scientific-skills.git
+
+[submodule "external/microsoft-hve-core"]
+	path = external/microsoft-hve-core
+	url = https://github.com/microsoft/hve-core.git
+
+[submodule "external/microsoft-skills"]
+	path = external/microsoft-skills
+	url = https://github.com/microsoft/skills.git
+
+[submodule "external/agency-agents"]
+	path = external/agency-agents
+	url = https://github.com/msitarzewski/agency-agents.git
+
+[submodule "external/voltagent-subagents"]
+	path = external/voltagent-subagents
+	url = https://github.com/VoltAgent/awesome-claude-code-subagents.git
+[submodule "external/anthropics-"]
+	path = external/anthropics-
+	url = https://github.com/anthropics/skills.git

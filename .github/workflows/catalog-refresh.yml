@@ -1,0 +1,63 @@
+name: Scheduled catalog refresh
+
+on:
+  schedule:
+    - cron: "0 7 * * 1"
+  workflow_dispatch:
+
+permissions:
+  contents: write
+  pull-requests: write
+
+concurrency:
+  group: catalog-refresh
+  cancel-in-progress: true
+
+env:
+  PYTHON_VERSION: "3.12"
+
+jobs:
+  refresh:
+    name: Refresh catalog metadata
+    runs-on: ubuntu-latest
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v6
+        with:
+          submodules: recursive
+
+      - name: Update submodules
+        run: git submodule update --init --remote --recursive
+
+      - name: Set up Python
+        uses: actions/setup-python@v6
+        with:
+          python-version: ${{ env.PYTHON_VERSION }}
+
+      - name: Set up uv
+        uses: astral-sh/setup-uv@v7
+        with:
+          enable-cache: true
+
+      - name: Sync dependencies
+        run: uv sync --group dev
+
+      - name: Refresh bundled catalogs
+        run: uv run python scripts/refresh_catalog.py
+
+      - name: Validate refreshed catalog
+        run: uv run poe check
+
+      - name: Create pull request
+        uses: peter-evans/create-pull-request@v8
+        with:
+          branch: automation/catalog-refresh
+          delete-branch: true
+          commit-message: "chore: refresh catalog metadata"
+          title: "chore: refresh catalog metadata"
+          body: |
+            Automated refresh of bundled catalog metadata.
+
+            - updates git submodules
+            - reruns `scripts/refresh_catalog.py`
+            - validates the result with `uv run poe check`

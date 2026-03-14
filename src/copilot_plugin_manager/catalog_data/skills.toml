@@ -1,0 +1,369 @@
+[providers."anthropic-brand-guidelines"]
+source = "anthropics-skills"
+prefix = "anthropic-brand-guidelines"
+roots = ["skills/brand-guidelines"]
+description = "To access Anthropic's official brand identity and style resources, use this skill."
+use_when = "Use when you need to access Anthropic's official brand identity and style resources, use this skill."
+homepage = "https://github.com/anthropics/skills/tree/main/skills/brand-guidelines"
+version_channel = "main"
+tags = ["skill", "frontend", "ui", "docs", "artifacts", "anthropic", "skills"]
+
+[providers."anthropic-canvas-design"]
+source = "anthropics-skills"
+prefix = "anthropic-canvas-design"
+roots = ["skills/canvas-design"]
+description = "Anthropic Canvas Design skill pack synced into the local skills catalog."
+use_when = "Use when you want the Anthropic Canvas Design skill pack available locally."
+homepage = "https://github.com/anthropics/skills/tree/main/skills/canvas-design/canvas-fonts"
+version_channel = "main"
+tags = ["skill", "frontend", "ui", "docs", "artifacts", "anthropic"]
+
+[providers."anthropic-claude-api"]
+source = "anthropics-skills"
+prefix = "anthropic-claude-api"
+roots = ["skills/claude-api"]
+description = "Anthropic claude api skills such as Csharp, Curl, GO."
+use_when = "Use when you want local Anthropic claude api skills such as Csharp, Curl, GO."
+homepage = "https://github.com/anthropics/skills/tree/main/skills/claude-api"
+version_channel = "main"
+tags = ["skill", "general", "anthropic", "language", "python", "frontend", "ui"]
+
+[providers."anthropic-doc-coauthoring"]
+source = "anthropics-skills"
+prefix = "anthropic-doc-coauthoring"
+roots = ["skills/doc-coauthoring"]
+description = "This skill provides a structured workflow for guiding users through collaborative document creation. Act as an active guide, walking users through three stages: Context…"
+use_when = "Use when you need this skill provides a structured workflow for guiding users through collaborative document creation. Act as an active guide, walking users through three stages…"
+homepage = "https://github.com/anthropics/skills/tree/main/skills/doc-coauthoring"
+version_channel = "main"
+tags = ["skill", "docs", "artifacts", "anthropic", "planning", "orchestration", "frontend", "ui", "skills"]
+
+[providers."anthropic-docx"]
+source = "anthropics-skills"
+prefix = "anthropic-docx"
+roots = ["skills/docx"]
+description = "Anthropic Docx skill pack synced into the local skills catalog."
+use_when = "Use when you want the Anthropic Docx skill pack available locally."
+homepage = "https://github.com/anthropics/skills/tree/main/skills/docx/scripts"
+version_channel = "main"
+tags = ["skill", "docs", "artifacts", "anthropic", "general"]
+
+[providers."anthropic-frontend-design"]
+source = "anthropics-skills"
+prefix = "anthropic-frontend-design"
+roots = ["skills/frontend-design"]
+description = "This skill guides creation of distinctive, production-grade frontend interfaces that avoid generic \"AI slop\" aesthetics. Implement real working code with exceptional attention to…"
+use_when = "Use when you need this skill guides creation of distinctive, production-grade frontend interfaces that avoid generic \"AI slop\" aesthetics. Implement real working code with…"
+homepage = "https://github.com/anthropics/skills/tree/main/skills/frontend-design"
+version_channel = "main"
+tags = ["skill", "frontend", "ui", "anthropic", "skills"]
+
+[providers."anthropic-internal-comms"]
+source = "anthropics-skills"
+prefix = "anthropic-internal-comms"
+roots = ["skills/internal-comms"]
+description = "Anthropic Internal Comms skill pack synced into the local skills catalog."
+use_when = "Use when you want the Anthropic Internal Comms skill pack available locally."
+homepage = "https://github.com/anthropics/skills/tree/main/skills/internal-comms/examples"
+version_channel = "main"
+tags = ["skill", "general", "anthropic"]
+
+[providers."anthropic-mcp-builder"]
+source = "anthropics-skills"
+prefix = "anthropic-mcp-builder"
+roots = ["skills/mcp-builder"]
+description = "Anthropic mcp builder skills such as Reference, Scripts."
+use_when = "Use when you want local Anthropic mcp builder skills such as Reference, Scripts."
+homepage = "https://github.com/anthropics/skills/tree/main/skills/mcp-builder"
+version_channel = "main"
+tags = ["skill", "frontend", "ui", "api", "mcp", "anthropic", "general"]
+
+[providers."anthropic-pdf"]
+source = "anthropics-skills"
+prefix = "anthropic-pdf"
+roots = ["skills/pdf"]
+description = "Anthropic PDF skill pack synced into the local skills catalog."
+use_when = "Use when you want the Anthropic PDF skill pack available locally."
+homepage = "https://github.com/anthropics/skills/tree/main/skills/pdf/scripts"
+version_channel = "main"
+tags = ["skill", "docs", "artifacts", "anthropic", "general"]
+
+[providers."anthropic-pptx"]
+source = "anthropics-skills"
+prefix = "anthropic-pptx"
+roots = ["skills/pptx"]
+description = "Anthropic Pptx skill pack synced into the local skills catalog."
+use_when = "Use when you want the Anthropic Pptx skill pack available locally."
+homepage = "https://github.com/anthropics/skills/tree/main/skills/pptx/scripts"
+version_channel = "main"
+tags = ["skill", "docs", "artifacts", "anthropic", "general"]
+
+[providers."anthropic-skill-creator"]
+source = "anthropics-skills"
+prefix = "anthropic-skill-creator"
+roots = ["skills/skill-creator"]
+description = "Anthropic skill creator skills such as Agents, Assets, Eval Viewer."
+use_when = "Use when you want local Anthropic skill creator skills such as Agents, Assets, Eval Viewer."
+homepage = "https://github.com/anthropics/skills/tree/main/skills/skill-creator"
+version_channel = "main"
+tags = ["skill", "skills", "anthropic", "agents", "general"]
+
+[providers."anthropic-theme-factory"]
+source = "anthropics-skills"
+prefix = "anthropic-theme-factory"
+roots = ["skills/theme-factory"]
+description = "Anthropic Theme Factory skill pack synced into the local skills catalog."
+use_when = "Use when you want the Anthropic Theme Factory skill pack available locally."
+homepage = "https://github.com/anthropics/skills/tree/main/skills/theme-factory/themes"
+version_channel = "main"
+tags = ["skill", "docs", "artifacts", "anthropic"]
+
+[providers."anthropics"]
+source = "anthropics-skills"
+prefix = "anthropics"
+roots = ["skills"]
+description = "Anthropic skills skills such as algorithmic-art, brand-guidelines, canvas-design."
+use_when = "Use when you want local Anthropic skills skills such as algorithmic-art, brand-guidelines, canvas-design."
+homepage = "https://github.com/anthropics/skills/tree/main/skills"
+version_channel = "main"
+tags = ["skill", "general", "anthropic", "language", "frontend", "ui", "docs", "artifacts", "skills", "planning", "orchestration", "api", "mcp", "python"]
+
+[providers."kdense"]
+source = "kdense-science"
+prefix = "kdense"
+roots = ["scientific-skills"]
+description = "Kdense Science scientific skills skills such as adaptyv, aeon, alpha-vantage."
+use_when = "Use when you want local Kdense Science scientific skills skills such as adaptyv, aeon, alpha-vantage."
+homepage = "https://github.com/K-Dense-AI/claude-scientific-skills/tree/main/scientific-skills"
+version_channel = "main"
+tags = ["skill", "general", "devops", "python", "language", "frontend", "ui", "data", "docs", "artifacts", "skills", "api", "mcp", "agents", "github", "planning", "orchestration"]
+
+[providers."kdense-biopython"]
+source = "kdense-science"
+prefix = "kdense-biopython"
+roots = ["scientific-skills/biopython"]
+description = "Kdense Science Biopython skill pack synced into the local skills catalog."
+use_when = "Use when you want the Kdense Science Biopython skill pack available locally."
+homepage = "https://github.com/K-Dense-AI/claude-scientific-skills/tree/main/scientific-skills/biopython/references"
+version_channel = "main"
+tags = ["skill", "python", "language", "data", "general"]
+
+[providers."kdense-exploratory-data-analysis"]
+source = "kdense-science"
+prefix = "kdense-exploratory-data-analysis"
+roots = ["scientific-skills/exploratory-data-analysis"]
+description = "Kdense Science exploratory data analysis skills such as Assets, References, Scripts."
+use_when = "Use when you want local Kdense Science exploratory data analysis skills such as Assets, References, Scripts."
+homepage = "https://github.com/K-Dense-AI/claude-scientific-skills/tree/main/scientific-skills/exploratory-data-analysis"
+version_channel = "main"
+tags = ["skill", "data", "general"]
+
+[providers."kdense-hypothesis-generation"]
+source = "kdense-science"
+prefix = "kdense-hypothesis-generation"
+roots = ["scientific-skills/hypothesis-generation"]
+description = "Kdense Science hypothesis generation skills such as Assets, References."
+use_when = "Use when you want local Kdense Science hypothesis generation skills such as Assets, References."
+homepage = "https://github.com/K-Dense-AI/claude-scientific-skills/tree/main/scientific-skills/hypothesis-generation"
+version_channel = "main"
+tags = ["skill", "general"]
+
+[providers."kdense-literature-review"]
+source = "kdense-science"
+prefix = "kdense-literature-review"
+roots = ["scientific-skills/literature-review"]
+description = "Kdense Science literature review skills such as Assets, References, Scripts."
+use_when = "Use when you want local Kdense Science literature review skills such as Assets, References, Scripts."
+homepage = "https://github.com/K-Dense-AI/claude-scientific-skills/tree/main/scientific-skills/literature-review"
+version_channel = "main"
+tags = ["skill", "general"]
+
+[providers."kdense-pubmed-database"]
+source = "kdense-science"
+prefix = "kdense-pubmed-database"
+roots = ["scientific-skills/pubmed-database"]
+description = "Kdense Science Pubmed Database skill pack synced into the local skills catalog."
+use_when = "Use when you want the Kdense Science Pubmed Database skill pack available locally."
+homepage = "https://github.com/K-Dense-AI/claude-scientific-skills/tree/main/scientific-skills/pubmed-database/references"
+version_channel = "main"
+tags = ["skill", "data", "general"]
+
+[providers."kdense-scientific-visualization"]
+source = "kdense-science"
+prefix = "kdense-scientific-visualization"
+roots = ["scientific-skills/scientific-visualization"]
+description = "Kdense Science scientific visualization skills such as Assets, References, Scripts."
+use_when = "Use when you want local Kdense Science scientific visualization skills such as Assets, References, Scripts."
+homepage = "https://github.com/K-Dense-AI/claude-scientific-skills/tree/main/scientific-skills/scientific-visualization"
+version_channel = "main"
+tags = ["skill", "general"]
+
+[providers."kdense-scientific-writing"]
+source = "kdense-science"
+prefix = "kdense-scientific-writing"
+roots = ["scientific-skills/scientific-writing"]
+description = "Kdense Science scientific writing skills such as Assets, References."
+use_when = "Use when you want local Kdense Science scientific writing skills such as Assets, References."
+homepage = "https://github.com/K-Dense-AI/claude-scientific-skills/tree/main/scientific-skills/scientific-writing"
+version_channel = "main"
+tags = ["skill", "general"]
+
+[providers."mskills-dotnet"]
+source = "microsoft-skills"
+prefix = "mskills-dotnet"
+roots = ["skills/dotnet"]
+description = "Microsoft dotnet skills such as Compute, Data, Entra."
+use_when = "Use when you want local Microsoft dotnet skills such as Compute, Data, Entra."
+homepage = "https://github.com/microsoft/skills/tree/main/skills/dotnet"
+version_channel = "main"
+tags = ["skill", "skills", "microsoft", "general", "data"]
+
+[providers."mskills-dotnet-data"]
+source = "microsoft-skills"
+prefix = "mskills-dotnet-data"
+roots = ["skills/dotnet/data"]
+description = "Microsoft Dotnet Data skill pack synced into the local skills catalog."
+use_when = "Use when you want the Microsoft Dotnet Data skill pack available locally."
+homepage = "https://github.com/microsoft/skills/tree/main/skills/dotnet/data"
+version_channel = "main"
+tags = ["skill", "data", "skills", "microsoft"]
+
+[providers."mskills-dotnet-general"]
+source = "microsoft-skills"
+prefix = "mskills-dotnet-general"
+roots = ["skills/dotnet/general"]
+description = "Microsoft Dotnet General skill pack synced into the local skills catalog."
+use_when = "Use when you want the Microsoft Dotnet General skill pack available locally."
+homepage = "https://github.com/microsoft/skills/tree/main/skills/dotnet/general"
+version_channel = "main"
+tags = ["skill", "skills", "microsoft", "general"]
+
+[providers."mskills-java"]
+source = "microsoft-skills"
+prefix = "mskills-java"
+roots = ["skills/java"]
+description = "Microsoft java skills such as Communication, Compute, Data."
+use_when = "Use when you want local Microsoft java skills such as Communication, Compute, Data."
+homepage = "https://github.com/microsoft/skills/tree/main/skills/java"
+version_channel = "main"
+tags = ["skill", "language", "skills", "microsoft", "general", "data"]
+
+[providers."mskills-java-integration"]
+source = "microsoft-skills"
+prefix = "mskills-java-integration"
+roots = ["skills/java/integration"]
+description = "Microsoft Java Integration skill pack synced into the local skills catalog."
+use_when = "Use when you want the Microsoft Java Integration skill pack available locally."
+homepage = "https://github.com/microsoft/skills/tree/main/skills/java/integration"
+version_channel = "main"
+tags = ["skill", "language", "skills", "microsoft", "general"]
+
+[providers."mskills-python"]
+source = "microsoft-skills"
+prefix = "mskills-python"
+roots = ["skills/python"]
+description = "Microsoft python skills such as Compute, Data, Entra."
+use_when = "Use when you want local Microsoft python skills such as Compute, Data, Entra."
+homepage = "https://github.com/microsoft/skills/tree/main/skills/python"
+version_channel = "main"
+tags = ["skill", "python", "language", "skills", "microsoft", "general", "data"]
+
+[providers."mskills-python-data"]
+source = "microsoft-skills"
+prefix = "mskills-python-data"
+roots = ["skills/python/data"]
+description = "Microsoft Python Data skill pack synced into the local skills catalog."
+use_when = "Use when you want the Microsoft Python Data skill pack available locally."
+homepage = "https://github.com/microsoft/skills/tree/main/skills/python/data"
+version_channel = "main"
+tags = ["skill", "python", "language", "data", "skills", "microsoft"]
+
+[providers."mskills-python-foundry"]
+source = "microsoft-skills"
+prefix = "mskills-python-foundry"
+roots = ["skills/python/foundry"]
+description = "Microsoft Python Foundry skill pack synced into the local skills catalog."
+use_when = "Use when you want the Microsoft Python Foundry skill pack available locally."
+homepage = "https://github.com/microsoft/skills/tree/main/skills/python/foundry"
+version_channel = "main"
+tags = ["skill", "python", "language", "skills", "microsoft", "general"]
+
+[providers."mskills-python-integration"]
+source = "microsoft-skills"
+prefix = "mskills-python-integration"
+roots = ["skills/python/integration"]
+description = "Microsoft Python Integration skill pack synced into the local skills catalog."
+use_when = "Use when you want the Microsoft Python Integration skill pack available locally."
+homepage = "https://github.com/microsoft/skills/tree/main/skills/python/integration"
+version_channel = "main"
+tags = ["skill", "python", "language", "skills", "microsoft", "general"]
+
+[providers."mskills-python-monitoring"]
+source = "microsoft-skills"
+prefix = "mskills-python-monitoring"
+roots = ["skills/python/monitoring"]
+description = "Microsoft Python Monitoring skill pack synced into the local skills catalog."
+use_when = "Use when you want the Microsoft Python Monitoring skill pack available locally."
+homepage = "https://github.com/microsoft/skills/tree/main/skills/python/monitoring"
+version_channel = "main"
+tags = ["skill", "python", "language", "skills", "microsoft", "general"]
+
+[providers."mskills-rust"]
+source = "microsoft-skills"
+prefix = "mskills-rust"
+roots = ["skills/rust"]
+description = "Microsoft rust skills such as Data, Entra, Messaging."
+use_when = "Use when you want local Microsoft rust skills such as Data, Entra, Messaging."
+homepage = "https://github.com/microsoft/skills/tree/main/skills/rust"
+version_channel = "main"
+tags = ["skill", "language", "skills", "microsoft", "data", "general"]
+
+[providers."mskills-rust-data"]
+source = "microsoft-skills"
+prefix = "mskills-rust-data"
+roots = ["skills/rust/data"]
+description = "Microsoft Rust Data skill pack synced into the local skills catalog."
+use_when = "Use when you want the Microsoft Rust Data skill pack available locally."
+homepage = "https://github.com/microsoft/skills/tree/main/skills/rust/data"
+version_channel = "main"
+tags = ["skill", "language", "data", "skills", "microsoft"]
+
+[providers."mskills-typescript"]
+source = "microsoft-skills"
+prefix = "mskills-typescript"
+roots = ["skills/typescript"]
+description = "Microsoft typescript skills such as Compute, Data, Entra."
+use_when = "Use when you want local Microsoft typescript skills such as Compute, Data, Entra."
+homepage = "https://github.com/microsoft/skills/tree/main/skills/typescript"
+version_channel = "main"
+tags = ["skill", "frontend", "ui", "skills", "microsoft", "general", "data"]
+
+[providers."mskills-typescript-data"]
+source = "microsoft-skills"
+prefix = "mskills-typescript-data"
+roots = ["skills/typescript/data"]
+description = "Microsoft Typescript Data skill pack synced into the local skills catalog."
+use_when = "Use when you want the Microsoft Typescript Data skill pack available locally."
+homepage = "https://github.com/microsoft/skills/tree/main/skills/typescript/data"
+version_channel = "main"
+tags = ["skill", "frontend", "ui", "data", "skills", "microsoft"]
+
+[providers."mskills-typescript-frontend"]
+source = "microsoft-skills"
+prefix = "mskills-typescript-frontend"
+roots = ["skills/typescript/frontend"]
+description = "Microsoft Typescript Frontend skill pack synced into the local skills catalog."
+use_when = "Use when you want the Microsoft Typescript Frontend skill pack available locally."
+homepage = "https://github.com/microsoft/skills/tree/main/skills/typescript/frontend"
+version_channel = "main"
+tags = ["skill", "frontend", "ui", "skills", "microsoft"]
+
+[providers."mskills-typescript-integration"]
+source = "microsoft-skills"
+prefix = "mskills-typescript-integration"
+roots = ["skills/typescript/integration"]
+description = "Microsoft Typescript Integration skill pack synced into the local skills catalog."
+use_when = "Use when you want the Microsoft Typescript Integration skill pack available locally."
+homepage = "https://github.com/microsoft/skills/tree/main/skills/typescript/integration"
+version_channel = "main"
+tags = ["skill", "frontend", "ui", "skills", "microsoft", "general"]

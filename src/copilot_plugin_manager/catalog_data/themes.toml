@@ -1,0 +1,99 @@
+[themes."core"]
+plugins = ["awesome-copilot", "context-engineering", "copilot-sdk", "gem-team", "hve-core", "noob-mode", "project-planning", "rug-agentic-workflow", "software-engineering-team", "structured-autonomy"]
+skills = ["anthropic-claude-api", "anthropic-mcp-builder", "anthropic-skill-creator"]
+agents = []
+
+[themes."docs"]
+plugins = ["docx", "napkin", "pdf", "pptx", "python-mcp-development", "technical-spike"]
+skills = ["anthropic-doc-coauthoring", "anthropic-docx", "anthropic-pdf", "anthropic-pptx", "mskills-typescript-frontend"]
+agents = []
+
+[themes."docs-design"]
+plugins = ["brand-guidelines", "canvas-design", "doc-coauthoring", "frontend-web-dev", "hve-design-thinking", "internal-comms", "theme-factory"]
+skills = ["anthropic-brand-guidelines", "anthropic-canvas-design", "anthropic-frontend-design", "anthropic-internal-comms", "anthropic-theme-factory"]
+agents = ["agency-design-brand-guardian", "agency-design-ui-designer", "agency-design-ux-architect", "voltagent-documentation-engineer"]
+
+[themes."python"]
+plugins = ["hve-coding-standards", "polyglot-test-agent", "python-mcp-development", "technical-spike", "testing-automation"]
+skills = ["mskills-python-data", "mskills-python-foundry", "mskills-python-integration", "mskills-python-monitoring"]
+agents = []
+
+[themes."python-agents"]
+plugins = []
+skills = []
+agents = ["voltagent-python-pro", "voltagent-code-reviewer", "voltagent-debugger", "voltagent-refactoring-specialist", "voltagent-test-automator"]
+
+[themes."frontend"]
+plugins = ["frontend-web-dev", "hve-design-thinking", "partners", "polyglot-test-agent", "testing-automation"]
+skills = ["anthropic-frontend-design", "mskills-typescript-frontend", "mskills-typescript-integration"]
+agents = []
+
+[themes."mcp"]
+plugins = ["csharp-mcp-development", "go-mcp-development", "java-mcp-development", "kotlin-mcp-development", "php-mcp-development", "python-mcp-development", "ruby-mcp-development", "rust-mcp-development", "swift-mcp-development", "typescript-mcp-development"]
+skills = ["anthropic-mcp-builder", "mskills-dotnet-general", "mskills-java-integration", "mskills-python-integration", "mskills-rust-data", "mskills-typescript-integration"]
+agents = []
+
+[themes."mcp-agents"]
+plugins = ["hve-project-planning"]
+skills = []
+agents = ["agency-engineering-backend-architect", "agency-engineering-technical-writer", "voltagent-mcp-developer", "voltagent-multi-agent-coordinator", "voltagent-task-distributor", "voltagent-workflow-orchestrator"]
+
+[themes."testing"]
+plugins = ["hve-coding-standards", "polyglot-test-agent", "technical-spike", "testing-automation"]
+skills = []
+agents = ["agency-testing-api-tester", "agency-testing-performance-benchmarker", "agency-testing-reality-checker", "voltagent-code-reviewer", "voltagent-security-auditor", "voltagent-test-automator"]
+
+[themes."science"]
+plugins = ["hve-data-science"]
+skills = ["kdense-biopython", "kdense-exploratory-data-analysis", "kdense-hypothesis-generation", "kdense-pubmed-database", "kdense-scientific-visualization", "kdense-scientific-writing", "mskills-python-data"]
+agents = ["voltagent-data-engineer", "voltagent-data-scientist", "voltagent-llm-architect"]
+
+[themes."openapi"]
+plugins = ["openapi-to-application-csharp-dotnet", "openapi-to-application-go", "openapi-to-application-java-spring-boot", "openapi-to-application-nodejs-nestjs", "openapi-to-application-python-fastapi", "hve-project-planning"]
+skills = []
+agents = []
+
+[themes."enterprise"]
+plugins = ["azure-cloud-development", "csharp-dotnet-development", "dataverse", "dataverse-sdk-for-python", "flowstudio-power-automate", "hve-ado", "hve-github", "hve-project-planning", "hve-security-planning", "mcp-m365-copilot", "pcf-development", "power-apps-code-apps", "power-bi-development", "power-platform-mcp-connector-development", "typespec-m365-copilot", "winui3-development"]
+skills = []
+agents = ["agency-product-sprint-prioritizer", "agency-product-trend-researcher", "agency-project-project-shepherd", "agency-project-manager-senior", "agency-engineering-security-engineer"]
+
+[themes."data"]
+plugins = ["database-data-management", "hve-data-science", "oracle-to-postgres-migration-expert"]
+skills = ["kdense-exploratory-data-analysis", "mskills-dotnet-data", "mskills-python-data", "mskills-rust-data", "mskills-typescript-data"]
+agents = ["voltagent-data-engineer", "voltagent-data-scientist"]
+
+[themes."devops"]
+plugins = ["automate-this", "devops-oncall", "edge-ai-tasks", "hve-github", "security-best-practices"]
+skills = []
+agents = ["agency-engineering-devops-automator", "voltagent-devops-engineer", "voltagent-docker-expert", "voltagent-git-workflow-manager", "voltagent-kubernetes-specialist", "voltagent-platform-engineer"]
+
+[themes."security"]
+plugins = ["hve-security-planning", "security-best-practices"]
+skills = []
+agents = ["agency-engineering-security-engineer", "agency-testing-reality-checker", "voltagent-code-reviewer", "voltagent-security-auditor"]
+
+[themes."planning"]
+plugins = ["hve-project-planning", "project-planning", "technical-spike"]
+skills = []
+agents = ["agency-product-sprint-prioritizer", "agency-project-project-shepherd", "agency-project-manager-senior", "voltagent-task-distributor", "voltagent-workflow-orchestrator"]
+
+[themes."github"]
+plugins = ["automate-this", "hve-github"]
+skills = []
+agents = ["voltagent-git-workflow-manager", "voltagent-workflow-orchestrator"]
+
+[themes."research"]
+plugins = ["hve-data-science", "technical-spike"]
+skills = ["kdense-hypothesis-generation", "kdense-literature-review", "kdense-pubmed-database", "kdense-scientific-writing", "mskills-python-data"]
+agents = ["agency-product-trend-researcher", "voltagent-research-analyst", "voltagent-scientific-literature-researcher"]
+
+[themes."specialized"]
+plugins = ["cast-imaging", "clojure-interactive-programming", "java-development", "ospo-sponsorship"]
+skills = []
+agents = ["voltagent-domains"]
+
+[themes."agents"]
+plugins = []
+skills = []
+agents = ["agency", "voltagent"]

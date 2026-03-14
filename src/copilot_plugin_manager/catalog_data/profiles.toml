@@ -1,0 +1,62 @@
+[profiles."minimal"]
+themes = ["core"]
+
+[profiles."docs"]
+themes = ["core", "docs", "python", "testing"]
+
+[profiles."docs-lite"]
+themes = ["core", "docs"]
+
+[profiles."docs-pro"]
+themes = ["core", "docs", "docs-design", "planning", "testing"]
+
+[profiles."python-dev"]
+themes = ["core", "python", "testing", "devops"]
+
+[profiles."python-core"]
+themes = ["core", "python", "testing"]
+
+[profiles."python-agents"]
+themes = ["core", "python", "testing", "python-agents"]
+
+[profiles."python-mcp"]
+themes = ["core", "python", "mcp", "testing", "python-agents", "mcp-agents"]
+
+[profiles."mcp-dev"]
+themes = ["core", "mcp", "python", "testing"]
+
+[profiles."frontend-design"]
+themes = ["core", "frontend", "docs-design", "testing"]
+
+[profiles."backend-api"]
+themes = ["core", "python", "openapi", "data", "testing", "security"]
+
+[profiles."fullstack"]
+themes = ["core", "frontend", "python", "testing", "data"]
+
+[profiles."agentic-fullstack"]
+themes = ["core", "frontend", "python", "testing", "data", "security", "python-agents", "mcp-agents"]
+
+[profiles."science"]
+themes = ["core", "science", "python", "data"]
+
+[profiles."data-ai"]
+themes = ["core", "data", "science", "research"]
+
+[profiles."research"]
+themes = ["core", "docs", "science", "research", "planning"]
+
+[profiles."devops-sec"]
+themes = ["core", "devops", "security", "github"]
+
+[profiles."planner"]
+themes = ["core", "planning", "github"]
+
+[profiles."enterprise"]
+themes = ["core", "enterprise", "data", "testing", "devops"]
+
+[profiles."enterprise-architect"]
+themes = ["core", "enterprise", "planning", "security", "github", "testing"]
+
+[profiles."everything"]
+themes = ["['core', 'docs', 'docs-design', 'python', 'python-agents', 'frontend', 'mcp', 'mcp-agents', 'testing', 'science', 'openapi', 'enterprise', 'data', 'devops', 'security', 'planning', 'github', 'research', 'specialized', 'agents']"]

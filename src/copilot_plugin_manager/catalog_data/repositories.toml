@@ -1,0 +1,90 @@
+[repositories."awesome-copilot"]
+url = "https://github.com/github/awesome-copilot"
+description = "Marketplace plugin source used by the main awesome-copilot ecosystem."
+use_when = "Use when you want marketplace plugins from the GitHub awesome-copilot ecosystem."
+license = "MIT"
+version = "main"
+owner = "github"
+repo = "awesome-copilot"
+submodule_path = "external/awesome-copilot"
+source_url = "https://github.com/github/awesome-copilot"
+version_channel = "main"
+tags = ["plugins"]
+
+[repositories."anthropics-skills"]
+url = "https://github.com/anthropics/skills"
+description = "Anthropic skill packs synced as local skill folders."
+use_when = "Use when you want Anthropic-maintained local skills for common workflows."
+license = "See repository"
+version = "main"
+owner = "anthropics"
+repo = "skills"
+submodule_path = "external/anthropics-skills"
+source_url = "https://github.com/anthropics/skills"
+version_channel = "main"
+tags = ["skills"]
+
+[repositories."kdense-science"]
+url = "https://github.com/K-Dense-AI/claude-scientific-skills"
+description = "Scientific and research-focused skill packs."
+use_when = "Use when you need scientific, literature, or research-oriented skills."
+license = "MIT"
+version = "main"
+owner = "K-Dense-AI"
+repo = "claude-scientific-skills"
+submodule_path = "external/kdense-science"
+source_url = "https://github.com/K-Dense-AI/claude-scientific-skills"
+version_channel = "main"
+tags = ["data", "skills"]
+
+[repositories."microsoft-hve-core"]
+url = "https://github.com/microsoft/hve-core"
+description = "Microsoft HVE plugin collections for planning, security, GitHub, and data work."
+use_when = "Use when you want Microsoft HVE planning, security, GitHub, and data plugins."
+license = "MIT"
+version = "main"
+owner = "microsoft"
+repo = "hve-core"
+submodule_path = "external/microsoft-hve-core"
+source_url = "https://github.com/microsoft/hve-core"
+version_channel = "main"
+tags = ["plugins", "security", "planning", "orchestration", "data", "github"]
+
+[repositories."microsoft-skills"]
+url = "https://github.com/microsoft/skills"
+description = "Language-specific Microsoft skills packs."
+use_when = "Use when you want Microsoft-curated language skill packs."
+license = "MIT"
+version = "main"
+owner = "microsoft"
+repo = "skills"
+submodule_path = "external/microsoft-skills"
+source_url = "https://github.com/microsoft/skills"
+version_channel = "main"
+tags = ["skills"]
+
+[repositories."agency-agents"]
+url = "https://github.com/msitarzewski/agency-agents"
+description = "Role/division-based agent bundles."
+use_when = "Use when you want organization-style agent teams grouped by function."
+license = "MIT"
+version = "main"
+owner = "msitarzewski"
+repo = "agency-agents"
+submodule_path = "external/agency-agents"
+source_url = "https://github.com/msitarzewski/agency-agents"
+version_channel = "main"
+tags = ["agents"]
+
+[repositories."voltagent-subagents"]
+url = "https://github.com/VoltAgent/awesome-claude-code-subagents"
+description = "Category-based Claude Code subagents grouped by workflow theme."
+use_when = "Use when you want category-based subagents such as language, quality, infrastructure, and product."
+license = "MIT"
+version = "main"
+owner = "VoltAgent"
+repo = "awesome-claude-code-subagents"
+submodule_path = "external/voltagent-subagents"
+source_url = "https://github.com/VoltAgent/awesome-claude-code-subagents"
+version_channel = "main"
+tags = ["language", "docs", "artifacts", "agents"]

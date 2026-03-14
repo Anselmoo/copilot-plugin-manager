@@ -1,0 +1,105 @@
+[project]
+name = "copilot-plugin-manager"
+version = "0.1.0"
+description = "Python-first GitHub Copilot plugin, skill, and agent manager"
+readme = "README.md"
+authors = [{ name = "Anselm Hahn", email = "Anselm.Hahn@gmail.com" }]
+license = "MIT"
+license-files = ["LICENSE"]
+requires-python = ">=3.12"
+keywords = [
+    "github-copilot",
+    "copilot",
+    "cli",
+    "plugin-manager",
+    "skills",
+    "agents",
+]
+classifiers = [
+    "Development Status :: 3 - Alpha",
+    "Environment :: Console",
+    "Intended Audience :: Developers",
+    "License :: OSI Approved :: MIT License",
+    "Operating System :: OS Independent",
+    "Programming Language :: Python",
+    "Programming Language :: Python :: 3",
+    "Programming Language :: Python :: 3 :: Only",
+    "Programming Language :: Python :: 3.12",
+    "Programming Language :: Python :: 3.13",
+    "Programming Language :: Python :: 3.14",
+    "Topic :: Software Development :: Libraries :: Python Modules",
+    "Topic :: Software Development :: Version Control",
+    "Topic :: Software Development :: Build Tools",
+    "Topic :: Utilities",
+]
+dependencies = ["pydantic>=2,<3", "rich>=14.3.3", "typer>=0.24.1"]
+
+[project.urls]
+Homepage = "https://github.com/Anselmoo/copilot-plugin-manager"
+Repository = "https://github.com/Anselmoo/copilot-plugin-manager"
+Issues = "https://github.com/Anselmoo/copilot-plugin-manager/issues"
+
+[project.scripts]
+copilot-plugin-manager = "copilot_plugin_manager.cli:main"
+
+[build-system]
+requires = ["uv_build>=0.10.9,<0.11.0"]
+build-backend = "uv_build"
+
+[dependency-groups]
+dev = [
+    "pre-commit>=4.3.0",
+    "poethepoet>=0.34.0",
+    "pytest>=9.0.2",
+    "pytest-cov>=7.0.0",
+    "ruff>=0.15.0",
+    "twine>=6.2.0",
+    "ty>=0.0.23",
+]
+
+[tool.pytest.ini_options]
+addopts = ["-ra"]
+testpaths = ["test"]
+
+[tool.coverage.run]
+branch = true
+source = ["copilot_plugin_manager"]
+
+[tool.coverage.report]
+show_missing = true
+skip_covered = true
+
+[tool.ruff]
+line-length = 180
+target-version = "py312"
+extend-exclude = ["dist", "external", "legacy"]
+
+[tool.ruff.lint]
+select = ["E", "F", "I", "W"]
+
+[tool.ty.src]
+include = ["src", "test"]
+exclude = ["dist", "external", "legacy"]
+
+[tool.ty.terminal]
+output-format = "full"
+
+[tool.poe.tasks]
+pre-commit = { cmd = "pre-commit run --all-files", help = "Run pre-commit hooks across the repository." }
+test = { cmd = "pytest -q", help = "Run the test suite." }
+test-cov = { cmd = "pytest --cov=copilot_plugin_manager --cov-report=term-missing --cov-report=xml", help = "Run tests with coverage." }
+lint = { cmd = "ruff check .", help = "Run Ruff lint checks." }
+typecheck = { cmd = "ty check", help = "Run ty type checks." }
+refresh-catalog = { cmd = "python scripts/refresh_catalog.py", help = "Regenerate plugin and entrypoint metadata from upstream submodules without legacy bootstrap files." }
+refresh-catalog-reset = { cmd = "python scripts/refresh_catalog.py --hard-reset", help = "Hard-reset entrypoint provenance history and rebuild provider metadata from upstream source files." }
+_build-dist = { cmd = "uv build", help = "Build source and wheel distributions." }
+_check-dist = { shell = "twine check dist/*", help = "Validate built distributions." }
+build = { sequence = [
+    "_build-dist",
+    "_check-dist",
+], help = "Build and validate distributions." }
+check = { sequence = [
+    "lint",
+    "typecheck",
+    "test",
+], help = "Run lint, type checks, and tests." }
