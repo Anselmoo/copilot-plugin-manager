@@ -1,6 +1,6 @@
 [project]
 name = "copilot-plugin-manager"
-version = "0.1.0"
+version = "0.1.1"
 description = "Python-first GitHub Copilot plugin, skill, and agent manager"
 readme = "README.md"
 authors = [{ name = "Anselm Hahn", email = "Anselm.Hahn@gmail.com" }]
