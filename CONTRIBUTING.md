@@ -89,6 +89,8 @@ Before opening a pull request:
 - update docs or examples if command behavior changed
 - add or update tests for behavior changes
 
+If you change repository-aware activation behavior, keep `README.md`, `docs/USAGE.md`, and the relevant CLI help examples aligned. In particular, repo-local hint handling (`.copilot-profile` / `.github/copilot-profile`) and `status` output are treated as maintained user-facing workflows.
+
 ## Project layout
 
 - `src/copilot_plugin_manager/`: application code

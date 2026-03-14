@@ -68,7 +68,9 @@ Compatibility state is also written to:
 
 - `~/.copilot/active-profile`
 
-Repository-specific setup history is tracked per repository path in the manager state file. Repo-local hints such as `.copilot-profile` and `.github/copilot-profile` are still honored for autodetection.
+Repository-specific setup history is tracked per detected project root in the manager state file. Repo-local hints such as `.copilot-profile` and `.github/copilot-profile` are still honored for autodetection.
+
+Repo activation state is normalized to the detected project root, so switching from one subdirectory is reflected when you later run commands from another subdirectory in the same repository.
 
 Generated entrypoint data also records:
 
@@ -85,8 +87,8 @@ copilot-plugin-manager status
 copilot-plugin-manager install [all|plugins|skills|agents|thirdparty]
 copilot-plugin-manager update [all|plugins|skills|agents|thirdparty]
 copilot-plugin-manager delete [all|plugins|skills|agents|thirdparty]
-copilot-plugin-manager switch <profile-or-theme>
-copilot-plugin-manager switch-exclusive <profile-or-theme>
+copilot-plugin-manager switch <profile-or-theme> [--save-repo-profile] [--repo-profile-location root|github]
+copilot-plugin-manager switch-exclusive <profile-or-theme> [--save-repo-profile] [--repo-profile-location root|github]
 copilot-plugin-manager repo-update [--remote/--no-remote]
 copilot-plugin-manager self-update
 copilot-plugin-manager shell-init <bash|zsh|fish|powershell|nushell>
@@ -145,3 +147,18 @@ Force ASCII-only output with:
 ```bash
 export COPILOT_PLUGINS_ASCII=1
 ```
+
+## Repo-local profile management
+
+Use `switch` or `switch-exclusive` with `--save-repo-profile` to write the selected target into a repo-local hint file:
+
+```bash
+copilot-plugin-manager switch python-core --save-repo-profile
+copilot-plugin-manager switch ts --save-repo-profile --repo-profile-location github
+```
+
+`--repo-profile-location root` writes `.copilot-profile` in the detected project root. `--repo-profile-location github` writes `.github/copilot-profile`.
+
+## Sync warnings
+
+When a third-party skill provider contains missing or dangling entries, the manager now skips the broken paths, persists a warning in state, and shows those warnings in `status` output. This makes partial syncs visible without aborting the entire profile switch.

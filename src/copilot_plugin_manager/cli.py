@@ -22,6 +22,7 @@ from .rendering import (
     render_providers,
     render_repositories,
     render_status,
+    render_sync_warnings,
     render_themes,
 )
 
@@ -80,6 +81,11 @@ class ShellName(StrEnum):
     nushell = "nushell"
 
 
+class RepoProfileLocation(StrEnum):
+    root = "root"
+    github = "github"
+
+
 app = typer.Typer(
     name="copilot-plugin-manager",
     no_args_is_help=False,
@@ -115,6 +121,11 @@ def _revision_table(title: str, revisions: dict[str, str | None]) -> Table:
     return table
 
 
+def _print_sync_warnings(manager: PluginManager) -> None:
+    if manager.sync_warnings:
+        console().print(render_sync_warnings(manager.sync_warnings))
+
+
 def _completion_command():
     return get_command(app)
 
@@ -143,6 +154,7 @@ def callback(
         if repo_hint:
             activation = manager.switch_target(repo_hint, current, exclusive_plugins=False)
             console().print(build_target_tree(manager.catalog, activation))
+            _print_sync_warnings(manager)
             raise typer.Exit()
         _, active_target = _active_target(manager, current)
         for renderable in render_overview(manager.catalog, active_target, repo_hint):
@@ -257,7 +269,9 @@ def install_command(
     ] = None,
 ) -> None:
     """Install the selected managed content scope."""
-    get_manager().manage_target("install", target.value, _cwd(cwd))
+    manager = get_manager()
+    manager.manage_target("install", target.value, _cwd(cwd))
+    _print_sync_warnings(manager)
 
 
 @app.command(
@@ -281,7 +295,9 @@ def update_command(
     ] = None,
 ) -> None:
     """Update the selected managed content scope."""
-    get_manager().manage_target("update", target.value, _cwd(cwd))
+    manager = get_manager()
+    manager.manage_target("update", target.value, _cwd(cwd))
+    _print_sync_warnings(manager)
 
 
 @app.command(
@@ -327,11 +343,32 @@ def switch_command(
             rich_help_panel="Repository context",
         ),
     ] = None,
+    save_repo_profile: Annotated[
+        bool,
+        typer.Option(
+            "--save-repo-profile",
+            help="Write the selected target into a repo-local profile hint file for easier future activation.",
+            rich_help_panel="Repository context",
+        ),
+    ] = False,
+    repo_profile_location: Annotated[
+        RepoProfileLocation,
+        typer.Option(
+            "--repo-profile-location",
+            help="Where to write the repo-local profile hint when --save-repo-profile is used.",
+            rich_help_panel="Repository context",
+        ),
+    ] = RepoProfileLocation.root,
 ) -> None:
     """Switch to a profile or theme without aggressively pruning unrelated plugins."""
     manager = get_manager()
-    activation = manager.switch_target(target, _cwd(cwd), exclusive_plugins=False)
+    current = _cwd(cwd)
+    activation = manager.switch_target(target, current, exclusive_plugins=False)
     console().print(build_target_tree(manager.catalog, activation))
+    if save_repo_profile:
+        profile_path = manager.write_repo_profile(current, activation.name, repo_profile_location.value)
+        console().print(f"Saved repo profile hint to {profile_path}")
+    _print_sync_warnings(manager)
 
 
 @app.command(
@@ -353,11 +390,32 @@ def switch_exclusive_command(
             rich_help_panel="Repository context",
         ),
     ] = None,
+    save_repo_profile: Annotated[
+        bool,
+        typer.Option(
+            "--save-repo-profile",
+            help="Write the selected target into a repo-local profile hint file for easier future activation.",
+            rich_help_panel="Repository context",
+        ),
+    ] = False,
+    repo_profile_location: Annotated[
+        RepoProfileLocation,
+        typer.Option(
+            "--repo-profile-location",
+            help="Where to write the repo-local profile hint when --save-repo-profile is used.",
+            rich_help_panel="Repository context",
+        ),
+    ] = RepoProfileLocation.root,
 ) -> None:
     """Switch to a profile or theme and keep managed plugins aligned exactly to the target."""
     manager = get_manager()
-    activation = manager.switch_target(target, _cwd(cwd), exclusive_plugins=True)
+    current = _cwd(cwd)
+    activation = manager.switch_target(target, current, exclusive_plugins=True)
     console().print(build_target_tree(manager.catalog, activation))
+    if save_repo_profile:
+        profile_path = manager.write_repo_profile(current, activation.name, repo_profile_location.value)
+        console().print(f"Saved repo profile hint to {profile_path}")
+    _print_sync_warnings(manager)
 
 
 @app.command(

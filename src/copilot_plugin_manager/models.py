@@ -124,6 +124,7 @@ class ProviderSyncState(BaseModel):
     manifest_version: str | None = None
     source_path: str | None = None
     outputs: list[str] = Field(default_factory=list)
+    warnings: list[str] = Field(default_factory=list)
     definition_signature: str | None = None
     updated_at: str | None = None
 

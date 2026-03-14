@@ -1,8 +1,12 @@
+from pathlib import Path
+
 from typer.main import get_command
 from typer.testing import CliRunner
 
+from copilot_plugin_manager.catalog import load_catalog_bundle
 from copilot_plugin_manager.cli import app
 from copilot_plugin_manager.completion import completion_source, default_completion_path, shell_init_snippet
+from copilot_plugin_manager.models import ActivationTarget
 from copilot_plugin_manager.runner import parse_installed_plugins
 
 runner = CliRunner()
@@ -73,3 +77,34 @@ def test_default_completion_paths_cover_supported_shells(monkeypatch, tmp_path) 
     assert default_completion_path("fish").suffix == ".fish"
     assert default_completion_path("powershell").suffix == ".ps1"
     assert default_completion_path("nushell").suffix == ".nu"
+
+
+def test_cli_switch_can_save_repo_profile(monkeypatch, tmp_path) -> None:
+    class StubManager:
+        def __init__(self) -> None:
+            self.catalog = load_catalog_bundle()
+            self.sync_warnings: list[str] = []
+            self.saved_paths: list[Path] = []
+
+        def switch_target(self, target: str, cwd: Path, exclusive_plugins: bool = False) -> ActivationTarget:
+            return self.catalog.resolve_target(target)
+
+        def write_repo_profile(self, cwd: Path, target_name: str, location: str = "root") -> Path:
+            path = cwd / (".copilot-profile" if location == "root" else ".github/copilot-profile")
+            path.parent.mkdir(parents=True, exist_ok=True)
+            path.write_text(target_name + "\n")
+            self.saved_paths.append(path)
+            return path
+
+    manager = StubManager()
+    monkeypatch.setattr("copilot_plugin_manager.cli.get_manager", lambda: manager)
+
+    result = runner.invoke(
+        app,
+        ["switch", "python-core", "--cwd", str(tmp_path), "--save-repo-profile", "--repo-profile-location", "github"],
+    )
+
+    assert result.exit_code == 0
+    assert "Saved repo profile hint to" in result.stdout
+    saved_path = tmp_path / ".github" / "copilot-profile"
+    assert saved_path.read_text() == "python-core\n"

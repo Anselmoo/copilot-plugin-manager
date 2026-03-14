@@ -68,9 +68,20 @@ class PluginManager:
         self.paths = paths
         self.runner = runner or ShellRunner()
         self.state_store = state_store or StateStore(paths)
+        self.sync_warnings: list[str] = []
 
     def repo_profile_hint(self, cwd: Path) -> str:
         return find_repo_profile(cwd, self.paths.copilot_home)
+
+    def repo_profile_path(self, cwd: Path, location: Literal["root", "github"] = "root") -> Path:
+        base = find_project_root(cwd) or cwd.resolve()
+        return base / (".copilot-profile" if location == "root" else ".github/copilot-profile")
+
+    def write_repo_profile(self, cwd: Path, target_name: str, location: Literal["root", "github"] = "root") -> Path:
+        profile_path = self.repo_profile_path(cwd, location)
+        profile_path.parent.mkdir(parents=True, exist_ok=True)
+        profile_path.write_text(target_name + "\n")
+        return profile_path
 
     def read_active_target(self, cwd: Path) -> str:
         repo_state = self.state_store.read_repo_state(cwd)
@@ -79,6 +90,17 @@ class PluginManager:
         if self.paths.legacy_active_target_file.exists():
             return self.paths.legacy_active_target_file.read_text().strip()
         return ""
+
+    def _reset_sync_warnings(self) -> None:
+        self.sync_warnings = []
+
+    def _remember_sync_warnings(self, warnings: list[str]) -> None:
+        for warning in warnings:
+            if warning not in self.sync_warnings:
+                self.sync_warnings.append(warning)
+
+    def _sync_warning(self, provider_name: str, relative_path: str, reason: str) -> str:
+        return f"{provider_name}: skipped {relative_path} ({reason})"
 
     def _new_progress(self) -> Progress:
         return Progress(
@@ -207,16 +229,27 @@ class PluginManager:
         raise RuntimeError(f"Source checkout missing for {source_name}. Initialize the configured submodules or run repo-update first.")
 
     def _copy_fs_path(self, source: Path, destination: Path) -> None:
+        if source.is_symlink() and not source.exists():
+            raise FileNotFoundError(f"Dangling symlink: {source}")
+        if not source.exists():
+            raise FileNotFoundError(f"Missing source path: {source}")
         if destination.exists():
             if destination.is_dir() and not destination.is_symlink():
                 shutil.rmtree(destination)
             else:
                 destination.unlink()
         if source.is_dir():
-            shutil.copytree(source, destination)
+            shutil.copytree(source, destination, ignore_dangling_symlinks=True)
         else:
             destination.parent.mkdir(parents=True, exist_ok=True)
             shutil.copy2(source, destination)
+
+    def _dangling_symlinks(self, source: Path) -> list[Path]:
+        if source.is_symlink() and not source.exists():
+            return [source]
+        if not source.exists() or not source.is_dir():
+            return []
+        return sorted(path for path in source.rglob("*") if path.is_symlink() and not path.exists())
 
     def _title_from_path(self, source_path: str) -> str:
         stem = Path(source_path).stem
@@ -355,6 +388,8 @@ class PluginManager:
         stored = self.state_store.read_provider_state(kind, provider_name)
         if stored is None or stored.source != provider_source:
             return False
+        if stored.warnings:
+            return False
         if stored.definition_signature != self._provider_definition_signature(kind, provider_name):
             return False
         previous = SourceState(
@@ -373,16 +408,19 @@ class PluginManager:
         provider_source: str,
         observed: SourceState,
         outputs: list[str],
+        warnings: list[str],
     ) -> None:
-        if outputs:
+        if outputs or warnings:
             self.state_store.write_provider_state(
                 kind,
                 provider_name,
                 provider_source,
                 observed,
                 outputs,
+                warnings,
                 self._provider_definition_signature(kind, provider_name),
             )
+            self._remember_sync_warnings(warnings)
             return
         self.state_store.clear_provider_state(kind, provider_name)
 
@@ -407,9 +445,14 @@ class PluginManager:
         observed = observed or self.current_source_state(source_root)
         self.paths.skills_dir.mkdir(parents=True, exist_ok=True)
         outputs: list[str] = []
+        warnings: list[str] = []
         for root in provider.roots:
             source = source_root / root
+            if source.is_symlink() and not source.exists():
+                warnings.append(self._sync_warning(provider_name, root, "dangling symlink"))
+                continue
             if not source.exists():
+                warnings.append(self._sync_warning(provider_name, root, "missing source root"))
                 continue
             if source.is_file():
                 destination = self.paths.skills_dir / f"{provider.prefix}__{source.stem}"
@@ -417,11 +460,20 @@ class PluginManager:
                 outputs.append(destination.name)
                 continue
             for directory in sorted(item for item in source.iterdir() if item.is_dir()):
+                dangling = [
+                    self._sync_warning(
+                        provider_name,
+                        str(path.relative_to(source_root)).replace("\\", "/"),
+                        "dangling symlink",
+                    )
+                    for path in self._dangling_symlinks(directory)
+                ]
                 destination = self.paths.skills_dir / f"{provider.prefix}__{directory.name}"
                 self._copy_fs_path(directory, destination)
                 outputs.append(destination.name)
+                warnings.extend(dangling)
         synced_outputs = list(dict.fromkeys(outputs))
-        self._record_provider_sync("skill", provider_name, provider.source, observed, synced_outputs)
+        self._record_provider_sync("skill", provider_name, provider.source, observed, synced_outputs, list(dict.fromkeys(warnings)))
         return synced_outputs
 
     def sync_agent_provider(
@@ -489,7 +541,7 @@ class PluginManager:
                 )
                 outputs.append(destination.name)
         synced_outputs = list(dict.fromkeys(outputs))
-        self._record_provider_sync("agent", provider_name, provider.source, observed, synced_outputs)
+        self._record_provider_sync("agent", provider_name, provider.source, observed, synced_outputs, [])
         return synced_outputs
 
     def _sync_skill_providers(
@@ -592,6 +644,7 @@ class PluginManager:
         raise ValueError(f"Unknown agent operation: {operation}")
 
     def manage_target(self, operation: str, target: str, cwd: Path) -> None:
+        self._reset_sync_warnings()
         match target:
             case "all":
                 self.manage_plugins(operation)
@@ -640,6 +693,7 @@ class PluginManager:
         )
 
     def switch_target(self, target_name: str, cwd: Path, exclusive_plugins: bool = False) -> ActivationTarget:
+        self._reset_sync_warnings()
         old_target_name = self.read_active_target(cwd)
         target = self.catalog.resolve_target(target_name)
         if old_target_name == target.name:
@@ -793,10 +847,12 @@ class PluginManager:
 
     def status_snapshot(self, cwd: Path) -> dict[str, object]:
         repo_hint = self.repo_profile_hint(cwd)
+        repo_profile_file = next((str(candidate) for candidate in (self.repo_profile_path(cwd, "root"), self.repo_profile_path(cwd, "github")) if candidate.exists()), "")
         active_target_name = self.read_active_target(cwd)
         active_target = self.catalog.resolve_target(active_target_name) if active_target_name in {*self.catalog.profiles, *self.catalog.themes} else None
         skill_count = len([item for item in self.paths.skills_dir.iterdir() if item.is_dir()]) if self.paths.skills_dir.exists() else 0
         agent_count = len(list(self.paths.agents_dir.rglob("*.md"))) if self.paths.agents_dir.exists() else 0
+        sync_warnings: list[str] = []
         source_revisions: list[dict[str, str | int | None]] = []
         for name in self.catalog.repositories:
             stored = self.state_store.read_source_state(name)
@@ -811,11 +867,18 @@ class PluginManager:
                     "provider_count": snapshot["provider_count"],
                 }
             )
+        for provider_name in self.catalog.skill_providers:
+            stored_provider = self.state_store.read_provider_state("skill", provider_name)
+            if stored_provider is None:
+                continue
+            sync_warnings.extend(stored_provider.warnings)
         return {
             "repo_hint": repo_hint,
+            "repo_profile_file": repo_profile_file,
             "active_target": active_target,
             "installed_plugins": self.installed_plugins_details(),
             "skill_count": skill_count,
             "agent_count": agent_count,
+            "sync_warnings": list(dict.fromkeys(sync_warnings)),
             "source_revisions": source_revisions,
         }

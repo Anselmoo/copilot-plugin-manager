@@ -154,6 +154,72 @@ def test_sync_missing_skill_providers_reuses_cached_outputs(tmp_path: Path, monk
     assert calls == []
 
 
+def test_sync_skill_provider_skips_dangling_symlinks_and_records_warning(tmp_path: Path, monkeypatch) -> None:
+    monkeypatch.setenv("COPILOT_HOME", str(tmp_path / ".copilot"))
+    bundle = load_catalog_bundle()
+    paths = ManagerPaths.from_environment()
+    manager = PluginManager(bundle, paths, runner=FakeRunner())
+
+    project = tmp_path / "repo"
+    compute_root = project / "external" / "microsoft-skills" / "skills" / "typescript" / "compute"
+    good_skill = compute_root / "calculator"
+    good_skill.mkdir(parents=True)
+    (good_skill / "README.md").write_text("sample")
+    (compute_root / "playwright").symlink_to(compute_root / "missing-playwright")
+
+    outputs = manager.sync_skill_provider("mskills-typescript", project)
+
+    assert "mskills-typescript__compute" in outputs
+    assert (paths.skills_dir / "mskills-typescript__compute").exists()
+    assert not (paths.skills_dir / "mskills-typescript__compute" / "playwright").exists()
+    assert manager.sync_warnings == ["mskills-typescript: skipped skills/typescript/compute/playwright (dangling symlink)"]
+    saved = manager.state_store.read_provider_state("skill", "mskills-typescript")
+    assert saved is not None
+    assert saved.warnings == manager.sync_warnings
+
+
+def test_sync_missing_skill_providers_retries_when_previous_sync_had_warnings(tmp_path: Path, monkeypatch) -> None:
+    monkeypatch.setenv("COPILOT_HOME", str(tmp_path / ".copilot"))
+    bundle = load_catalog_bundle()
+    paths = ManagerPaths.from_environment()
+    manager = PluginManager(bundle, paths, runner=FakeRunner())
+    project = tmp_path / "repo"
+    compute_root = project / "external" / "microsoft-skills" / "skills" / "typescript" / "compute"
+    good_skill = compute_root / "calculator"
+    good_skill.mkdir(parents=True)
+    (good_skill / "README.md").write_text("sample")
+    (compute_root / "playwright").symlink_to(compute_root / "missing-playwright")
+
+    manager.sync_skill_provider("mskills-typescript", project)
+    calls: list[str] = []
+    original = manager.sync_skill_provider
+
+    def tracked(provider_name: str, cwd: Path, *, source_root: Path | None = None, observed: SourceState | None = None) -> list[str]:
+        calls.append(provider_name)
+        return original(provider_name, cwd, source_root=source_root, observed=observed)
+
+    monkeypatch.setattr(manager, "sync_skill_provider", tracked)
+    manager._sync_missing_skill_providers(["mskills-typescript"], project)
+
+    assert calls == ["mskills-typescript"]
+
+
+def test_write_repo_profile_creates_hint_in_repo_root(tmp_path: Path, monkeypatch) -> None:
+    monkeypatch.setenv("COPILOT_HOME", str(tmp_path / ".copilot"))
+    bundle = load_catalog_bundle()
+    paths = ManagerPaths.from_environment()
+    manager = PluginManager(bundle, paths, runner=FakeRunner())
+    project = tmp_path / "repo"
+    nested = project / "src" / "feature"
+    nested.mkdir(parents=True)
+    (project / ".git").mkdir()
+
+    saved = manager.write_repo_profile(nested, "python-core", "github")
+
+    assert saved == project / ".github" / "copilot-profile"
+    assert saved.read_text() == "python-core\n"
+
+
 def test_sync_agent_provider_normalizes_output_name_and_metadata(tmp_path: Path, monkeypatch) -> None:
     monkeypatch.setenv("COPILOT_HOME", str(tmp_path / ".copilot"))
     bundle = load_catalog_bundle()
@@ -291,3 +357,25 @@ def test_repo_update_clones_cache_inside_regular_git_repository(tmp_path: Path, 
     assert len(clone_calls) == len(bundle.repositories)
     assert revisions["anthropics-skills"] == "abc123"
     assert (paths.sources_dir / "anthropics-skills").exists()
+
+
+def test_status_snapshot_includes_repo_profile_file_and_sync_warnings(tmp_path: Path, monkeypatch) -> None:
+    monkeypatch.setenv("COPILOT_HOME", str(tmp_path / ".copilot"))
+    bundle = load_catalog_bundle()
+    paths = ManagerPaths.from_environment()
+    manager = PluginManager(bundle, paths, runner=FakeRunner())
+    project = tmp_path / "repo"
+    project.mkdir()
+    (project / ".git").mkdir()
+    (project / ".copilot-profile").write_text("ts\n")
+    compute_root = project / "external" / "microsoft-skills" / "skills" / "typescript" / "compute"
+    good_skill = compute_root / "calculator"
+    good_skill.mkdir(parents=True)
+    (good_skill / "README.md").write_text("sample")
+    (compute_root / "playwright").symlink_to(compute_root / "missing-playwright")
+
+    manager.sync_skill_provider("mskills-typescript", project)
+    snapshot = manager.status_snapshot(project)
+
+    assert snapshot["repo_profile_file"] == str(project / ".copilot-profile")
+    assert snapshot["sync_warnings"] == ["mskills-typescript: skipped skills/typescript/compute/playwright (dangling symlink)"]
