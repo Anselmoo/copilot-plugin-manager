@@ -5,12 +5,12 @@ agents = ["agency-engineering-technical-writer"]
 
 [themes."docs"]
 plugins = ["docx", "napkin", "pdf", "pptx", "python-mcp-development", "technical-spike"]
-skills = ["anthropic-doc-coauthoring", "anthropic-docx", "anthropic-pdf", "anthropic-pptx", "mskills-typescript-frontend"]
+skills = ["anthropic-doc-coauthoring", "anthropic-docx", "anthropic-pdf", "anthropic-pptx", "anthropic-xlsx", "mskills-typescript-frontend"]
 agents = []
 
 [themes."docs-design"]
 plugins = ["brand-guidelines", "canvas-design", "doc-coauthoring", "frontend-web-dev", "hve-design-thinking", "internal-comms", "theme-factory"]
-skills = ["anthropic-brand-guidelines", "anthropic-canvas-design", "anthropic-frontend-design", "anthropic-internal-comms", "anthropic-theme-factory"]
+skills = ["anthropic-brand-guidelines", "anthropic-canvas-design", "anthropic-frontend-design", "anthropic-internal-comms", "anthropic-theme-factory", "anthropic-algorithmic-art"]
 agents = ["agency-design-brand-guardian", "agency-design-ui-designer", "agency-design-ux-architect", "voltagent-documentation-engineer"]
 
 [themes."python"]
@@ -25,7 +25,7 @@ agents = ["voltagent-python-pro", "voltagent-code-reviewer", "voltagent-debugger
 
 [themes."frontend"]
 plugins = ["frontend-web-dev", "hve-design-thinking", "partners", "polyglot-test-agent", "testing-automation"]
-skills = ["anthropic-frontend-design", "anthropic-canvas-design", "mskills-typescript-frontend", "mskills-typescript-integration"]
+skills = ["anthropic-frontend-design", "anthropic-canvas-design", "anthropic-web-artifacts-builder", "mskills-typescript-frontend", "mskills-typescript-integration"]
 agents = ["agency-design-ui-designer", "agency-design-ux-architect"]
 
 [themes."mcp"]
@@ -40,7 +40,7 @@ agents = ["agency-engineering-backend-architect", "agency-engineering-technical-
 
 [themes."testing"]
 plugins = ["hve-coding-standards", "polyglot-test-agent", "technical-spike", "testing-automation"]
-skills = ["anthropic-skill-creator"]
+skills = ["anthropic-skill-creator", "anthropic-webapp-testing"]
 agents = ["agency-testing-api-tester", "agency-testing-performance-benchmarker", "agency-testing-reality-checker", "voltagent-code-reviewer", "voltagent-security-auditor", "voltagent-test-automator"]
 
 [themes."science"]
@@ -60,7 +60,7 @@ agents = ["agency-product-sprint-prioritizer", "agency-product-trend-researcher"
 
 [themes."data"]
 plugins = ["database-data-management", "hve-data-science", "oracle-to-postgres-migration-expert"]
-skills = ["kdense-exploratory-data-analysis", "mskills-dotnet-data", "mskills-python-data", "mskills-rust-data", "mskills-typescript-data"]
+skills = ["kdense-exploratory-data-analysis", "mskills-dotnet-data", "mskills-python-data", "mskills-rust-data", "mskills-typescript-data", "anthropic-xlsx"]
 agents = ["voltagent-data-engineer", "voltagent-data-scientist", "agency-product-trend-researcher"]
 
 [themes."devops"]

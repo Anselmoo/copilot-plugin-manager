@@ -5,7 +5,7 @@ def test_catalog_bundle_counts() -> None:
     bundle = load_catalog_bundle()
     assert len(bundle.plugins) > 0
     assert len(bundle.repositories) == 7
-    assert len(bundle.skill_providers) == 37
+    assert len(bundle.skill_providers) == 42
     assert len(bundle.agent_providers) == 58
     assert len(bundle.entrypoints) > len(bundle.plugins)
     assert len(bundle.themes) == 20
