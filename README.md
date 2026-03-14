@@ -6,7 +6,7 @@
 [![Python versions](https://img.shields.io/pypi/pyversions/copilot-plugin-manager)](https://pypi.org/project/copilot-plugin-manager/)
 [![License](https://img.shields.io/github/license/Anselmoo/copilot-plugin-manager)](LICENSE)
 
-A Python-first GitHub Copilot plugin manager built with `Typer`, `Rich`, and `Pydantic`.
+A Python-first CLI for managing GitHub Copilot plugins, skills, and agents.
 
 It keeps Copilot setup management focused and reproducible:
 
@@ -16,18 +16,24 @@ It keeps Copilot setup management focused and reproducible:
 - track repository-aware state under `~/.copilot/copilot-plugin-manager`
 - refresh bundled catalogs from curated upstream sources
 
-## Install from source
+## Install
+
+Install the CLI into your current Python environment:
 
 ```bash
-git submodule update --init --recursive
-uv sync --group dev
-uv run copilot-plugin-manager --help
+pip install copilot-plugin-manager
 ```
 
-The default invocation also works:
+Or run it without installing anything permanently:
 
 ```bash
-uv run copilot-plugin-manager
+uvx copilot-plugin-manager --help
+```
+
+Once installed with `pip`, the command is available directly:
+
+```bash
+copilot-plugin-manager --help
 ```
 
 ## Quick start
@@ -35,51 +41,62 @@ uv run copilot-plugin-manager
 List what is available:
 
 ```bash
-uv run copilot-plugin-manager list profiles
-uv run copilot-plugin-manager list themes
-uv run copilot-plugin-manager list sources
+copilot-plugin-manager list profiles
+copilot-plugin-manager list themes
+copilot-plugin-manager list sources
 ```
-
-Run a one-off command straight from your terminal with `uvx`:
-
-```bash
-uvx copilot-plugin-manager list profiles
-```
-
-`uvx` is convenient for direct execution, but persistent shell completion is easier when the CLI is installed locally or run from a checked-out repository with `uv run`.
 
 Activate a setup for the current repository:
 
 ```bash
-uv run copilot-plugin-manager switch python-core
-uv run copilot-plugin-manager switch-exclusive python-mcp
+copilot-plugin-manager switch python-core
+copilot-plugin-manager switch-exclusive python-mcp
 ```
 
 Refresh upstream sources and inspect state:
 
 ```bash
-uv run copilot-plugin-manager repo-update --remote
-uv run copilot-plugin-manager status
+copilot-plugin-manager repo-update --remote
+copilot-plugin-manager status
 ```
+
+If you prefer one-off execution with `uvx`, the same commands work there too:
+
+```bash
+uvx copilot-plugin-manager list profiles
+uvx copilot-plugin-manager status
+```
+
+`uvx` is convenient for direct execution, but persistent shell completion is easiest when the CLI is installed locally.
 
 ## Shell completion
 
 Quick shell-init snippets:
 
 ```bash
-uv run copilot-plugin-manager shell-init bash
-uv run copilot-plugin-manager shell-init zsh
-uv run copilot-plugin-manager shell-init fish
-uv run copilot-plugin-manager shell-init powershell
-uv run copilot-plugin-manager shell-init nushell
+copilot-plugin-manager shell-init bash
+copilot-plugin-manager shell-init zsh
+copilot-plugin-manager shell-init fish
+copilot-plugin-manager shell-init powershell
+copilot-plugin-manager shell-init nushell
 ```
 
 Managed completion files:
 
 ```bash
-uv run copilot-plugin-manager completion-install fish
-uv run copilot-plugin-manager completion-install bash
-uv run copilot-plugin-manager completion-script powershell
+copilot-plugin-manager completion-install fish
+copilot-plugin-manager completion-install bash
+copilot-plugin-manager completion-script powershell
+```
+
+## From source
+
+If you want to run the project from a local checkout instead of installing it from PyPI:
+
+```bash
+git submodule update --init --recursive
+uv sync --group dev
+uv run copilot-plugin-manager --help
 ```
 
 ## Documentation
