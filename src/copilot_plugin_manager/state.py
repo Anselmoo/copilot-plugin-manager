@@ -7,7 +7,8 @@ from pathlib import Path
 from typing import Literal
 
 from .models import ActivationTarget, ManagerState, McpSyncState, ProviderSyncState, RepoState, SourceState
-from .paths import ManagerPaths, repo_key
+from .paths import ManagerPaths, find_project_root, repo_key
+
 
 
 def provider_key(kind: Literal["skill", "agent"], provider_name: str) -> str:
@@ -17,6 +18,9 @@ def provider_key(kind: Literal["skill", "agent"], provider_name: str) -> str:
 @dataclass
 class StateStore:
     paths: ManagerPaths
+
+    def _repo_state_path(self, cwd: Path) -> Path:
+        return find_project_root(cwd) or cwd.resolve()
 
     def load(self) -> ManagerState:
         self.paths.ensure_directories()
@@ -30,7 +34,7 @@ class StateStore:
 
     def read_repo_state(self, cwd: Path) -> RepoState | None:
         state = self.load()
-        return state.repositories.get(repo_key(cwd))
+        return state.repositories.get(repo_key(self._repo_state_path(cwd)))
 
     def read_source_state(self, source_name: str) -> SourceState | None:
         state = self.load()
@@ -45,7 +49,7 @@ class StateStore:
 
     def write_repo_target(self, cwd: Path, target: ActivationTarget, repo_profile_hint: str | None) -> None:
         state = self.load()
-        state.repositories[repo_key(cwd)] = RepoState.from_target(target, repo_profile_hint)
+        state.repositories[repo_key(self._repo_state_path(cwd))] = RepoState.from_target(target, repo_profile_hint)
         self.save(state)
         self.paths.legacy_active_target_file.parent.mkdir(parents=True, exist_ok=True)
         self.paths.legacy_active_target_file.write_text(target.name + "\n")
@@ -76,6 +80,7 @@ class StateStore:
         source_name: str,
         observed: SourceState,
         outputs: list[str],
+        warnings: list[str],
         definition_signature: str,
     ) -> None:
         state = self.load()
@@ -86,6 +91,7 @@ class StateStore:
             manifest_version=observed.manifest_version,
             source_path=observed.source_path,
             outputs=list(dict.fromkeys(outputs)),
+            warnings=list(dict.fromkeys(warnings)),
             definition_signature=definition_signature,
             updated_at=datetime.now(UTC).isoformat(),
         )

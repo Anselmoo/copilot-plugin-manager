@@ -39,6 +39,7 @@ uv run poe test-cov
 uv run poe pre-commit
 uv run poe lint
 uv run poe typecheck
+uv run poe broken-links
 uv run poe check
 uv run poe build
 uv run poe generate-docs
@@ -51,6 +52,7 @@ uv run pytest -q
 uv run pre-commit run --all-files
 uv run ruff check .
 uv run ty check
+uv run python scripts/check_broken_links.py
 uv build
 uv run twine check dist/*
 ```
@@ -88,6 +90,8 @@ Before opening a pull request:
 - run `uv run poe build` when packaging behavior changes
 - update docs or examples if command behavior changed
 - add or update tests for behavior changes
+
+If you change repository-aware activation behavior, keep `README.md`, `docs/USAGE.md`, and the relevant CLI help examples aligned. In particular, repo-local hint handling (`.copilot-profile` / `.github/copilot-profile`) and `status` output are treated as maintained user-facing workflows.
 
 ## Project layout
 

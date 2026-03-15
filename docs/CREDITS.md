@@ -7,10 +7,10 @@ These bundled catalogs build on the upstream repositories tracked by this projec
 | Source | Owner / Repo | License | Providers | Files | Description |
 | --- | --- | --- | ---: | ---: | --- |
 | `awesome-copilot` | `github/awesome-copilot` | MIT | 0 | 53 | Marketplace plugin source used by the main awesome-copilot ecosystem. |
-| `anthropics-skills` | `anthropics/skills` | See repository | 13 | 39 | Anthropic skill packs synced as local skill folders. |
-| `kdense-science` | `K-Dense-AI/claude-scientific-skills` | MIT | 8 | 190 | Scientific and research-focused skill packs. |
+| `anthropics-skills` | `anthropics/skills` | See repository | 18 | 45 | Anthropic skill packs synced as local skill folders. |
+| `kdense-science` | `K-Dense-AI/claude-scientific-skills` | MIT | 0 | 0 | Scientific and research-focused skill packs. |
 | `microsoft-hve-core` | `microsoft/hve-core` | MIT | 0 | 0 | Microsoft HVE plugin collections for planning, security, GitHub, and data work. |
-| `microsoft-skills` | `microsoft/skills` | MIT | 16 | 38 | Language-specific Microsoft skills packs. |
+| `microsoft-skills` | `microsoft/skills` | MIT | 16 | 85 | Language-specific Microsoft skills packs. |
 | `agency-agents` | `msitarzewski/agency-agents` | MIT | 21 | 161 | Role/division-based agent bundles. |
 | `voltagent-subagents` | `VoltAgent/awesome-claude-code-subagents` | MIT | 37 | 131 | Category-based Claude Code subagents grouped by workflow theme. |
 

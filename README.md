@@ -50,6 +50,7 @@ Activate a setup for the current repository:
 
 ```bash
 copilot-plugin-manager switch python-core
+copilot-plugin-manager switch python-core --save-repo-profile
 copilot-plugin-manager switch-exclusive python-mcp
 ```
 
@@ -59,6 +60,10 @@ Refresh upstream sources and inspect state:
 copilot-plugin-manager repo-update --remote
 copilot-plugin-manager status
 ```
+
+`status` now surfaces repo-local profile files and any persisted sync warnings from the last third-party skill sync, so partial upstream-copy problems are easier to spot.
+
+If you maintain the bundled upstream catalogs, `uv run poe broken-links` catches dangling symlinks in the repository and initialized submodules before refresh or sync work.
 
 If you prefer one-off execution with `uvx`, the same commands work there too:
 

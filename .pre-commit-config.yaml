@@ -16,3 +16,11 @@ repos:
         args: ["--fix"]
       - id: ruff-format
         types_or: ["python", "pyi"]
+  - repo: local
+    hooks:
+      - id: broken-links
+        name: broken-links
+        entry: uv run poe broken-links
+        language: system
+        pass_filenames: false
+        always_run: true

@@ -273,14 +273,17 @@ def render_status(status: dict[str, object], copilot_home: str) -> list[object]:
     active_target = cast(ActivationTarget | None, status["active_target"])
     installed_plugins = cast(list[dict[str, str | None]], status["installed_plugins"])
     source_revisions = cast(list[dict[str, str | int | None]], status["source_revisions"])
+    sync_warnings = cast(list[str], status.get("sync_warnings", []))
     rows = [
         ("Active target", active_target.name if active_target else "none"),
         ("Active type", active_target.kind if active_target else ""),
         ("Active themes", ", ".join(active_target.themes) if active_target else ""),
         ("Repo profile", str(status["repo_hint"])),
+        ("Repo profile file", str(status.get("repo_profile_file", ""))),
         ("Copilot home", copilot_home),
         ("Skill dirs", str(status["skill_count"])),
         ("Agent files", str(status["agent_count"])),
+        ("Sync warnings", str(len(sync_warnings))),
     ]
     plugin_table = _base_table("Installed plugins", header_style="bold blue")
     plugin_table.add_column("Name", style="blue", no_wrap=True, width=28)
@@ -302,4 +305,16 @@ def render_status(status: dict[str, object], copilot_home: str) -> list[object]:
             str(source["file_count"]),
             str(source["provider_count"]),
         )
-    return [_overview_panel("Copilot Plugin Manager", rows), source_table, plugin_table]
+    renderables: list[object] = [_overview_panel("Copilot Plugin Manager", rows)]
+    if sync_warnings:
+        renderables.append(render_sync_warnings(sync_warnings))
+    renderables.extend([source_table, plugin_table])
+    return renderables
+
+
+def render_sync_warnings(warnings: list[str]) -> Panel:
+    table = Table(show_header=False, box=None, expand=True, padding=(0, 1), collapse_padding=True)
+    table.add_column("Warning", style="yellow", overflow="fold")
+    for warning in warnings:
+        table.add_row(warning)
+    return Panel(table, title="Sync warnings", border_style="yellow", box=box.ROUNDED, expand=True)
