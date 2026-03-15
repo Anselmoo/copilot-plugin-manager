@@ -480,9 +480,7 @@ def test_reconcile_mcps_merges_local_definitions(tmp_path: Path) -> None:
     manager = _make_manager(tmp_path, runner=NoNpmRunner())
     vscode_dir = tmp_path / ".vscode"
     vscode_dir.mkdir()
-    (vscode_dir / "mcp.json").write_text(
-        json.dumps({"servers": {"repo-local": {"type": "http", "url": "https://local.example"}}})
-    )
+    (vscode_dir / "mcp.json").write_text(json.dumps({"servers": {"repo-local": {"type": "http", "url": "https://local.example"}}}))
 
     manager.reconcile_mcps(tmp_path, probe_version=False)
 
@@ -592,12 +590,7 @@ def test_probe_mcp_pip_version_parses_available_versions_line(tmp_path: Path) ->
         def run(self, args: list[str], cwd: Path | None = None, check: bool = True) -> CommandResult:
             if args[:1] == ["/usr/bin/pip"] and "index" in args and "versions" in args:
                 # Simulate actual pip output format.
-                stdout = (
-                    "markitdown-mcp (0.1.0)\n"
-                    "Available versions: 0.1.0, 0.0.9, 0.0.8\n"
-                    "  INSTALLED: 0.0.9\n"
-                    "  LATEST:    0.1.0\n"
-                )
+                stdout = "markitdown-mcp (0.1.0)\nAvailable versions: 0.1.0, 0.0.9, 0.0.8\n  INSTALLED: 0.0.9\n  LATEST:    0.1.0\n"
                 return CommandResult(tuple(args), stdout, "", 0)
             return CommandResult(tuple(args), "", "", 0)
 

@@ -552,12 +552,7 @@ def mcp_sync_command(
         "For catalog MCPs, version is probed from npm automatically. "
         "Pass [cyan]--no-probe-version[/cyan] to skip version probing."
     ),
-    epilog=(
-        "\b\nExamples:\n"
-        "  copilot-plugin-manager mcp-add playwright\n"
-        "  copilot-plugin-manager mcp-add context7\n"
-        "  copilot-plugin-manager mcp-add my-custom --no-probe-version"
-    ),
+    epilog=("\b\nExamples:\n  copilot-plugin-manager mcp-add playwright\n  copilot-plugin-manager mcp-add context7\n  copilot-plugin-manager mcp-add my-custom --no-probe-version"),
 )
 def mcp_add_command(
     name: Annotated[
@@ -607,11 +602,7 @@ def mcp_add_command(
     "mcp-remove",
     short_help="Remove a single MCP server entry.",
     help=("Remove a named MCP server entry from [cyan]~/.copilot/mcp-config.json[/cyan] and/or [cyan].vscode/mcp.json[/cyan]."),
-    epilog=(
-        "\b\nExamples:\n"
-        "  copilot-plugin-manager mcp-remove playwright\n"
-        "  copilot-plugin-manager mcp-remove context7 --cwd /path/to/repo"
-    ),
+    epilog=("\b\nExamples:\n  copilot-plugin-manager mcp-remove playwright\n  copilot-plugin-manager mcp-remove context7 --cwd /path/to/repo"),
 )
 def mcp_remove_command(
     name: Annotated[

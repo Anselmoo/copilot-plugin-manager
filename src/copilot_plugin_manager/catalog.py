@@ -244,7 +244,6 @@ class CatalogBundle(BaseModel):
             "measured_at": latest.measured_at if latest is not None else None,
         }
 
-
     def mcp_details(self, name: str) -> dict[str, str]:
         record = self.mcps[name]
         identifier = record.package or record.url or record.local_path or name

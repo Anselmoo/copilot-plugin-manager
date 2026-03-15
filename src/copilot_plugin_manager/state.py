@@ -10,7 +10,6 @@ from .models import ActivationTarget, ManagerState, McpSyncState, ProviderSyncSt
 from .paths import ManagerPaths, find_project_root, repo_key
 
 
-
 def provider_key(kind: Literal["skill", "agent"], provider_name: str) -> str:
     return f"{kind}:{provider_name}"
 
