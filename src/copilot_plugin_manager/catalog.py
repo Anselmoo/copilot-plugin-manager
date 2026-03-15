@@ -7,7 +7,7 @@ from pathlib import Path
 
 from pydantic import BaseModel, Field
 
-from .models import ActivationTarget, EntrypointRecord, PluginRecord, ProfileRecord, ProviderRecord, RepositorySource, ThemeRecord
+from .models import ActivationTarget, EntrypointRecord, McpRecord, PluginRecord, ProfileRecord, ProviderRecord, RepositorySource, ThemeRecord
 
 
 class CatalogBundle(BaseModel):
@@ -15,6 +15,7 @@ class CatalogBundle(BaseModel):
     plugins: dict[str, PluginRecord]
     skill_providers: dict[str, ProviderRecord]
     agent_providers: dict[str, ProviderRecord]
+    mcps: dict[str, McpRecord] = Field(default_factory=dict)
     entrypoints: dict[str, EntrypointRecord] = Field(default_factory=dict)
     themes: dict[str, ThemeRecord]
     profiles: dict[str, ProfileRecord]
@@ -243,6 +244,25 @@ class CatalogBundle(BaseModel):
             "measured_at": latest.measured_at if latest is not None else None,
         }
 
+    def mcp_details(self, name: str) -> dict[str, str]:
+        record = self.mcps[name]
+        identifier = record.package or record.url or record.local_path or name
+        version = record.pinned_tag or record.version_channel or "latest"
+        if record.kind == "http":
+            version = record.url or "http"
+        elif record.kind == "pip":
+            version = record.pinned_tag or record.version_channel or "latest"
+        return {
+            "name": name,
+            "kind": record.kind,
+            "identifier": identifier,
+            "description": record.description or f"MCP server {name}.",
+            "use_when": record.use_when or "Use when this MCP server matches the workflow you want.",
+            "source_url": record.source_url or "",
+            "version": version,
+            "tags": ", ".join(record.tags),
+        }
+
 
 def slug_to_title(value: str) -> str:
     parts = [part for part in re.split(r"[-_/]", value) if part]
@@ -361,12 +381,17 @@ def load_catalog_bundle(root: Path | None = None) -> CatalogBundle:
         entrypoints = _read_toml("entrypoints.toml", root)["entrypoints"]
     except FileNotFoundError:
         entrypoints = {}
+    try:
+        mcps = _read_toml("mcps.toml", root)["mcps"]
+    except (FileNotFoundError, KeyError):
+        mcps = {}
     return CatalogBundle.model_validate(
         {
             "repositories": _read_toml("repositories.toml", root)["repositories"],
             "plugins": _read_toml("plugins.toml", root)["plugins"],
             "skill_providers": _read_toml("skills.toml", root)["providers"],
             "agent_providers": _read_toml("agents.toml", root)["providers"],
+            "mcps": mcps,
             "entrypoints": entrypoints,
             "themes": _read_toml("themes.toml", root)["themes"],
             "profiles": _read_toml("profiles.toml", root)["profiles"],

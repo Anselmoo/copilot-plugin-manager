@@ -6,7 +6,7 @@ from datetime import UTC, datetime
 from pathlib import Path
 from typing import Literal
 
-from .models import ActivationTarget, ManagerState, ProviderSyncState, RepoState, SourceState
+from .models import ActivationTarget, ManagerState, McpSyncState, ProviderSyncState, RepoState, SourceState
 from .paths import ManagerPaths, find_project_root, repo_key
 
 
@@ -101,4 +101,20 @@ class StateStore:
         if provider_key(kind, provider_name) not in state.providers:
             return
         del state.providers[provider_key(kind, provider_name)]
+        self.save(state)
+
+    def read_mcp_state(self, name: str) -> McpSyncState | None:
+        state = self.load()
+        return state.mcps.get(name)
+
+    def write_mcp_state(self, mcp_state: McpSyncState) -> None:
+        state = self.load()
+        state.mcps[mcp_state.name] = mcp_state
+        self.save(state)
+
+    def clear_mcp_state(self, name: str) -> None:
+        state = self.load()
+        if name not in state.mcps:
+            return
+        del state.mcps[name]
         self.save(state)

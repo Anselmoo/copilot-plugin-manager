@@ -228,6 +228,27 @@ def render_providers(bundle: CatalogBundle, kind: str) -> Table:
     return table
 
 
+def render_mcps(bundle: CatalogBundle) -> Table:
+    table = _base_table(f"MCP servers ({len(bundle.mcps)})", header_style="bold magenta")
+    table.add_column("Name", style="magenta", no_wrap=True, width=24)
+    table.add_column("Kind", no_wrap=True, width=6)
+    table.add_column("Identifier", overflow="fold", width=32)
+    table.add_column("Version", no_wrap=True, width=14)
+    table.add_column("Tags", overflow="fold", width=18)
+    table.add_column("Description", overflow="fold")
+    for name in bundle.mcps:
+        details = bundle.mcp_details(name)
+        table.add_row(
+            name,
+            details["kind"],
+            details["identifier"],
+            details["version"],
+            details["tags"],
+            details["description"],
+        )
+    return table
+
+
 def render_overview(
     bundle: CatalogBundle,
     active_target: ActivationTarget | None,

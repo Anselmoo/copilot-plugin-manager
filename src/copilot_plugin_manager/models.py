@@ -44,7 +44,7 @@ class ProviderRecord(BaseModel):
 
 
 class EntrypointRecord(BaseModel):
-    kind: Literal["plugin", "skill", "agent"]
+    kind: Literal["plugin", "skill", "agent", "mcp"]
     source: str
     provider: str | None = None
     source_path: str
@@ -63,10 +63,44 @@ class EntrypointRecord(BaseModel):
     last_seen_at: str | None = None
 
 
+class McpRecord(BaseModel):
+    """Defines a single MCP server entry in the catalog."""
+
+    kind: Literal["npm", "pip", "http", "local", "docker"] = "npm"
+    package: str | None = None
+    url: str | None = None
+    local_path: str | None = None
+    description: str | None = None
+    use_when: str | None = None
+    source_url: str | None = None
+    version_channel: str | None = None
+    pinned_tag: str | None = None
+    pinned_sha: str | None = None
+    command: str | None = None
+    args: list[str] = Field(default_factory=list)
+    env: dict[str, str] = Field(default_factory=dict)
+    tags: list[str] = Field(default_factory=list)
+
+
+class McpSyncState(BaseModel):
+    """Persisted tracking state for a reconciled MCP server."""
+
+    kind: Literal["npm", "pip", "http", "local", "docker"] = "npm"
+    name: str
+    package: str | None = None
+    url: str | None = None
+    installed_version: str | None = None
+    installed_sha: str | None = None
+    config_signature: str | None = None
+    scope: Literal["global", "local"] = "global"
+    updated_at: str | None = None
+
+
 class ThemeRecord(BaseModel):
     plugins: list[str] = Field(default_factory=list)
     skills: list[str] = Field(default_factory=list)
     agents: list[str] = Field(default_factory=list)
+    mcps: list[str] = Field(default_factory=list)
 
 
 class ProfileRecord(BaseModel):
@@ -133,6 +167,7 @@ class ManagerState(BaseModel):
     repositories: dict[str, RepoState] = Field(default_factory=dict)
     sources: dict[str, SourceState] = Field(default_factory=dict)
     providers: dict[str, ProviderSyncState] = Field(default_factory=dict)
+    mcps: dict[str, McpSyncState] = Field(default_factory=dict)
 
 
 @dataclass(frozen=True)
@@ -144,6 +179,6 @@ class InstalledPlugin:
 
 @dataclass(frozen=True)
 class PlannedAction:
-    category: Literal["plugin", "skill", "agent", "repo", "state", "info"]
+    category: Literal["plugin", "skill", "agent", "mcp", "repo", "state", "info"]
     description: str
     command: tuple[str, ...] | None = None

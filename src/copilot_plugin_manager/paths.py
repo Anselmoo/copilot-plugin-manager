@@ -16,6 +16,7 @@ class ManagerPaths:
     legacy_active_target_file: Path
     state_file: Path
     sources_dir: Path
+    mcp_config_file: Path | None = None
 
     @classmethod
     def from_environment(cls) -> "ManagerPaths":
@@ -29,6 +30,7 @@ class ManagerPaths:
             legacy_active_target_file=copilot_home / "active-profile",
             state_file=manager_home / "state.json",
             sources_dir=manager_home / "sources",
+            mcp_config_file=copilot_home / "mcp-config.json",
         )
 
     def ensure_directories(self) -> None:
