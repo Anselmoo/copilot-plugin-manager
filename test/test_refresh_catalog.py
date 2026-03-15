@@ -148,3 +148,101 @@ def test_build_plugin_records_infers_specific_use_when_without_existing_catalog(
     records, _ = refresh_catalog.build_plugin_records({}, {})
 
     assert records["debug-helper"]["use_when"] == "Use when you need toolkit for debugging API integrations and tracing failures."
+
+
+def test_infer_skill_roots_keeps_microsoft_category_roots() -> None:
+    refresh_catalog = load_refresh_catalog_module()
+
+    assert refresh_catalog.infer_skill_roots("microsoft-skills", "mskills-python-data", ["skills/python/data"]) == ["skills/python/data"]
+    assert refresh_catalog.infer_skill_roots(
+        "microsoft-skills",
+        "mskills-python-data",
+        [
+            "skills/python/data/blob",
+            "skills/python/data/queue",
+        ],
+    ) == ["skills/python/data"]
+
+
+def test_build_skill_entrypoints_resolves_microsoft_symlink_entries_to_real_skill_dirs(tmp_path: Path, monkeypatch) -> None:
+    refresh_catalog = load_refresh_catalog_module()
+    monkeypatch.setattr(refresh_catalog, "ROOT", tmp_path)
+    monkeypatch.setattr(refresh_catalog, "now_iso", lambda: "2026-03-14T00:00:00+00:00")
+    monkeypatch.setattr(refresh_catalog, "git_revision", lambda _: "revision")
+    seen_pathspecs: list[str] = []
+
+    def fake_git_commit_metadata_map(_repo_root: Path, pathspecs: list[str]) -> dict[str, tuple[str, str]]:
+        seen_pathspecs.extend(pathspecs)
+        return {path: ("commit", "2026-03-14T00:00:00+00:00") for path in pathspecs}
+
+    monkeypatch.setattr(refresh_catalog, "git_commit_metadata_map", fake_git_commit_metadata_map)
+
+    source_root = tmp_path / "external" / "microsoft-skills" / "skills" / "python" / "data"
+    source_root.mkdir(parents=True)
+    (source_root / "blob").symlink_to("../../../.github/skills/azure-storage-blob-py")
+    real_skill = tmp_path / "external" / "microsoft-skills" / ".github" / "plugins" / "azure-sdk-python" / "skills" / "azure-storage-blob-py"
+    real_skill.mkdir(parents=True)
+    (real_skill / "SKILL.md").write_text("# Azure Storage Blob\n\nBlob Storage SDK patterns.\n", encoding="utf-8")
+
+    skills = {
+        "mskills-python-data": {
+            "source": "microsoft-skills",
+            "prefix": "mskills-python-data",
+            "roots": ["skills/python/data"],
+        }
+    }
+    repositories = {
+        "microsoft-skills": {
+            "owner": "microsoft",
+            "repo": "skills",
+            "submodule_path": "external/microsoft-skills",
+        }
+    }
+
+    entrypoints = refresh_catalog.build_skill_entrypoints(skills, repositories, {})
+
+    assert len(entrypoints) == 1
+    assert entrypoints[0]["source_path"] == "skills/python/data/blob"
+    assert seen_pathspecs == [".github/plugins/azure-sdk-python/skills/azure-storage-blob-py"]
+    assert entrypoints[0]["source_url"] == "https://github.com/microsoft/skills/tree/main/.github/plugins/azure-sdk-python/skills/azure-storage-blob-py"
+    assert entrypoints[0]["title"] == "Azure Storage Blob"
+    assert entrypoints[0]["local_name"] == "blob"
+    assert entrypoints[0]["commit_revision"] == "commit"
+
+
+def test_build_skill_entrypoints_falls_back_to_blob_url_when_microsoft_symlink_target_is_unknown(tmp_path: Path, monkeypatch) -> None:
+    refresh_catalog = load_refresh_catalog_module()
+    monkeypatch.setattr(refresh_catalog, "ROOT", tmp_path)
+    monkeypatch.setattr(refresh_catalog, "now_iso", lambda: "2026-03-14T00:00:00+00:00")
+    monkeypatch.setattr(refresh_catalog, "git_revision", lambda _: "revision")
+    monkeypatch.setattr(
+        refresh_catalog,
+        "git_commit_metadata_map",
+        lambda _repo_root, pathspecs: {path: ("commit", "2026-03-14T00:00:00+00:00") for path in pathspecs},
+    )
+
+    source_root = tmp_path / "external" / "microsoft-skills" / "skills" / "python" / "data"
+    source_root.mkdir(parents=True)
+    (source_root / "blob").symlink_to("../../../.github/skills/azure-storage-blob-py")
+
+    skills = {
+        "mskills-python-data": {
+            "source": "microsoft-skills",
+            "prefix": "mskills-python-data",
+            "roots": ["skills/python/data"],
+        }
+    }
+    repositories = {
+        "microsoft-skills": {
+            "owner": "microsoft",
+            "repo": "skills",
+            "submodule_path": "external/microsoft-skills",
+        }
+    }
+
+    entrypoints = refresh_catalog.build_skill_entrypoints(skills, repositories, {})
+
+    assert len(entrypoints) == 1
+    assert entrypoints[0]["source_path"] == "skills/python/data/blob"
+    assert entrypoints[0]["source_url"] == "https://github.com/microsoft/skills/blob/main/skills/python/data/blob"
+    assert entrypoints[0]["title"] == "Blob"

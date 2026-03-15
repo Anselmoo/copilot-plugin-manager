@@ -85,14 +85,15 @@ exclude = ["dist", "external", "legacy"]
 output-format = "full"
 
 [tool.poe.tasks]
-pre-commit = { cmd = "pre-commit run --all-files", help = "Run pre-commit hooks across the repository." }
-test = { cmd = "pytest -q", help = "Run the test suite." }
-test-cov = { cmd = "pytest --cov=copilot_plugin_manager --cov-report=term-missing --cov-report=xml", help = "Run tests with coverage." }
-lint = { cmd = "ruff check .", help = "Run Ruff lint checks." }
-typecheck = { cmd = "ty check", help = "Run ty type checks." }
-generate-docs = { cmd = "python scripts/generate_docs.py", help = "Regenerate markdown docs for credits, theme compositions, and the README catalog overview." }
-_refresh-catalog = { cmd = "python scripts/refresh_catalog.py", help = "Regenerate plugin and entrypoint metadata from upstream submodules without legacy bootstrap files." }
-_refresh-catalog-reset = { cmd = "python scripts/refresh_catalog.py --hard-reset", help = "Hard-reset entrypoint provenance history and rebuild provider metadata from upstream source files." }
+ pre-commit = { cmd = "pre-commit run --all-files", help = "Run pre-commit hooks across the repository." }
+ test = { cmd = "pytest -q", help = "Run the test suite." }
+ test-cov = { cmd = "pytest --cov=copilot_plugin_manager --cov-report=term-missing --cov-report=xml", help = "Run tests with coverage." }
+ lint = { cmd = "ruff check .", help = "Run Ruff lint checks." }
+ typecheck = { cmd = "ty check", help = "Run ty type checks." }
+ broken-links = { cmd = "python scripts/check_broken_links.py", help = "Detect dangling symlinks in tracked repository and submodule content." }
+ generate-docs = { cmd = "python scripts/generate_docs.py", help = "Regenerate markdown docs for credits, theme compositions, and the README catalog overview." }
+ _refresh-catalog = { cmd = "python scripts/refresh_catalog.py", help = "Regenerate plugin and entrypoint metadata from upstream submodules without legacy bootstrap files." }
+ _refresh-catalog-reset = { cmd = "python scripts/refresh_catalog.py --hard-reset", help = "Hard-reset entrypoint provenance history and rebuild provider metadata from upstream source files." }
 refresh-catalog = { sequence = ["_refresh-catalog", "generate-docs"], help = "Regenerate catalog metadata and refresh generated markdown docs." }
 refresh-catalog-reset = { sequence = ["_refresh-catalog-reset", "generate-docs"], help = "Hard-reset catalog provenance data and refresh generated markdown docs." }
 _build-dist = { cmd = "uv build", help = "Build source and wheel distributions." }

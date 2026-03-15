@@ -1,3 +1,13 @@
+[providers."anthropic-algorithmic-art"]
+source = "anthropics-skills"
+prefix = "anthropic-algorithmic-art"
+roots = ["skills/algorithmic-art"]
+description = "Anthropic Algorithmic ART skill pack synced into the local skills catalog."
+use_when = "Use when you want the Anthropic Algorithmic ART skill pack available locally."
+homepage = "https://github.com/anthropics/skills/tree/main/skills/algorithmic-art/templates"
+version_channel = "main"
+tags = ["skill", "frontend", "ui", "artifacts", "anthropic", "art", "generative", "language", "general"]
+
 [providers."anthropic-brand-guidelines"]
 source = "anthropics-skills"
 prefix = "anthropic-brand-guidelines"
@@ -108,6 +118,16 @@ homepage = "https://github.com/anthropics/skills/tree/main/skills/skill-creator"
 version_channel = "main"
 tags = ["skill", "skills", "anthropic", "agents", "general"]
 
+[providers."anthropic-slack-gif-creator"]
+source = "anthropics-skills"
+prefix = "anthropic-slack-gif-creator"
+roots = ["skills/slack-gif-creator"]
+description = "Anthropic Slack GIF Creator skill pack synced into the local skills catalog."
+use_when = "Use when you want the Anthropic Slack GIF Creator skill pack available locally."
+homepage = "https://github.com/anthropics/skills/tree/main/skills/slack-gif-creator/core"
+version_channel = "main"
+tags = ["skill", "frontend", "ui", "artifacts", "anthropic", "generative", "general"]
+
 [providers."anthropic-theme-factory"]
 source = "anthropics-skills"
 prefix = "anthropic-theme-factory"
@@ -118,6 +138,36 @@ homepage = "https://github.com/anthropics/skills/tree/main/skills/theme-factory/
 version_channel = "main"
 tags = ["skill", "docs", "artifacts", "anthropic"]
 
+[providers."anthropic-web-artifacts-builder"]
+source = "anthropics-skills"
+prefix = "anthropic-web-artifacts-builder"
+roots = ["skills/web-artifacts-builder"]
+description = "Anthropic WEB Artifacts Builder skill pack synced into the local skills catalog."
+use_when = "Use when you want the Anthropic WEB Artifacts Builder skill pack available locally."
+homepage = "https://github.com/anthropics/skills/tree/main/skills/web-artifacts-builder/scripts"
+version_channel = "main"
+tags = ["skill", "frontend", "ui", "artifacts", "anthropic", "general"]
+
+[providers."anthropic-webapp-testing"]
+source = "anthropics-skills"
+prefix = "anthropic-webapp-testing"
+roots = ["skills/webapp-testing"]
+description = "Anthropic webapp testing skills such as Examples, Scripts."
+use_when = "Use when you want local Anthropic webapp testing skills such as Examples, Scripts."
+homepage = "https://github.com/anthropics/skills/tree/main/skills/webapp-testing"
+version_channel = "main"
+tags = ["skill", "frontend", "ui", "testing", "anthropic", "general"]
+
+[providers."anthropic-xlsx"]
+source = "anthropics-skills"
+prefix = "anthropic-xlsx"
+roots = ["skills/xlsx"]
+description = "Anthropic Xlsx skill pack synced into the local skills catalog."
+use_when = "Use when you want the Anthropic Xlsx skill pack available locally."
+homepage = "https://github.com/anthropics/skills/tree/main/skills/xlsx/scripts"
+version_channel = "main"
+tags = ["skill", "data", "artifacts", "anthropic", "general", "docs"]
+
 [providers."anthropics"]
 source = "anthropics-skills"
 prefix = "anthropics"
@@ -127,17 +177,6 @@ use_when = "Use when you want local Anthropic skills skills such as algorithmic-
 homepage = "https://github.com/anthropics/skills/tree/main/skills"
 version_channel = "main"
 tags = ["skill", "general", "anthropic", "language", "frontend", "ui", "docs", "artifacts", "skills", "planning", "orchestration", "api", "mcp", "python"]
-
-
-[providers."kdense-broad"]
-source = "kdense-science"
-prefix = "kdense-broad"
-roots = ["adaptyv", "aeon", "alpha-vantage", "alphafold-database", "anndata", "arboreto", "arxiv-database", "astropy", "benchling-integration", "bgpt-paper-search", "bindingdb-database", "biopython", "biorxiv-database", "bioservices", "brenda-database", "cbioportal-database", "cellxgene-census", "chembl-database", "cirq", "citation-management", "clinical-decision-support", "clinical-reports", "clinicaltrials-database", "clinpgx-database", "clinvar-database", "cobrapy", "consciousness-council", "cosmic-database", "dask", "datacommons-client", "datamol", "deepchem", "deeptools", "denario", "depmap", "dhdna-profiler", "diffdock", "dnanexus-integration", "docx", "drugbank-database", "edgartools", "ena-database", "ensembl-database", "esm", "etetoolkit", "exploratory-data-analysis", "fda-database", "flowio", "fluidsim", "fred-economic-data", "gene-database", "generate-image", "geniml", "geo-database", "geomaster", "geopandas", "get-available-resources", "gget", "ginkgo-cloud-lab", "glycoengineering", "gnomad-database", "gtars", "gtex-database", "gwas-database", "hedgefundmonitor", "histolab", "hmdb-database", "hypogenic", "hypothesis-generation", "imaging-data-commons", "infographics", "interpro-database", "iso-13485-certification", "jaspar-database", "kegg-database", "labarchive-integration", "lamindb", "latchbio-integration", "latex-posters", "literature-review", "markdown-mermaid-writing", "market-research-reports", "markitdown", "matchms", "matlab", "matplotlib", "medchem", "metabolomics-workbench-database", "modal", "molecular-dynamics", "molfeat", "monarch-database", "networkx", "neurokit2", "neuropixels-analysis", "offer-k-dense-web", "omero-integration", "open-notebook", "openalex-database", "opentargets-database", "opentrons-integration", "paper-2-web", "parallel-web", "pathml", "pdb-database", "pdf", "peer-review", "pennylane", "perplexity-search", "phylogenetics", "plotly", "polars", "pptx", "pptx-posters", "primekg", "protocolsio-integration", "pubchem-database", "pubmed-database", "pufferlib", "pydeseq2", "pydicom", "pyhealth", "pylabrobot", "pymatgen", "pymc", "pymoo", "pyopenms", "pysam", "pytdc", "pytorch-lightning", "pyzotero", "qiskit", "qutip", "rdkit", "reactome-database", "research-grants", "research-lookup", "rowan", "scanpy", "scholar-evaluation", "scientific-brainstorming", "scientific-critical-thinking", "scientific-schematics", "scientific-slides", "scientific-visualization", "scientific-writing", "scikit-bio", "scikit-learn", "scikit-survival", "scvelo", "scvi-tools", "seaborn", "shap", "simpy", "stable-baselines3", "statistical-analysis", "statsmodels", "string-database", "sympy", "tiledbvcf", "timesfm-forecasting", "torch-geometric", "torchdrug", "transformers", "treatment-plans", "umap-learn", "uniprot-database", "usfiscaldata", "uspto-database", "vaex", "venue-templates", "what-if-oracle", "xlsx", "zarr-python", "zinc-database"]
-description = "Complete K-Dense scientific skills collection (all 175 skills)."
-use_when = "Use when you want access to the full K-Dense scientific skills library."
-homepage = "https://github.com/K-Dense-AI/claude-scientific-skills"
-version_channel = "main"
-tags = ["skill", "general", "science", "python", "data", "research"]
 
 [providers."kdense-adaptyv"]
 source = "kdense-science"
@@ -288,6 +327,16 @@ use_when = "Use when you want the K-Dense Brenda Database skill pack available l
 homepage = "https://github.com/K-Dense-AI/claude-scientific-skills/tree/main/scientific-skills/brenda-database"
 version_channel = "main"
 tags = ["skill", "science", "python", "data", "research"]
+
+[providers."kdense-broad"]
+source = "kdense-science"
+prefix = "kdense-broad"
+roots = ["adaptyv", "aeon", "alpha-vantage", "alphafold-database", "anndata", "arboreto", "arxiv-database", "astropy", "benchling-integration", "bgpt-paper-search", "bindingdb-database", "biopython", "biorxiv-database", "bioservices", "brenda-database", "cbioportal-database", "cellxgene-census", "chembl-database", "cirq", "citation-management", "clinical-decision-support", "clinical-reports", "clinicaltrials-database", "clinpgx-database", "clinvar-database", "cobrapy", "consciousness-council", "cosmic-database", "dask", "datacommons-client", "datamol", "deepchem", "deeptools", "denario", "depmap", "dhdna-profiler", "diffdock", "dnanexus-integration", "docx", "drugbank-database", "edgartools", "ena-database", "ensembl-database", "esm", "etetoolkit", "exploratory-data-analysis", "fda-database", "flowio", "fluidsim", "fred-economic-data", "gene-database", "generate-image", "geniml", "geo-database", "geomaster", "geopandas", "get-available-resources", "gget", "ginkgo-cloud-lab", "glycoengineering", "gnomad-database", "gtars", "gtex-database", "gwas-database", "hedgefundmonitor", "histolab", "hmdb-database", "hypogenic", "hypothesis-generation", "imaging-data-commons", "infographics", "interpro-database", "iso-13485-certification", "jaspar-database", "kegg-database", "labarchive-integration", "lamindb", "latchbio-integration", "latex-posters", "literature-review", "markdown-mermaid-writing", "market-research-reports", "markitdown", "matchms", "matlab", "matplotlib", "medchem", "metabolomics-workbench-database", "modal", "molecular-dynamics", "molfeat", "monarch-database", "networkx", "neurokit2", "neuropixels-analysis", "offer-k-dense-web", "omero-integration", "open-notebook", "openalex-database", "opentargets-database", "opentrons-integration", "paper-2-web", "parallel-web", "pathml", "pdb-database", "pdf", "peer-review", "pennylane", "perplexity-search", "phylogenetics", "plotly", "polars", "pptx", "pptx-posters", "primekg", "protocolsio-integration", "pubchem-database", "pubmed-database", "pufferlib", "pydeseq2", "pydicom", "pyhealth", "pylabrobot", "pymatgen", "pymc", "pymoo", "pyopenms", "pysam", "pytdc", "pytorch-lightning", "pyzotero", "qiskit", "qutip", "rdkit", "reactome-database", "research-grants", "research-lookup", "rowan", "scanpy", "scholar-evaluation", "scientific-brainstorming", "scientific-critical-thinking", "scientific-schematics", "scientific-slides", "scientific-visualization", "scientific-writing", "scikit-bio", "scikit-learn", "scikit-survival", "scvelo", "scvi-tools", "seaborn", "shap", "simpy", "stable-baselines3", "statistical-analysis", "statsmodels", "string-database", "sympy", "tiledbvcf", "timesfm-forecasting", "torch-geometric", "torchdrug", "transformers", "treatment-plans", "umap-learn", "uniprot-database", "usfiscaldata", "uspto-database", "vaex", "venue-templates", "what-if-oracle", "xlsx", "zarr-python", "zinc-database"]
+description = "Complete K-Dense scientific skills collection (all 175 skills)."
+use_when = "Use when you want access to the full K-Dense scientific skills library."
+homepage = "https://github.com/K-Dense-AI/claude-scientific-skills"
+version_channel = "main"
+tags = ["skill", "general", "science", "python", "data", "research"]
 
 [providers."kdense-cbioportal-database"]
 source = "kdense-science"
@@ -1889,7 +1938,6 @@ homepage = "https://github.com/K-Dense-AI/claude-scientific-skills/tree/main/sci
 version_channel = "main"
 tags = ["skill", "science", "python", "data", "research"]
 
-
 [providers."mskills-dotnet"]
 source = "microsoft-skills"
 prefix = "mskills-dotnet"
@@ -1904,19 +1952,19 @@ tags = ["skill", "skills", "microsoft", "general", "data"]
 source = "microsoft-skills"
 prefix = "mskills-dotnet-data"
 roots = ["skills/dotnet/data"]
-description = "Microsoft Dotnet Data skill pack synced into the local skills catalog."
-use_when = "Use when you want the Microsoft Dotnet Data skill pack available locally."
+description = "Microsoft data skills such as azure-mgmt-fabric-dotnet, azure-resource-manager-cosmosdb-dotnet, azure-resource-manager-mysql-dotnet."
+use_when = "Use when you want local Microsoft data skills such as azure-mgmt-fabric-dotnet, azure-resource-manager-cosmosdb-dotnet, azure-resource-manager-mysql-dotnet."
 homepage = "https://github.com/microsoft/skills/tree/main/skills/dotnet/data"
 version_channel = "main"
-tags = ["skill", "data", "skills", "microsoft"]
+tags = ["skill", "data", "skills", "microsoft", "general"]
 
 [providers."mskills-dotnet-general"]
 source = "microsoft-skills"
 prefix = "mskills-dotnet-general"
 roots = ["skills/dotnet/general"]
-description = "Microsoft Dotnet General skill pack synced into the local skills catalog."
-use_when = "Use when you want the Microsoft Dotnet General skill pack available locally."
-homepage = "https://github.com/microsoft/skills/tree/main/skills/dotnet/general"
+description = "Azure Maps SDK for .NET providing location-based services: geocoding, routing, rendering, geolocation, and weather."
+use_when = "Use when you need azure Maps SDK for .NET providing location-based services: geocoding, routing, rendering, geolocation, and weather."
+homepage = "https://github.com/microsoft/skills/tree/main/.github/plugins/azure-sdk-dotnet/skills/azure-maps-search-dotnet"
 version_channel = "main"
 tags = ["skill", "skills", "microsoft", "general"]
 
@@ -1934,9 +1982,9 @@ tags = ["skill", "language", "skills", "microsoft", "general", "data"]
 source = "microsoft-skills"
 prefix = "mskills-java-integration"
 roots = ["skills/java/integration"]
-description = "Microsoft Java Integration skill pack synced into the local skills catalog."
-use_when = "Use when you want the Microsoft Java Integration skill pack available locally."
-homepage = "https://github.com/microsoft/skills/tree/main/skills/java/integration"
+description = "Client library for Azure App Configuration, a managed service for centralizing application configurations."
+use_when = "Use when you need client library for Azure App Configuration, a managed service for centralizing application configurations."
+homepage = "https://github.com/microsoft/skills/tree/main/.github/plugins/azure-sdk-java/skills/azure-appconfiguration-java"
 version_channel = "main"
 tags = ["skill", "language", "skills", "microsoft", "general"]
 
@@ -1954,38 +2002,38 @@ tags = ["skill", "python", "language", "skills", "microsoft", "general", "data"]
 source = "microsoft-skills"
 prefix = "mskills-python-data"
 roots = ["skills/python/data"]
-description = "Microsoft Python Data skill pack synced into the local skills catalog."
-use_when = "Use when you want the Microsoft Python Data skill pack available locally."
+description = "Microsoft data skills such as azure-cosmos-db-py, azure-cosmos-py, azure-data-tables-py."
+use_when = "Use when you want local Microsoft data skills such as azure-cosmos-db-py, azure-cosmos-py, azure-data-tables-py."
 homepage = "https://github.com/microsoft/skills/tree/main/skills/python/data"
 version_channel = "main"
-tags = ["skill", "python", "language", "data", "skills", "microsoft"]
+tags = ["skill", "python", "language", "data", "skills", "microsoft", "general", "security", "frontend", "ui"]
 
 [providers."mskills-python-foundry"]
 source = "microsoft-skills"
 prefix = "mskills-python-foundry"
 roots = ["skills/python/foundry"]
-description = "Microsoft Python Foundry skill pack synced into the local skills catalog."
-use_when = "Use when you want the Microsoft Python Foundry skill pack available locally."
+description = "Microsoft foundry skills such as agent-framework-azure-ai-py, agents-v2-py, azure-ai-contentsafety-py."
+use_when = "Use when you want local Microsoft foundry skills such as agent-framework-azure-ai-py, agents-v2-py, azure-ai-contentsafety-py."
 homepage = "https://github.com/microsoft/skills/tree/main/skills/python/foundry"
 version_channel = "main"
-tags = ["skill", "python", "language", "skills", "microsoft", "general"]
+tags = ["skill", "python", "language", "skills", "microsoft", "general", "agents", "docs", "artifacts", "frontend", "ui", "data"]
 
 [providers."mskills-python-integration"]
 source = "microsoft-skills"
 prefix = "mskills-python-integration"
 roots = ["skills/python/integration"]
-description = "Microsoft Python Integration skill pack synced into the local skills catalog."
-use_when = "Use when you want the Microsoft Python Integration skill pack available locally."
+description = "Microsoft integration skills such as azure-appconfiguration-py, azure-mgmt-apicenter-py, azure-mgmt-apimanagement-py."
+use_when = "Use when you want local Microsoft integration skills such as azure-appconfiguration-py, azure-mgmt-apicenter-py, azure-mgmt-apimanagement-py."
 homepage = "https://github.com/microsoft/skills/tree/main/skills/python/integration"
 version_channel = "main"
-tags = ["skill", "python", "language", "skills", "microsoft", "general"]
+tags = ["skill", "python", "language", "skills", "microsoft", "general", "data"]
 
 [providers."mskills-python-monitoring"]
 source = "microsoft-skills"
 prefix = "mskills-python-monitoring"
 roots = ["skills/python/monitoring"]
-description = "Microsoft Python Monitoring skill pack synced into the local skills catalog."
-use_when = "Use when you want the Microsoft Python Monitoring skill pack available locally."
+description = "Microsoft monitoring skills such as azure-monitor-ingestion-py, azure-monitor-opentelemetry-exporter-py, azure-monitor-opentelemetry-py."
+use_when = "Use when you want local Microsoft monitoring skills such as azure-monitor-ingestion-py, azure-monitor-opentelemetry-exporter-py, azure-monitor-opentelemetry-py."
 homepage = "https://github.com/microsoft/skills/tree/main/skills/python/monitoring"
 version_channel = "main"
 tags = ["skill", "python", "language", "skills", "microsoft", "general"]
@@ -2004,8 +2052,8 @@ tags = ["skill", "language", "skills", "microsoft", "data", "general"]
 source = "microsoft-skills"
 prefix = "mskills-rust-data"
 roots = ["skills/rust/data"]
-description = "Microsoft Rust Data skill pack synced into the local skills catalog."
-use_when = "Use when you want the Microsoft Rust Data skill pack available locally."
+description = "Microsoft data skills such as azure-cosmos-rust, azure-storage-blob-rust."
+use_when = "Use when you want local Microsoft data skills such as azure-cosmos-rust, azure-storage-blob-rust."
 homepage = "https://github.com/microsoft/skills/tree/main/skills/rust/data"
 version_channel = "main"
 tags = ["skill", "language", "data", "skills", "microsoft"]
@@ -2024,78 +2072,28 @@ tags = ["skill", "frontend", "ui", "skills", "microsoft", "general", "data"]
 source = "microsoft-skills"
 prefix = "mskills-typescript-data"
 roots = ["skills/typescript/data"]
-description = "Microsoft Typescript Data skill pack synced into the local skills catalog."
-use_when = "Use when you want the Microsoft Typescript Data skill pack available locally."
+description = "Microsoft data skills such as azure-cosmos-ts, azure-postgres-ts, azure-storage-blob-ts."
+use_when = "Use when you want local Microsoft data skills such as azure-cosmos-ts, azure-postgres-ts, azure-storage-blob-ts."
 homepage = "https://github.com/microsoft/skills/tree/main/skills/typescript/data"
 version_channel = "main"
-tags = ["skill", "frontend", "ui", "data", "skills", "microsoft"]
+tags = ["skill", "frontend", "ui", "data", "skills", "microsoft", "general", "docs", "artifacts"]
 
 [providers."mskills-typescript-frontend"]
 source = "microsoft-skills"
 prefix = "mskills-typescript-frontend"
 roots = ["skills/typescript/frontend"]
-description = "Microsoft Typescript Frontend skill pack synced into the local skills catalog."
-use_when = "Use when you want the Microsoft Typescript Frontend skill pack available locally."
+description = "Microsoft frontend skills such as frontend-ui-dark-ts, react-flow-node-ts, zustand-store-ts."
+use_when = "Use when you want local Microsoft frontend skills such as frontend-ui-dark-ts, react-flow-node-ts, zustand-store-ts."
 homepage = "https://github.com/microsoft/skills/tree/main/skills/typescript/frontend"
 version_channel = "main"
-tags = ["skill", "frontend", "ui", "skills", "microsoft"]
+tags = ["skill", "frontend", "ui", "skills", "microsoft", "general", "data", "docs", "artifacts"]
 
 [providers."mskills-typescript-integration"]
 source = "microsoft-skills"
 prefix = "mskills-typescript-integration"
 roots = ["skills/typescript/integration"]
-description = "Microsoft Typescript Integration skill pack synced into the local skills catalog."
-use_when = "Use when you want the Microsoft Typescript Integration skill pack available locally."
-homepage = "https://github.com/microsoft/skills/tree/main/skills/typescript/integration"
+description = "Centralized configuration management with feature flags and dynamic refresh."
+use_when = "Use when you need centralized configuration management with feature flags and dynamic refresh."
+homepage = "https://github.com/microsoft/skills/tree/main/.github/plugins/azure-sdk-typescript/skills/azure-appconfiguration-ts"
 version_channel = "main"
 tags = ["skill", "frontend", "ui", "skills", "microsoft", "general"]
-
-[providers."anthropic-algorithmic-art"]
-source = "anthropics-skills"
-prefix = "anthropic-algorithmic-art"
-roots = ["skills/algorithmic-art"]
-description = "Create algorithmic art using p5.js with seeded randomness and interactive parameter exploration."
-use_when = "Use when creating generative art, algorithmic patterns, flow fields, or particle systems with creative coding."
-homepage = "https://github.com/anthropics/skills/tree/main/skills/algorithmic-art"
-version_channel = "main"
-tags = ["skill", "frontend", "ui", "artifacts", "anthropic", "art", "generative"]
-
-[providers."anthropic-web-artifacts-builder"]
-source = "anthropics-skills"
-prefix = "anthropic-web-artifacts-builder"
-roots = ["skills/web-artifacts-builder"]
-description = "Suite of tools for creating elaborate, multi-component web applications using modern frontend technologies."
-use_when = "Use when building complex web applications with React, Tailwind CSS, and component libraries."
-homepage = "https://github.com/anthropics/skills/tree/main/skills/web-artifacts-builder"
-version_channel = "main"
-tags = ["skill", "frontend", "ui", "artifacts", "anthropic"]
-
-[providers."anthropic-webapp-testing"]
-source = "anthropics-skills"
-prefix = "anthropic-webapp-testing"
-roots = ["skills/webapp-testing"]
-description = "Toolkit for testing local web applications using Playwright and browser automation."
-use_when = "Use when testing frontend functionality, debugging UI behavior, or capturing browser state."
-homepage = "https://github.com/anthropics/skills/tree/main/skills/webapp-testing"
-version_channel = "main"
-tags = ["skill", "frontend", "ui", "testing", "anthropic"]
-
-[providers."anthropic-slack-gif-creator"]
-source = "anthropics-skills"
-prefix = "anthropic-slack-gif-creator"
-roots = ["skills/slack-gif-creator"]
-description = "Create animated GIFs optimized for Slack with proper constraints and validation."
-use_when = "Use when creating animated GIFs for Slack communications and visual storytelling."
-homepage = "https://github.com/anthropics/skills/tree/main/skills/slack-gif-creator"
-version_channel = "main"
-tags = ["skill", "frontend", "ui", "artifacts", "anthropic", "generative"]
-
-[providers."anthropic-xlsx"]
-source = "anthropics-skills"
-prefix = "anthropic-xlsx"
-roots = ["skills/xlsx"]
-description = "Create, read, edit, and manipulate Excel spreadsheet files (.xlsx)."
-use_when = "Use when working with spreadsheets, data export, or creating tabular reports."
-homepage = "https://github.com/anthropics/skills/tree/main/skills/xlsx"
-version_channel = "main"
-tags = ["skill", "data", "artifacts", "anthropic", "general"]

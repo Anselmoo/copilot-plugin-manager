@@ -25,6 +25,12 @@ Refresh generated metadata from the current submodules:
 uv run poe refresh-catalog
 ```
 
+Before refreshing, you can scan the repository and initialized upstream trees for dangling symlinks:
+
+```bash
+uv run poe broken-links
+```
+
 Hard-reset entrypoint history and rebuild provider metadata directly from upstream target files:
 
 ```bash

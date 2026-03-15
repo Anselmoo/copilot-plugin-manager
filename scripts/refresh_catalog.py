@@ -372,7 +372,7 @@ def infer_skill_roots(source_name: str, provider_name: str, source_paths: list[s
     normalized = dedupe([path.replace("\\", "/") for path in source_paths])
     if not normalized:
         return []
-    if source_name == "microsoft-skills" and provider_name.count("-") >= 2:
+    if source_name == "microsoft-skills" and provider_name.count("-") >= 2 and len(normalized) == 1:
         return normalized
     parents = dedupe([parent_dir(path) for path in normalized if parent_dir(path)])
     common = common_posix_path(parents)
@@ -548,8 +548,30 @@ def build_plugin_records(existing_plugins: dict[str, object], previous: dict[str
     return records, entrypoints
 
 
+def github_source_url(owner: str, repo: str, relative_path: str, *, is_tree: bool) -> str:
+    view = "tree" if is_tree else "blob"
+    return f"https://github.com/{owner}/{repo}/{view}/main/{relative_path}"
+
+
+def resolve_microsoft_skill_directory(source_root: Path, candidate: Path) -> tuple[Path, str] | None:
+    if not candidate.is_symlink():
+        return None
+    target_name = candidate.readlink().name
+    matches: list[Path] = []
+    direct_skill = source_root / ".github" / "skills" / target_name
+    if direct_skill.is_dir():
+        matches.append(direct_skill)
+    plugin_skills_root = source_root / ".github" / "plugins"
+    if plugin_skills_root.exists():
+        matches.extend(sorted(path for path in plugin_skills_root.glob(f"*/skills/{target_name}") if path.is_dir()))
+    if len(matches) != 1:
+        return None
+    resolved = matches[0]
+    return resolved, resolved.relative_to(source_root).as_posix()
+
+
 def directory_entry_candidates(path: Path) -> list[Path]:
-    subdirs = sorted(item for item in path.iterdir() if item.is_dir())
+    subdirs = sorted(item for item in path.iterdir() if item.is_dir() or item.is_symlink())
     return subdirs or [path]
 
 
@@ -563,13 +585,14 @@ def build_provider_entrypoints_for_source(
     previous: dict[str, dict[str, object]],
 ) -> list[dict[str, object]]:
     records: list[dict[str, object]] = []
-    commit_metadata = git_commit_metadata_map(source_root, [str(candidate["source_path"]) for candidate in candidates])
+    commit_metadata = git_commit_metadata_map(source_root, [str(candidate.get("commit_path") or candidate["source_path"]) for candidate in candidates])
     for candidate in candidates:
         provider_name = str(candidate["provider_name"])
         source_path = str(candidate["source_path"])
         local_name = str(candidate["local_name"])
         title, description, approval_date = markdown_metadata(Path(candidate["metadata_path"]), local_name)
-        commit_revision, commit_date = commit_metadata.get(source_path, (None, None))
+        commit_path = str(candidate.get("commit_path") or source_path)
+        commit_revision, commit_date = commit_metadata.get(commit_path, (None, None))
         key = entrypoint_key(kind, provider_name, source_name, source_path)
         records.append(
             entrypoint_record(
@@ -623,28 +646,44 @@ def build_skill_entrypoints(skills: dict[str, object], repositories: dict[str, o
                         "provider_name": provider_name,
                         "source_name": source_name,
                         "source_path": relative,
+                        "commit_path": relative,
                         "metadata_path": base,
                         "local_name": base.stem,
                         "local_output": f"{provider['prefix']}__{base.stem}",
-                        "source_url": f"https://github.com/{repo['owner']}/{repo['repo']}/blob/main/{relative}",
+                        "source_url": github_source_url(str(repo["owner"]), str(repo["repo"]), relative, is_tree=False),
                     }
                 )
                 continue
             for candidate in directory_entry_candidates(base):
-                entry_file = candidate / "SKILL.md"
-                if not entry_file.exists():
-                    entry_file = candidate / "README.md"
                 relative_root = candidate.relative_to(source_root).as_posix()
-                source_path = entry_file.relative_to(source_root).as_posix() if entry_file.exists() else relative_root
+                if candidate.is_symlink():
+                    source_path = relative_root
+                    resolved_dir = resolve_microsoft_skill_directory(source_root, candidate) if source_name == "microsoft-skills" else None
+                    if resolved_dir is not None:
+                        metadata_path, commit_path = resolved_dir
+                        source_url = github_source_url(str(repo["owner"]), str(repo["repo"]), commit_path, is_tree=True)
+                    else:
+                        metadata_path = candidate
+                        commit_path = source_path
+                        source_url = github_source_url(str(repo["owner"]), str(repo["repo"]), relative_root, is_tree=False)
+                else:
+                    entry_file = candidate / "SKILL.md"
+                    if not entry_file.exists():
+                        entry_file = candidate / "README.md"
+                    source_path = entry_file.relative_to(source_root).as_posix() if entry_file.exists() else relative_root
+                    metadata_path = entry_file if entry_file.exists() else candidate
+                    commit_path = source_path
+                    source_url = github_source_url(str(repo["owner"]), str(repo["repo"]), relative_root, is_tree=True)
                 candidates.append(
                     {
                         "provider_name": provider_name,
                         "source_name": source_name,
                         "source_path": source_path,
-                        "metadata_path": entry_file if entry_file.exists() else candidate,
+                        "commit_path": commit_path,
+                        "metadata_path": metadata_path,
                         "local_name": candidate.name,
                         "local_output": f"{provider['prefix']}__{candidate.name}",
-                        "source_url": f"https://github.com/{repo['owner']}/{repo['repo']}/tree/main/{relative_root}",
+                        "source_url": source_url,
                     }
                 )
 

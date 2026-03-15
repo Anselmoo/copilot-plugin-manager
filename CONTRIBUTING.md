@@ -39,6 +39,7 @@ uv run poe test-cov
 uv run poe pre-commit
 uv run poe lint
 uv run poe typecheck
+uv run poe broken-links
 uv run poe check
 uv run poe build
 uv run poe generate-docs
@@ -51,6 +52,7 @@ uv run pytest -q
 uv run pre-commit run --all-files
 uv run ruff check .
 uv run ty check
+uv run python scripts/check_broken_links.py
 uv build
 uv run twine check dist/*
 ```
