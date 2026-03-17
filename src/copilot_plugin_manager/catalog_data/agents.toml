@@ -577,4 +577,3 @@ use_when = "Use when you need state management, process orchestration, and error
 homepage = "https://github.com/VoltAgent/awesome-claude-code-subagents/blob/main/categories/09-meta-orchestration/workflow-orchestrator.md"
 version_channel = "main"
 tags = ["agent", "agents", "voltagent", "frontend", "ui"]
-

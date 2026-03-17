@@ -2097,4 +2097,3 @@ use_when = "Use when you need centralized configuration management with feature 
 homepage = "https://github.com/microsoft/skills/tree/main/.github/plugins/azure-sdk-typescript/skills/azure-appconfiguration-ts"
 version_channel = "main"
 tags = ["skill", "frontend", "ui", "skills", "microsoft", "general"]
-

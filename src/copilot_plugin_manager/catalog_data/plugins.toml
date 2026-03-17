@@ -421,4 +421,3 @@ use_when = "Use when you need instructions, and migration guide. Prevents common
 source_url = "https://github.com/github/awesome-copilot/tree/main/plugins/winui3-development"
 version_channel = "marketplace-latest"
 tags = ["frontend", "ui", "agents"]
-

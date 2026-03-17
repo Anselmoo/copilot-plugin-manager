@@ -12696,4 +12696,3 @@ first_seen_at = "2026-03-14T07:20:22.629101+00:00"
 last_seen_at = "2026-03-16T07:38:26.458159+00:00"
 provider = "mskills-typescript"
 tags = ["skill", "frontend", "ui", "skills", "microsoft", "general"]
-
