@@ -522,8 +522,7 @@ class PluginManager:
                 outputs.append(destination.name)
                 continue
             for directory in sorted(item for item in source.iterdir() if item.is_dir() or item.is_symlink()):
-                if not directory.is_dir() and not directory.is_symlink():
-                    continue
+                resolved_directory = self._resolve_skill_symlink(provider.source, source_root, directory) if directory.is_symlink() else directory
                 dangling = [
                     self._sync_warning(
                         provider_name,
@@ -533,7 +532,7 @@ class PluginManager:
                     for path in self._dangling_skill_symlinks(provider.source, source_root, directory)
                 ]
                 destination = self.paths.skills_dir / f"{provider.prefix}__{directory.name}"
-                if directory.is_symlink() and not directory.exists() and not self._resolve_skill_symlink(provider.source, source_root, directory):
+                if directory.is_symlink() and not directory.exists() and resolved_directory is None:
                     warnings.extend(dangling)
                     continue
                 self._copy_skill_path(provider.source, source_root, directory, destination)
