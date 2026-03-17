@@ -2,8 +2,8 @@
 source = "agency-agents"
 prefix = "agency"
 roots = ["design", "engineering", "game-development", "marketing", "paid-media", "product", "project-management", "sales", "spatial-computing", "specialized", "strategy", "support", "testing"]
-description = "Agency design specialists such as AI Data Remediation Engineer, AI Engineer, API Tester."
-use_when = "Use when you want local Agency design agents such as AI Data Remediation Engineer, AI Engineer, API Tester."
+description = "Agency design specialists such as AI Citation Strategist, AI Data Remediation Engineer, AI Engineer."
+use_when = "Use when you want local Agency design agents such as AI Citation Strategist, AI Data Remediation Engineer, AI Engineer."
 homepage = "https://github.com/msitarzewski/agency-agents"
 version_channel = "main"
 tags = ["agent", "general", "agency", "security", "docs", "artifacts", "frontend", "ui", "language", "data", "devops", "github", "planning", "orchestration", "agents", "api", "mcp"]
@@ -102,11 +102,11 @@ tags = ["agent", "general", "agency", "frontend", "ui", "docs", "artifacts"]
 source = "agency-agents"
 prefix = "agency-product"
 roots = ["product"]
-description = "Agency product specialists such as Behavioral Nudge Engine, Feedback Synthesizer, Sprint Prioritizer."
-use_when = "Use when you want local Agency product agents such as Behavioral Nudge Engine, Feedback Synthesizer, Sprint Prioritizer."
+description = "Agency product specialists such as Behavioral Nudge Engine, Feedback Synthesizer, Product Manager."
+use_when = "Use when you want local Agency product agents such as Behavioral Nudge Engine, Feedback Synthesizer, Product Manager."
 homepage = "https://github.com/msitarzewski/agency-agents/tree/main/product"
 version_channel = "main"
-tags = ["agent", "general", "agency", "data", "planning", "orchestration"]
+tags = ["agent", "general", "agency", "data", "planning", "orchestration", "devops"]
 
 [providers."agency-product-sprint-prioritizer"]
 source = "agency-agents"
@@ -577,3 +577,4 @@ use_when = "Use when you need state management, process orchestration, and error
 homepage = "https://github.com/VoltAgent/awesome-claude-code-subagents/blob/main/categories/09-meta-orchestration/workflow-orchestrator.md"
 version_channel = "main"
 tags = ["agent", "agents", "voltagent", "frontend", "ui"]
+
