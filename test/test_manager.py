@@ -4,7 +4,7 @@ from copilot_plugin_manager.catalog import load_catalog_bundle
 from copilot_plugin_manager.manager import PluginManager
 from copilot_plugin_manager.models import SourceState
 from copilot_plugin_manager.paths import ManagerPaths
-from copilot_plugin_manager.runner import CommandResult, ShellRunner
+from copilot_plugin_manager.runner import CommandError, CommandResult, ShellRunner
 
 
 class FakeRunner(ShellRunner):
@@ -321,6 +321,45 @@ def test_sync_agent_provider_fetches_catalog_commit_when_missing_from_checkout(t
     assert "Fetched from pinned commit." in generated.read_text()
     assert any(call[:4] == ("git", "fetch", "--depth", "1") for call in runner.calls)
     assert ("git", "show", "6254154899f510eb4a4de10561fecfc1f32ff17f:design/design-brand-guardian.md") in runner.calls
+
+
+def test_sync_agent_provider_reports_context_when_pinned_commit_fetch_fails(tmp_path: Path, monkeypatch) -> None:
+    class FailingFetchRunner(GitCloneRunner):
+        def run(
+            self,
+            args: list[str],
+            cwd: Path | None = None,
+            check: bool = True,
+        ) -> CommandResult:
+            if args[:4] == ["git", "fetch", "--depth", "1"]:
+                result = CommandResult(tuple(args), "", "fatal: bad object", 128)
+                raise CommandError("Command failed: git fetch --depth 1", result)
+            return super().run(args, cwd=cwd, check=check)
+
+    monkeypatch.setenv("COPILOT_HOME", str(tmp_path / ".copilot"))
+    bundle = load_catalog_bundle()
+    paths = ManagerPaths.from_environment()
+    runner = FailingFetchRunner(
+        {
+            "agency-agents": {
+                "design/design-brand-guardian.md": "# Design Brand Guardian\n\nFetched from pinned commit.\n",
+            }
+        }
+    )
+    manager = PluginManager(bundle, paths, runner=runner)
+
+    project = tmp_path / "repo"
+    project.mkdir()
+
+    try:
+        manager.sync_agent_provider("agency-design-brand-guardian", project)
+    except RuntimeError as exc:
+        assert (
+            str(exc)
+            == "Unable to load agent agency-design-brand-guardian:design/design-brand-guardian.md from agency-agents at 6254154899f510eb4a4de10561fecfc1f32ff17f."
+        )
+    else:
+        raise AssertionError("sync_agent_provider should fail when fetching the pinned agent commit fails")
 
 
 def test_sync_missing_agent_providers_dedupes_overlapping_sources(tmp_path: Path, monkeypatch) -> None:

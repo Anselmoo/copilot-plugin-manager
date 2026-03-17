@@ -255,7 +255,11 @@ class PluginManager:
     def _resolve_microsoft_skill_directory(self, source_root: Path, candidate: Path) -> Path | None:
         if not candidate.is_symlink():
             return None
-        target_name = candidate.readlink().name
+        symlink_target = candidate.readlink()
+        resolved_target = (candidate.parent / symlink_target).resolve(strict=False)
+        if resolved_target.is_dir() and resolved_target.is_relative_to(source_root):
+            return resolved_target
+        target_name = symlink_target.name
         matches: list[Path] = []
         direct_skill = source_root / ".github" / "skills" / target_name
         if direct_skill.is_dir():
@@ -589,21 +593,21 @@ class PluginManager:
             for entrypoint in entrypoints:
                 source_path = entrypoint.source_path
                 source = source_root / source_path
-                if not source.exists() and not (source_root / ".git").exists():
-                    continue
+                if not source.exists():
+                    if not (source_root / ".git").exists():
+                        continue
                 claim_key = (provider.source, source_path)
                 if claimed_source_paths is not None:
                     if claim_key in claimed_source_paths:
                         continue
                     claimed_source_paths.add(claim_key)
                 destination = self.paths.agents_dir / entrypoint.local_output
-                self._write_agent_output(
-                    destination,
-                    self._read_agent_source_text(source_root, source_path, entrypoint),
-                    provider.source,
-                    source_path,
-                    entrypoint,
-                )
+                try:
+                    source_text = self._read_agent_source_text(source_root, source_path, entrypoint)
+                except CommandError as exc:
+                    commit = entrypoint.commit_revision or "the current checkout"
+                    raise RuntimeError(f"Unable to load agent {provider_name}:{source_path} from {provider.source} at {commit}.") from exc
+                self._write_agent_output(destination, source_text, provider.source, source_path, entrypoint)
                 outputs.append(destination.name)
         else:
             for root in provider.roots:
