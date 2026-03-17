@@ -3,6 +3,7 @@ from pathlib import Path
 from typer.main import get_command
 from typer.testing import CliRunner
 
+from copilot_plugin_manager import cli
 from copilot_plugin_manager.catalog import load_catalog_bundle
 from copilot_plugin_manager.cli import app
 from copilot_plugin_manager.completion import completion_source, default_completion_path, shell_init_snippet
@@ -153,3 +154,50 @@ def test_cli_default_invocation_opens_guided_menu(monkeypatch, tmp_path) -> None
     assert result.exit_code == 0
     assert "Choose an action" in result.stdout
     assert "Do you want to choose another action?" in result.stdout
+
+
+def test_cli_list_without_section_opens_catalog_browser(monkeypatch, tmp_path) -> None:
+    class StubManager:
+        def __init__(self) -> None:
+            self.catalog = load_catalog_bundle()
+            self.sync_warnings: list[str] = []
+
+        def read_active_target(self, cwd: Path) -> str:
+            return ""
+
+        def repo_profile_hint(self, cwd: Path) -> str:
+            return ""
+
+    monkeypatch.setattr("copilot_plugin_manager.cli.get_manager", lambda: StubManager())
+    monkeypatch.setattr("copilot_plugin_manager.cli._supports_interactive_menu", lambda: True)
+
+    result = runner.invoke(app, ["list"], input="1\nn\n")
+
+    assert result.exit_code == 0
+    assert "Catalog browser" in result.stdout
+    assert "Choose a catalog view" in result.stdout
+    assert "Browse another catalog view?" in result.stdout
+
+
+def test_prompt_helpers_reset_keyboard_protocol_for_tty(monkeypatch) -> None:
+    class StubStdout:
+        def __init__(self) -> None:
+            self.writes: list[str] = []
+
+        def isatty(self) -> bool:
+            return True
+
+        def write(self, value: str) -> None:
+            self.writes.append(value)
+
+        def flush(self) -> None:
+            return None
+
+    stdout = StubStdout()
+    monkeypatch.setattr(cli.sys, "__stdout__", stdout)
+    monkeypatch.setattr(cli.typer, "prompt", lambda message, default=None: default or "")
+    monkeypatch.setattr(cli.typer, "confirm", lambda message, default=False: default)
+
+    assert cli._prompt_text("Choose", default="1") == "1"
+    assert cli._confirm_text("Again?", default=True) is True
+    assert stdout.writes == ["\x1b[<u", "\x1b[<u"]

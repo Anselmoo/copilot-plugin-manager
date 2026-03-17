@@ -1,4 +1,5 @@
 from copilot_plugin_manager.catalog import load_catalog_bundle
+from copilot_plugin_manager.rendering import _ordered_profiles, _profile_focus
 
 
 def test_catalog_bundle_counts() -> None:
@@ -121,3 +122,41 @@ def test_agent_provider_metadata_is_extracted_from_target_files() -> None:
     assert "specific VoltAgent specialist or workflow agent" not in provider["use_when"]
     assert "code review" in provider["description"].lower()
     assert "use when you need" in provider["use_when"].lower()
+
+
+def test_themes_only_reference_catalogued_plugins() -> None:
+    bundle = load_catalog_bundle()
+
+    missing = {
+        theme_name: [plugin_name for plugin_name in theme.plugins if plugin_name not in bundle.plugins]
+        for theme_name, theme in bundle.themes.items()
+        if any(plugin_name not in bundle.plugins for plugin_name in theme.plugins)
+    }
+
+    assert missing == {}
+
+
+def test_kdense_skill_provider_roots_include_scientific_skills_prefix() -> None:
+    bundle = load_catalog_bundle()
+
+    offenders = {
+        name: provider.roots
+        for name, provider in bundle.skill_providers.items()
+        if provider.source == "kdense-science" and any(not root.startswith("scientific-skills/") for root in provider.roots)
+    }
+
+    assert offenders == {}
+
+
+def test_profile_focus_prefers_non_base_themes() -> None:
+    assert _profile_focus(["core", "python", "testing"]) == "python"
+    assert _profile_focus(["core", "frontend", "typescript", "mcp", "testing"]) == "frontend, typescript"
+
+
+def test_profiles_are_ordered_by_focus_then_name() -> None:
+    bundle = load_catalog_bundle()
+
+    ordered_names = [name for name, _focus, _themes in _ordered_profiles(bundle)]
+
+    assert ordered_names.index("docs") < ordered_names.index("python-core")
+    assert ordered_names.index("python-core") < ordered_names.index("science")

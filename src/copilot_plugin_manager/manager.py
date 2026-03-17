@@ -5,6 +5,7 @@ import json
 import re
 import shutil
 import tomllib
+from concurrent.futures import Future, ThreadPoolExecutor, as_completed
 from datetime import UTC, datetime
 from pathlib import Path
 from typing import Literal, cast
@@ -12,7 +13,7 @@ from typing import Literal, cast
 from rich.progress import BarColumn, Progress, SpinnerColumn, TaskProgressColumn, TextColumn, TimeElapsedColumn
 
 from .catalog import CatalogBundle
-from .models import ActivationTarget, EntrypointRecord, McpRecord, McpSyncState, PlannedAction, SourceState
+from .models import ActivationTarget, EntrypointRecord, McpRecord, McpSyncState, PlannedAction, RepositorySource, SourceState
 from .paths import ManagerPaths, find_project_root, find_repo_profile
 from .runner import CommandError, ShellRunner, parse_installed_plugins
 from .state import StateStore
@@ -110,8 +111,11 @@ class PluginManager:
             BarColumn(),
             TaskProgressColumn(),
             TimeElapsedColumn(),
-            transient=False,
+            transient=True,
         )
+
+    def _parallel_workers(self, total: int) -> int:
+        return max(1, min(4, total))
 
     def list_installed_plugins(self) -> list[str]:
         self.runner.require("copilot")
@@ -160,41 +164,92 @@ class PluginManager:
         actions: list[PlannedAction],
         cwd: Path | None = None,
         description: str = "Applying changes",
+        parallel_workers: int = 1,
     ) -> None:
         actionable = [action for action in actions if action.command is not None]
         if not actionable:
             return
-        with self._new_progress() as progress:
-            task_id = progress.add_task(description, total=len(actionable))
-            for action in actionable:
-                command = action.command
-                if command is None:
-                    continue
-                progress.update(task_id, description=action.description)
-                self.runner.run(list(command), cwd=cwd)
-                progress.advance(task_id)
 
-    def manage_plugins(self, operation: str) -> None:
-        self.runner.require("copilot")
+        workers = min(self._parallel_workers(len(actionable)), max(1, parallel_workers))
+        with self._new_progress() as progress:
+            item_task_ids = {action: progress.add_task(action.description, total=1) for action in actionable}
+            task_id = progress.add_task(f"{description} total", total=len(actionable))
+            if workers == 1:
+                for action in actionable:
+                    command = action.command
+                    if command is None:
+                        continue
+                    self.runner.run(list(command), cwd=cwd, check=action.check)
+                    progress.update(item_task_ids[action], completed=1)
+                    progress.advance(task_id)
+                return
+
+            future_map: dict[Future[object], PlannedAction] = {}
+            with ThreadPoolExecutor(max_workers=workers) as executor:
+                for action in actionable:
+                    command = action.command
+                    if command is None:
+                        continue
+                    future = executor.submit(self.runner.run, list(command), cwd=cwd, check=action.check)
+                    future_map[future] = action
+                for future in as_completed(future_map):
+                    action = future_map[future]
+                    try:
+                        future.result()
+                    except Exception:
+                        progress.update(item_task_ids[action], description=f"{action.description} [failed]")
+                        raise
+                    progress.update(item_task_ids[action], completed=1, description=f"{action.description} [done]")
+                    progress.advance(task_id)
+
+    def _format_copy_error(self, exc: OSError | shutil.Error) -> str:
+        if isinstance(exc, shutil.Error) and exc.args:
+            details = exc.args[0]
+            if isinstance(details, list):
+                problem_paths = [str(source) for source, _destination, _message in details[:3]]
+                if problem_paths:
+                    return f"copy failed for {', '.join(problem_paths)}"
+            return str(exc)
+        return str(exc)
+
+    def _plugin_actions_for_manage(self, operation: str) -> tuple[str, list[PlannedAction]]:
         description = {
             "install": "Installing plugins",
             "update": "Updating plugins",
             "delete": "Removing plugins",
         }.get(operation, "Managing plugins")
-        with self._new_progress() as progress:
-            task_id = progress.add_task(description, total=len(self.catalog.plugins))
-            for name in self.catalog.plugins:
-                progress.update(task_id, description=f"{description[:-1]} {name}")
-                match operation:
-                    case "install":
-                        self.runner.run(["copilot", "plugin", "install", self.catalog.plugin_install_source(name)])
-                    case "update":
-                        self.runner.run(["copilot", "plugin", "update", name])
-                    case "delete":
-                        self.runner.run(["copilot", "plugin", "uninstall", name], check=False)
-                    case _:
-                        raise ValueError(f"Unknown plugin operation: {operation}")
-                progress.advance(task_id)
+        actions: list[PlannedAction] = []
+        for name in self.catalog.plugins:
+            match operation:
+                case "install":
+                    command = ("copilot", "plugin", "install", self.catalog.plugin_install_source(name))
+                    check = True
+                case "update":
+                    command = ("copilot", "plugin", "update", name)
+                    check = True
+                case "delete":
+                    command = ("copilot", "plugin", "uninstall", name)
+                    check = False
+                case _:
+                    raise ValueError(f"Unknown plugin operation: {operation}")
+            actions.append(
+                PlannedAction(
+                    category="plugin",
+                    description=f"{description[:-1]} {name}",
+                    command=command,
+                    check=check,
+                )
+            )
+        return description, actions
+
+    def manage_plugins(self, operation: str) -> None:
+        self.runner.require("copilot")
+        description, actions = self._plugin_actions_for_manage(operation)
+        self._execute_actions(
+            actions,
+            description=description,
+            parallel_workers=self._parallel_workers(len(actions)),
+        )
 
     def _resolve_source_checkout(self, source_name: str, cwd: Path) -> Path:
         source = self.catalog.repository_details(source_name)
@@ -309,6 +364,12 @@ class PluginManager:
             if self._resolve_skill_symlink(source_name, source_root, path) is None:
                 broken.append(path)
         return sorted(broken)
+
+    def _skill_entry_candidates(self, source: Path) -> list[Path]:
+        if not source.is_dir():
+            return [source]
+        children = sorted(item for item in source.iterdir() if item.is_dir() or item.is_symlink())
+        return children or [source]
 
     def _title_from_path(self, source_path: str) -> str:
         stem = Path(source_path).stem
@@ -522,10 +583,14 @@ class PluginManager:
                 continue
             if source.is_file():
                 destination = self.paths.skills_dir / f"{provider.prefix}__{source.stem}"
-                self._copy_skill_path(provider.source, source_root, source, destination)
+                try:
+                    self._copy_skill_path(provider.source, source_root, source, destination)
+                except (OSError, shutil.Error) as exc:
+                    warnings.append(self._sync_warning(provider_name, root, self._format_copy_error(exc)))
+                    continue
                 outputs.append(destination.name)
                 continue
-            for directory in sorted(item for item in source.iterdir() if item.is_dir() or item.is_symlink()):
+            for directory in self._skill_entry_candidates(source):
                 resolved_directory = self._resolve_skill_symlink(provider.source, source_root, directory) if directory.is_symlink() else directory
                 dangling = [
                     self._sync_warning(
@@ -539,7 +604,18 @@ class PluginManager:
                 if directory.is_symlink() and not directory.exists() and resolved_directory is None:
                     warnings.extend(dangling)
                     continue
-                self._copy_skill_path(provider.source, source_root, directory, destination)
+                try:
+                    self._copy_skill_path(provider.source, source_root, directory, destination)
+                except (OSError, shutil.Error) as exc:
+                    warnings.append(
+                        self._sync_warning(
+                            provider_name,
+                            str(directory.relative_to(source_root)).replace("\\", "/"),
+                            self._format_copy_error(exc),
+                        )
+                    )
+                    warnings.extend(dangling)
+                    continue
                 outputs.append(destination.name)
                 warnings.extend(dangling)
         synced_outputs = list(dict.fromkeys(outputs))
@@ -843,34 +919,72 @@ class PluginManager:
             except (CommandError, RuntimeError) as exc:
                 warnings.append(f"verification: unable to list installed plugins ({exc})")
             else:
-                for plugin_name in sorted(desired_plugins - installed_plugins):
-                    warnings.append(f"verification: missing plugin {plugin_name}")
+                warnings.extend(self._grouped_verification_messages("verification: missing plugin", "verification: missing plugins", desired_plugins - installed_plugins))
                 unexpected_plugins = (installed_plugins - desired_plugins) if exclusive_plugins else ((installed_plugins & managed_plugins) - desired_plugins)
-                for plugin_name in sorted(unexpected_plugins):
-                    warnings.append(f"verification: unexpected plugin still installed {plugin_name}")
+                warnings.extend(
+                    self._grouped_verification_messages(
+                        "verification: unexpected plugin still installed",
+                        "verification: unexpected plugins still installed",
+                        unexpected_plugins,
+                    )
+                )
             progress.advance(task_id)
 
             progress.update(task_id, description="Verifying skills")
-            for provider_name in sorted(desired_skills):
-                if not self._provider_outputs_present("skill", provider_name, self.paths.skills_dir):
-                    warnings.append(f"verification: missing synced skill content for {provider_name}")
-            for provider_name in sorted(set(self.catalog.skill_providers) - desired_skills):
-                provider = self.catalog.skill_providers[provider_name]
-                if self._prefixed_content_exists(self.paths.skills_dir, provider.prefix):
-                    warnings.append(f"verification: stale skill content still present for {provider_name}")
+            missing_skills = {provider_name for provider_name in desired_skills if not self._provider_outputs_present("skill", provider_name, self.paths.skills_dir)}
+            warnings.extend(
+                self._grouped_verification_messages(
+                    "verification: missing synced skill content for",
+                    "verification: missing synced skill content for",
+                    missing_skills,
+                )
+            )
+            stale_skills = {
+                provider_name
+                for provider_name in set(self.catalog.skill_providers) - desired_skills
+                if self._prefixed_content_exists(self.paths.skills_dir, self.catalog.skill_providers[provider_name].prefix)
+            }
+            warnings.extend(
+                self._grouped_verification_messages(
+                    "verification: stale skill content still present for",
+                    "verification: stale skill content still present for",
+                    stale_skills,
+                )
+            )
             progress.advance(task_id)
 
             progress.update(task_id, description="Verifying agents")
-            for provider_name in sorted(desired_agents):
-                if not self._provider_outputs_present("agent", provider_name, self.paths.agents_dir):
-                    warnings.append(f"verification: missing synced agent content for {provider_name}")
-            for provider_name in sorted(set(self.catalog.agent_providers) - desired_agents):
-                provider = self.catalog.agent_providers[provider_name]
-                if self._prefixed_content_exists(self.paths.agents_dir, provider.prefix):
-                    warnings.append(f"verification: stale agent content still present for {provider_name}")
+            missing_agents = {provider_name for provider_name in desired_agents if not self._provider_outputs_present("agent", provider_name, self.paths.agents_dir)}
+            warnings.extend(
+                self._grouped_verification_messages(
+                    "verification: missing synced agent content for",
+                    "verification: missing synced agent content for",
+                    missing_agents,
+                )
+            )
+            stale_agents = {
+                provider_name
+                for provider_name in set(self.catalog.agent_providers) - desired_agents
+                if self._prefixed_content_exists(self.paths.agents_dir, self.catalog.agent_providers[provider_name].prefix)
+            }
+            warnings.extend(
+                self._grouped_verification_messages(
+                    "verification: stale agent content still present for",
+                    "verification: stale agent content still present for",
+                    stale_agents,
+                )
+            )
             progress.advance(task_id)
 
         return warnings
+
+    def _grouped_verification_messages(self, singular_prefix: str, plural_prefix: str, names: set[str]) -> list[str]:
+        ordered = sorted(names)
+        if not ordered:
+            return []
+        if len(ordered) == 1:
+            return [f"{singular_prefix} {ordered[0]}"]
+        return [f"{plural_prefix} {', '.join(ordered)}"]
 
     def switch_target(self, target_name: str, cwd: Path, exclusive_plugins: bool = False) -> ActivationTarget:
         self._reset_sync_warnings()
@@ -883,7 +997,12 @@ class PluginManager:
         actions = self.plugin_actions_for_switch(target.name, installed, exclusive=exclusive_plugins)
         self._remove_unselected_skill_providers(desired_skills)
         self._remove_unselected_agent_providers(desired_agents)
-        self._execute_actions(actions, cwd=cwd, description="Reconciling plugins")
+        self._execute_actions(
+            actions,
+            cwd=cwd,
+            description="Reconciling plugins",
+            parallel_workers=self._parallel_workers(len(actions)),
+        )
         self._sync_missing_skill_providers(desired_skills, cwd)
         self._sync_missing_agent_providers(desired_agents, cwd)
         self._remember_sync_warnings(self._collect_target_verification_warnings(target, exclusive_plugins=exclusive_plugins))
@@ -925,26 +1044,37 @@ class PluginManager:
                             source_path=observed.source_path,
                         )
 
-            for name, source in self.catalog.repositories.items():
-                progress.update(task_id, description=f"Refreshing source {name}")
-                cache_dir = self.paths.sources_dir / name
-                submodule_checkout = project_root / source.submodule_path if project_root is not None else None
-                use_cache = submodule_checkout is None or not submodule_checkout.exists()
-                if cache_dir.exists():
-                    self.runner.run(["git", "pull", "--ff-only"], cwd=cache_dir)
-                elif use_cache:
-                    self._clone_source_checkout(name)
-                if use_cache and cache_dir.exists():
-                    observed = self.current_source_state(cache_dir)
-                    revisions.setdefault(name, observed.revision)
-                    self.state_store.mark_source_revision(
-                        name,
-                        observed.revision,
-                        manifest_version=observed.manifest_version,
-                        source_path=observed.source_path,
-                    )
-                progress.advance(task_id)
+            future_map: dict[Future[tuple[str, SourceState | None]], str] = {}
+            with ThreadPoolExecutor(max_workers=self._parallel_workers(len(self.catalog.repositories))) as executor:
+                for name, source in self.catalog.repositories.items():
+                    future = executor.submit(self._refresh_source_cache, name, source, project_root)
+                    future_map[future] = name
+                for future in as_completed(future_map):
+                    name, observed = future.result()
+                    progress.update(task_id, description=f"Refreshing source {name}")
+                    if observed is not None:
+                        revisions.setdefault(name, observed.revision)
+                        self.state_store.mark_source_revision(
+                            name,
+                            observed.revision,
+                            manifest_version=observed.manifest_version,
+                            source_path=observed.source_path,
+                        )
+                    progress.advance(task_id)
         return revisions
+
+    def _refresh_source_cache(self, name: str, source: RepositorySource, project_root: Path | None) -> tuple[str, SourceState | None]:
+        submodule_path = source.submodule_path
+        cache_dir = self.paths.sources_dir / name
+        submodule_checkout = project_root / submodule_path if project_root is not None else None
+        use_cache = submodule_checkout is None or not submodule_checkout.exists()
+        if cache_dir.exists():
+            self.runner.run(["git", "pull", "--ff-only"], cwd=cache_dir)
+        elif use_cache:
+            self._clone_source_checkout(name)
+        if use_cache and cache_dir.exists():
+            return name, self.current_source_state(cache_dir)
+        return name, None
 
     def current_revision(self, checkout: Path) -> str | None:
         try:
@@ -1216,6 +1346,11 @@ class PluginManager:
                 entry["env"] = dict(record.env)
             return entry
         if record.kind == "pip":
+            if record.args and (record.command is not None or record.args[0] == "--from"):
+                pip_entry: dict[str, object] = {"type": "stdio", "command": record.command or "uvx", "args": list(record.args)}
+                if record.env:
+                    pip_entry["env"] = dict(record.env)
+                return pip_entry
             # Python packages are run via uvx (uv's tool runner); version is
             # pinned with pip-style ``package==version`` syntax.
             package = record.package or name

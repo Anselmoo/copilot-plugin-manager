@@ -1,3 +1,4 @@
+import subprocess
 from pathlib import Path
 
 import pytest
@@ -96,6 +97,56 @@ class GitCloneRunner(FakeRunner):
             "",
             0,
         )
+
+
+class LocalGitMirrorRunner(ShellRunner):
+    def __init__(self, mirrors: dict[str, Path]) -> None:
+        self.calls: list[tuple[str, ...]] = []
+        self.mirrors = mirrors
+
+    def require(self, name: str) -> None:
+        if name != "git":
+            return None
+        super().require(name)
+
+    def run(
+        self,
+        args: list[str],
+        cwd: Path | None = None,
+        check: bool = True,
+    ) -> CommandResult:
+        self.calls.append(tuple(args))
+        actual_args = list(args)
+        if args[:4] == ["git", "clone", "--depth", "1"]:
+            destination = Path(args[-1])
+            mirror = self.mirrors[destination.name]
+            actual_args = ["git", "clone", "--depth", "1", f"file://{mirror.resolve()}", args[-1]]
+        proc = subprocess.run(actual_args, cwd=cwd, capture_output=True, text=True)
+        result = CommandResult(tuple(args), proc.stdout, proc.stderr, proc.returncode)
+        if check and proc.returncode != 0:
+            raise CommandError(f"Command failed: {' '.join(args)}", result)
+        return result
+
+
+def create_git_commit(repo: Path, message: str) -> str:
+    subprocess.run(["git", "add", "."], cwd=repo, check=True, capture_output=True, text=True)
+    subprocess.run(
+        [
+            "git",
+            "-c",
+            "user.name=Test User",
+            "-c",
+            "user.email=test@example.com",
+            "commit",
+            "-m",
+            message,
+        ],
+        cwd=repo,
+        check=True,
+        capture_output=True,
+        text=True,
+    )
+    return subprocess.run(["git", "rev-parse", "HEAD"], cwd=repo, check=True, capture_output=True, text=True).stdout.strip()
 
 
 def test_plugin_actions_for_switch_non_exclusive() -> None:
@@ -238,6 +289,40 @@ def test_sync_skill_provider_resolves_nested_microsoft_wrapper_symlinks(tmp_path
     assert manager.sync_warnings == []
 
 
+def test_sync_skill_provider_resolves_multiple_microsoft_python_wrappers(tmp_path: Path, monkeypatch) -> None:
+    monkeypatch.setenv("COPILOT_HOME", str(tmp_path / ".copilot"))
+    bundle = load_catalog_bundle()
+    paths = ManagerPaths.from_environment()
+    manager = PluginManager(bundle, paths, runner=FakeRunner())
+
+    project = tmp_path / "repo"
+    compute_root = project / "external" / "microsoft-skills" / "skills" / "python" / "compute"
+    compute_root.mkdir(parents=True)
+    (compute_root / "containerregistry").symlink_to("../../../.github/skills/azure-containerregistry-py")
+    (compute_root / "fabric").symlink_to("../../../.github/skills/azure-mgmt-fabric-py")
+    (compute_root / "botservice").symlink_to("../../../.github/skills/azure-mgmt-botservice-py")
+
+    plugin_root = project / "external" / "microsoft-skills" / ".github" / "plugins" / "azure-sdk-python" / "skills"
+    container_skill = plugin_root / "azure-containerregistry-py"
+    container_skill.mkdir(parents=True)
+    (container_skill / "SKILL.md").write_text("# Container Registry\n\nRegistry automation.\n")
+    fabric_skill = plugin_root / "azure-mgmt-fabric-py"
+    fabric_skill.mkdir(parents=True)
+    (fabric_skill / "SKILL.md").write_text("# Fabric\n\nFabric workflows.\n")
+    botservice_skill = plugin_root / "azure-mgmt-botservice-py"
+    botservice_skill.mkdir(parents=True)
+    (botservice_skill / "SKILL.md").write_text("# Bot Service\n\nBot workflows.\n")
+
+    outputs = manager.sync_skill_provider("mskills-python", project)
+
+    copied_root = paths.skills_dir / "mskills-python__compute"
+    assert outputs == ["mskills-python__compute"]
+    assert (copied_root / "containerregistry" / "SKILL.md").exists()
+    assert (copied_root / "fabric" / "SKILL.md").exists()
+    assert (copied_root / "botservice" / "SKILL.md").exists()
+    assert manager.sync_warnings == []
+
+
 def test_sync_missing_skill_providers_retries_when_previous_sync_had_warnings(tmp_path: Path, monkeypatch) -> None:
     monkeypatch.setenv("COPILOT_HOME", str(tmp_path / ".copilot"))
     bundle = load_catalog_bundle()
@@ -262,6 +347,44 @@ def test_sync_missing_skill_providers_retries_when_previous_sync_had_warnings(tm
     manager._sync_missing_skill_providers(["mskills-typescript"], project)
 
     assert calls == ["mskills-typescript"]
+
+
+def test_sync_skill_provider_copies_single_directory_skill_root(tmp_path: Path, monkeypatch) -> None:
+    monkeypatch.setenv("COPILOT_HOME", str(tmp_path / ".copilot"))
+    bundle = load_catalog_bundle()
+    paths = ManagerPaths.from_environment()
+    manager = PluginManager(bundle, paths, runner=FakeRunner())
+    project = tmp_path / "repo"
+    skill_root = project / "external" / "anthropics-skills" / "skills" / "brand-guidelines"
+    skill_root.mkdir(parents=True)
+    (skill_root / "SKILL.md").write_text("# Brand Guidelines\n\nUse the official brand system.\n")
+
+    outputs = manager.sync_skill_provider("anthropic-brand-guidelines", project)
+
+    copied_skill = paths.skills_dir / "anthropic-brand-guidelines__brand-guidelines" / "SKILL.md"
+    assert outputs == ["anthropic-brand-guidelines__brand-guidelines"]
+    assert copied_skill.exists()
+    assert "official brand system" in copied_skill.read_text()
+    assert manager._provider_outputs_present("skill", "anthropic-brand-guidelines", paths.skills_dir) is True
+
+
+def test_sync_skill_provider_uses_scientific_skills_root_for_kdense_sources(tmp_path: Path, monkeypatch) -> None:
+    monkeypatch.setenv("COPILOT_HOME", str(tmp_path / ".copilot"))
+    bundle = load_catalog_bundle()
+    paths = ManagerPaths.from_environment()
+    manager = PluginManager(bundle, paths, runner=FakeRunner())
+    project = tmp_path / "repo"
+    skill_root = project / "external" / "kdense-science" / "scientific-skills" / "dask"
+    skill_root.mkdir(parents=True)
+    (skill_root / "SKILL.md").write_text("# Dask\n\nParallel data processing.\n")
+
+    outputs = manager.sync_skill_provider("kdense-dask", project)
+
+    copied_skill = paths.skills_dir / "kdense-dask__dask" / "SKILL.md"
+    assert outputs == ["kdense-dask__dask"]
+    assert copied_skill.exists()
+    assert "Parallel data processing." in copied_skill.read_text()
+    assert manager.sync_warnings == []
 
 
 def test_write_repo_profile_creates_hint_in_repo_root(tmp_path: Path, monkeypatch) -> None:
@@ -306,6 +429,13 @@ def test_sync_agent_provider_fetches_catalog_commit_when_missing_from_checkout(t
     monkeypatch.setenv("COPILOT_HOME", str(tmp_path / ".copilot"))
     bundle = load_catalog_bundle()
     paths = ManagerPaths.from_environment()
+    entrypoint = bundle.entrypoint_for_path(
+        "agent",
+        "agency-agents",
+        "design/design-brand-guardian.md",
+        provider="agency-design-brand-guardian",
+    )
+    assert entrypoint is not None
     runner = GitCloneRunner(
         {
             "agency-agents": {
@@ -324,7 +454,45 @@ def test_sync_agent_provider_fetches_catalog_commit_when_missing_from_checkout(t
     assert generated.exists()
     assert "Fetched from pinned commit." in generated.read_text()
     assert any(call[:4] == ("git", "fetch", "--depth", "1") for call in runner.calls)
-    assert ("git", "show", "6254154899f510eb4a4de10561fecfc1f32ff17f:design/design-brand-guardian.md") in runner.calls
+    assert ("git", "show", f"{entrypoint.commit_revision}:design/design-brand-guardian.md") in runner.calls
+
+
+def test_sync_agent_provider_fetches_pinned_commit_from_real_git_checkout(tmp_path: Path, monkeypatch) -> None:
+    monkeypatch.setenv("COPILOT_HOME", str(tmp_path / ".copilot"))
+    bundle = load_catalog_bundle()
+    paths = ManagerPaths.from_environment()
+    entrypoint = bundle.entrypoint_for_path(
+        "agent",
+        "agency-agents",
+        "design/design-brand-guardian.md",
+        provider="agency-design-brand-guardian",
+    )
+    assert entrypoint is not None
+
+    remote = tmp_path / "agency-agents-remote"
+    subprocess.run(["git", "init", "--initial-branch=main", str(remote)], check=True, capture_output=True, text=True)
+    (remote / "design").mkdir(parents=True)
+    (remote / "scripts").mkdir(parents=True)
+    (remote / "design" / "design-brand-guardian.md").write_text("# Design Brand Guardian\n\nPinned content.\n")
+    (remote / "scripts" / "install.sh").write_text("#!/usr/bin/env bash\necho install\n")
+    pinned_revision = create_git_commit(remote, "initial")
+    (remote / "design" / "design-brand-guardian.md").write_text("# Design Brand Guardian\n\nHead content.\n")
+    create_git_commit(remote, "head")
+    entrypoint.commit_revision = pinned_revision
+
+    runner = LocalGitMirrorRunner({"agency-agents": remote})
+    manager = PluginManager(bundle, paths, runner=runner)
+    project = tmp_path / "repo"
+    project.mkdir()
+
+    manager.sync_agent_provider("agency-design-brand-guardian", project)
+
+    generated = paths.agents_dir / "agency-design-brand-guardian__design__design-brand-guardian.agent.md"
+    cloned_scripts = paths.sources_dir / "agency-agents" / "scripts" / "install.sh"
+    assert generated.exists()
+    assert "Pinned content." in generated.read_text()
+    assert cloned_scripts.exists()
+    assert ("git", "show", f"{pinned_revision}:design/design-brand-guardian.md") in runner.calls
 
 
 def test_sync_agent_provider_reports_context_when_pinned_commit_fetch_fails(tmp_path: Path, monkeypatch) -> None:
@@ -343,6 +511,13 @@ def test_sync_agent_provider_reports_context_when_pinned_commit_fetch_fails(tmp_
     monkeypatch.setenv("COPILOT_HOME", str(tmp_path / ".copilot"))
     bundle = load_catalog_bundle()
     paths = ManagerPaths.from_environment()
+    entrypoint = bundle.entrypoint_for_path(
+        "agent",
+        "agency-agents",
+        "design/design-brand-guardian.md",
+        provider="agency-design-brand-guardian",
+    )
+    assert entrypoint is not None
     runner = FailingFetchRunner(
         {
             "agency-agents": {
@@ -357,7 +532,7 @@ def test_sync_agent_provider_reports_context_when_pinned_commit_fetch_fails(tmp_
 
     with pytest.raises(
         RuntimeError,
-        match=("Unable to load agent agency-design-brand-guardian:design/design-brand-guardian.md from agency-agents at 6254154899f510eb4a4de10561fecfc1f32ff17f."),
+        match=(f"Unable to load agent agency-design-brand-guardian:design/design-brand-guardian.md from agency-agents at {entrypoint.commit_revision}."),
     ):
         manager.sync_agent_provider("agency-design-brand-guardian", project)
 
@@ -517,7 +692,7 @@ def test_switch_target_reconciles_even_when_target_matches_saved_state(tmp_path:
     monkeypatch.setattr(
         manager,
         "_execute_actions",
-        lambda actions, cwd=None, description="Applying changes": calls.append(("plugins", tuple(action.description for action in actions))),
+        lambda actions, cwd=None, description="Applying changes", parallel_workers=1: calls.append(("plugins", tuple(action.description for action in actions))),
     )
     monkeypatch.setattr(
         manager,

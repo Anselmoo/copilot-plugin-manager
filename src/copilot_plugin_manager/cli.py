@@ -102,6 +102,19 @@ class MenuAction(StrEnum):
     quit = "q"
 
 
+class ListMenuAction(StrEnum):
+    overview = "1"
+    profiles = "2"
+    themes = "3"
+    sources = "4"
+    plugins = "5"
+    skills = "6"
+    agents = "7"
+    mcps = "8"
+    all = "9"
+    quit = "q"
+
+
 app = typer.Typer(
     name="copilot-plugin-manager",
     no_args_is_help=False,
@@ -142,6 +155,27 @@ def _print_sync_warnings(manager: PluginManager) -> None:
         console().print(render_sync_warnings(manager.sync_warnings))
 
 
+def _reset_terminal_keyboard_protocol() -> None:
+    stream = getattr(sys, "__stdout__", None)
+    if stream is None or not hasattr(stream, "isatty") or not stream.isatty():
+        return
+    try:
+        stream.write("\x1b[<u")
+        stream.flush()
+    except OSError:
+        return
+
+
+def _prompt_text(message: str, default: str | None = None) -> str:
+    _reset_terminal_keyboard_protocol()
+    return typer.prompt(message, default=default).strip()
+
+
+def _confirm_text(message: str, default: bool = False) -> bool:
+    _reset_terminal_keyboard_protocol()
+    return typer.confirm(message, default=default)
+
+
 def _supports_interactive_menu() -> bool:
     return sys.stdin.isatty() and sys.stdout.isatty()
 
@@ -179,7 +213,7 @@ def _menu_table(manager: PluginManager, current: Path) -> Table:
 
 def _prompt_menu_action() -> MenuAction:
     while True:
-        raw = typer.prompt("Choose an action", default=MenuAction.status.value).strip().lower()
+        raw = _prompt_text("Choose an action", default=MenuAction.status.value).lower()
         if raw in {action.value for action in MenuAction}:
             return MenuAction(raw)
         console().print("[red]Unknown choice. Pick 1-7 or q.[/red]")
@@ -188,7 +222,7 @@ def _prompt_menu_action() -> MenuAction:
 def _prompt_managed_target(default: ManagedTarget = ManagedTarget.all) -> ManagedTarget:
     choices = ", ".join(target.value for target in ManagedTarget)
     while True:
-        raw = typer.prompt(f"Managed target [{choices}]", default=default.value).strip().lower()
+        raw = _prompt_text(f"Managed target [{choices}]", default=default.value).lower()
         try:
             return ManagedTarget(raw)
         except ValueError:
@@ -196,17 +230,13 @@ def _prompt_managed_target(default: ManagedTarget = ManagedTarget.all) -> Manage
 
 
 def _maybe_save_repo_profile(manager: PluginManager, current: Path, target_name: str) -> None:
-    if not typer.confirm("Save this target as the repo profile hint?", default=False):
+    if not _confirm_text("Save this target as the repo profile hint?", default=False):
         return
     while True:
-        location = (
-            typer.prompt(
-                "Repo profile location [root/github]",
-                default=RepoProfileLocation.root.value,
-            )
-            .strip()
-            .lower()
-        )
+        location = _prompt_text(
+            "Repo profile location [root/github]",
+            default=RepoProfileLocation.root.value,
+        ).lower()
         try:
             repo_location = RepoProfileLocation(location)
         except ValueError:
@@ -234,7 +264,7 @@ def _run_interactive_menu(manager: PluginManager, current: Path) -> None:
             case MenuAction.switch | MenuAction.switch_exclusive:
                 active_name, _ = _active_target(manager, current)
                 default_target = manager.repo_profile_hint(current) or active_name or "minimal"
-                target_name = typer.prompt("Target to activate", default=default_target).strip()
+                target_name = _prompt_text("Target to activate", default=default_target)
                 activation = manager.switch_target(
                     target_name,
                     current,
@@ -247,9 +277,91 @@ def _run_interactive_menu(manager: PluginManager, current: Path) -> None:
                 manager.manage_target("update", _prompt_managed_target().value, current)
                 _print_sync_warnings(manager)
             case MenuAction.repo_update:
-                revisions = manager.repo_update(current, remote=typer.confirm("Refresh remote refs too?", default=True))
+                revisions = manager.repo_update(current, remote=_confirm_text("Refresh remote refs too?", default=True))
                 console().print(_revision_table("Source revisions", revisions))
-        if not typer.confirm("Do you want to choose another action?", default=False):
+        if not _confirm_text("Do you want to choose another action?", default=False):
+            return
+
+
+def _render_list_section(manager: PluginManager, current: Path, section: ListSection) -> None:
+    active_name, active_target = _active_target(manager, current)
+    repo_hint = manager.repo_profile_hint(current)
+    term = console()
+    match section:
+        case ListSection.overview:
+            for renderable in render_overview(manager.catalog, active_target, repo_hint):
+                term.print(renderable)
+        case ListSection.profiles:
+            term.print(render_overview(manager.catalog, active_target, repo_hint)[1])
+        case ListSection.themes:
+            term.print(render_themes(manager.catalog, active_name or None))
+        case ListSection.sources:
+            term.print(render_repositories(manager.catalog))
+        case ListSection.plugins:
+            term.print(render_plugins(manager.catalog))
+        case ListSection.skills:
+            term.print(render_providers(manager.catalog, "skill"))
+        case ListSection.agents:
+            term.print(render_providers(manager.catalog, "agent"))
+        case ListSection.mcps:
+            term.print(render_mcps(manager.catalog))
+        case ListSection.all:
+            for renderable in render_overview(manager.catalog, active_target, repo_hint):
+                term.print(renderable)
+            term.print(render_repositories(manager.catalog))
+            term.print(render_plugins(manager.catalog))
+            term.print(render_providers(manager.catalog, "skill"))
+            term.print(render_providers(manager.catalog, "agent"))
+            term.print(render_mcps(manager.catalog))
+
+
+def _list_menu_table(manager: PluginManager, current: Path) -> Table:
+    active_name, _ = _active_target(manager, current)
+    table = Table(title="Catalog browser", box=box.ROUNDED, expand=True)
+    table.add_column("Key", style="cyan", no_wrap=True, width=4)
+    table.add_column("View", style="bold white", no_wrap=True, width=16)
+    table.add_column("What it shows", style="white", overflow="fold")
+    table.add_row("1", "overview", "Compact overview with active state, profiles, and themes.")
+    table.add_row("2", "profiles", "Bundled profile catalog.")
+    table.add_row("3", "themes", "Theme bundles across plugins, skills, and agents.")
+    table.add_row("4", "sources", "Tracked upstream repositories and revisions.")
+    table.add_row("5", "plugins", "Managed plugin catalog.")
+    table.add_row("6", "skills", "Skill provider catalog.")
+    table.add_row("7", "agents", "Agent provider catalog.")
+    table.add_row("8", "mcps", "Managed MCP catalog.")
+    table.add_row("9", "all", "Full catalog dump.")
+    table.add_row("q", "quit", "Exit the catalog browser.")
+    table.caption = f"cwd: {current} | active: {active_name or 'none'}"
+    return table
+
+
+def _prompt_list_action() -> ListMenuAction:
+    while True:
+        raw = _prompt_text("Choose a catalog view", default=ListMenuAction.overview.value).lower()
+        if raw in {action.value for action in ListMenuAction}:
+            return ListMenuAction(raw)
+        console().print("[red]Unknown choice. Pick 1-9 or q.[/red]")
+
+
+def _run_list_menu(manager: PluginManager, current: Path) -> None:
+    section_map = {
+        ListMenuAction.overview: ListSection.overview,
+        ListMenuAction.profiles: ListSection.profiles,
+        ListMenuAction.themes: ListSection.themes,
+        ListMenuAction.sources: ListSection.sources,
+        ListMenuAction.plugins: ListSection.plugins,
+        ListMenuAction.skills: ListSection.skills,
+        ListMenuAction.agents: ListSection.agents,
+        ListMenuAction.mcps: ListSection.mcps,
+        ListMenuAction.all: ListSection.all,
+    }
+    while True:
+        console().print(_list_menu_table(manager, current))
+        action = _prompt_list_action()
+        if action is ListMenuAction.quit:
+            return
+        _render_list_section(manager, current, section_map[action])
+        if not _confirm_text("Browse another catalog view?", default=False):
             return
 
 
@@ -300,10 +412,11 @@ def callback(
     ),
 )
 def list_command(
+    ctx: typer.Context,
     section: Annotated[
-        ListSection,
-        typer.Argument(help="Which catalog view to render. Use 'overview' for the summary or 'all' for every view."),
-    ] = ListSection.overview,
+        ListSection | None,
+        typer.Argument(help="Which catalog view to render. Omit in an interactive terminal to open the catalog browser."),
+    ] = None,
     cwd: Annotated[
         Path | None,
         typer.Option(
@@ -316,35 +429,13 @@ def list_command(
     """Render a specific catalog section for the current or supplied repository context."""
     manager = get_manager()
     current = _cwd(cwd)
-    active_name, active_target = _active_target(manager, current)
-    repo_hint = manager.repo_profile_hint(current)
-    term = console()
-    match section:
-        case ListSection.overview:
-            for renderable in render_overview(manager.catalog, active_target, repo_hint):
-                term.print(renderable)
-        case ListSection.profiles:
-            term.print(render_overview(manager.catalog, active_target, repo_hint)[1])
-        case ListSection.themes:
-            term.print(render_themes(manager.catalog, active_name or None))
-        case ListSection.sources:
-            term.print(render_repositories(manager.catalog))
-        case ListSection.plugins:
-            term.print(render_plugins(manager.catalog))
-        case ListSection.skills:
-            term.print(render_providers(manager.catalog, "skill"))
-        case ListSection.agents:
-            term.print(render_providers(manager.catalog, "agent"))
-        case ListSection.mcps:
-            term.print(render_mcps(manager.catalog))
-        case ListSection.all:
-            for renderable in render_overview(manager.catalog, active_target, repo_hint):
-                term.print(renderable)
-            term.print(render_repositories(manager.catalog))
-            term.print(render_plugins(manager.catalog))
-            term.print(render_providers(manager.catalog, "skill"))
-            term.print(render_providers(manager.catalog, "agent"))
-            term.print(render_mcps(manager.catalog))
+    del ctx
+    if section is None:
+        if _supports_interactive_menu():
+            _run_list_menu(manager, current)
+            return
+        section = ListSection.overview
+    _render_list_section(manager, current, section)
 
 
 @app.command(

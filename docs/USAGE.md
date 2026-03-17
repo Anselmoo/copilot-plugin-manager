@@ -90,7 +90,7 @@ Generated entrypoint data also records:
 ```text
 copilot-plugin-manager
 copilot-plugin-manager menu
-copilot-plugin-manager list [overview|all|sources|profiles|themes|plugins|skills|agents]
+copilot-plugin-manager list [overview|all|sources|profiles|themes|plugins|skills|agents|mcps]
 copilot-plugin-manager status
 copilot-plugin-manager install [all|plugins|skills|agents|thirdparty]
 copilot-plugin-manager update [all|plugins|skills|agents|thirdparty]
@@ -105,6 +105,8 @@ copilot-plugin-manager completion-install <bash|zsh|fish|powershell|nushell> [--
 ```
 
 `copilot-plugin-manager` with no subcommand now opens a guided interactive menu when running in an interactive terminal. In non-interactive contexts, it falls back to a compact status view.
+
+`copilot-plugin-manager list` follows the same pattern: in an interactive terminal it opens a catalog browser with focused views for overview, profiles, themes, sources, plugins, skills, agents, and MCPs. In non-interactive contexts, or when you pass a section explicitly, it renders that specific section directly.
 
 ## Shell setup
 
@@ -147,6 +149,7 @@ For quick one-off execution without installing the package into your environment
 
 ```bash
 uvx copilot-plugin-manager status
+uvx copilot-plugin-manager list
 uvx copilot-plugin-manager list profiles
 ```
 

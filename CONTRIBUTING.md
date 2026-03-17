@@ -28,7 +28,11 @@ Run the CLI locally with:
 ```bash
 uv run copilot-plugin-manager --help
 uv run copilot-plugin-manager
+uv run copilot-plugin-manager list
+uv run copilot-plugin-manager list overview
 ```
+
+In an interactive terminal, bare `list` opens the catalog browser. Use an explicit section such as `list overview` when you need deterministic output for tests, docs, or pasted examples.
 
 ## Common tasks
 

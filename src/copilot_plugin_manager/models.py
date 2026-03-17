@@ -192,3 +192,4 @@ class PlannedAction:
     category: Literal["plugin", "skill", "agent", "mcp", "repo", "state", "info"]
     description: str
     command: tuple[str, ...] | None = None
+    check: bool = True

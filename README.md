@@ -44,13 +44,17 @@ Open the guided menu for the current repository context:
 copilot-plugin-manager
 ```
 
-List what is available:
+Browse what is available:
 
 ```bash
+copilot-plugin-manager list
 copilot-plugin-manager list profiles
 copilot-plugin-manager list themes
 copilot-plugin-manager list sources
+copilot-plugin-manager list mcps
 ```
+
+In an interactive terminal, bare `list` opens a compact catalog browser instead of dumping every section at once. Use an explicit section such as `list overview` when you want a stable non-interactive view for scripts or copy/paste output.
 
 Activate a setup for the current repository:
 
@@ -74,6 +78,7 @@ If you maintain the bundled upstream catalogs, `uv run poe broken-links` catches
 If you prefer one-off execution with `uvx`, the same commands work there too:
 
 ```bash
+uvx copilot-plugin-manager list
 uvx copilot-plugin-manager list profiles
 uvx copilot-plugin-manager status
 ```

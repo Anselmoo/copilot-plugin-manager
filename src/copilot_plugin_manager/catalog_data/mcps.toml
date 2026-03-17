@@ -16,9 +16,22 @@
 
 # ── Requested defaults ───────────────────────────────────────────────────────
 
+[mcps."zen-of-docs"]
+kind = "pip"
+package = "mcp-zen-of-docs"
+command = "uvx"
+args = ["--from", "mcp-zen-of-docs", "mcp-zen-of-docs-server"]
+description = "Zen of Docs — framework-aware documentation quality tooling and authoring primitives for MCP clients."
+use_when = "Use when you want documentation-native validation, scaffolding, and framework-aware doc quality feedback."
+source_url = "https://github.com/Anselmoo/mcp-zen-of-docs"
+version_channel = "latest"
+tags = ["docs", "general"]
+
 [mcps."zen-of-languages"]
-kind = "npm"
-package = "@Anselmoo/mcp-zen-of-languages"
+kind = "pip"
+package = "mcp-zen-of-languages"
+command = "uvx"
+args = ["--from", "mcp-zen-of-languages", "zen-mcp-server"]
 description = "Zen of Languages — philosophy-inspired guidance on idiomatic coding across programming languages and runtimes."
 use_when = "Use when you want idiomatic style guidance and opinionated best practices for a specific programming language."
 source_url = "https://github.com/Anselmoo/mcp-zen-of-languages"
@@ -63,8 +76,9 @@ pinned_tag = "0.1.0"
 tags = ["frontend", "ui"]
 
 [mcps."serena"]
-kind = "npm"
-package = "@oraios/serena"
+kind = "pip"
+command = "uvx"
+args = ["--from", "git+https://github.com/oraios/serena", "serena", "start-mcp-server"]
 description = "Serena — software engineering agent specialised in deep code navigation, large-scale refactoring, and multi-file reasoning."
 use_when = "Use when performing complex, cross-file refactoring, architectural modernisation, or deep code understanding tasks."
 source_url = "https://github.com/oraios/serena"

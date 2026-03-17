@@ -88,8 +88,9 @@ def _get_entry(servers: dict[str, object], name: str) -> dict[str, object]:
 
 def test_catalog_loads_default_mcps() -> None:
     bundle = load_catalog_bundle()
-    assert len(bundle.mcps) >= 7
+    assert len(bundle.mcps) >= 8
     required = {
+        "zen-of-docs",
         "zen-of-languages",
         "context7",
         "ai-agent-guidelines",
@@ -105,6 +106,9 @@ def test_catalog_mcp_kinds() -> None:
     bundle = load_catalog_bundle()
     assert bundle.mcps["context7"].kind == "http"
     assert bundle.mcps["context7"].url is not None
+    assert bundle.mcps["zen-of-docs"].kind == "pip"
+    assert bundle.mcps["zen-of-languages"].kind == "pip"
+    assert bundle.mcps["serena"].kind == "pip"
     for name, record in bundle.mcps.items():
         if name != "context7":
             if record.kind == "npm":
@@ -564,6 +568,20 @@ def test_build_mcp_server_entry_pip_no_version(tmp_path: Path) -> None:
     assert "markitdown-mcp" in args
 
 
+def test_build_mcp_server_entry_pip_custom_uvx_args(tmp_path: Path) -> None:
+    manager = _make_manager(tmp_path)
+    record = McpRecord(
+        kind="pip",
+        package="mcp-zen-of-languages",
+        command="uvx",
+        args=["--from", "mcp-zen-of-languages", "zen-mcp-server"],
+    )
+    entry = manager.build_mcp_server_entry("zen-of-languages", record, installed_version="9.9.9")
+
+    assert entry["command"] == "uvx"
+    assert cast(list[object], entry["args"]) == ["--from", "mcp-zen-of-languages", "zen-mcp-server"]
+
+
 def test_build_mcp_server_entry_pip_with_pinned_tag(tmp_path: Path) -> None:
     manager = _make_manager(tmp_path)
     record = McpRecord(kind="pip", package="markitdown-mcp", pinned_tag="0.1.2")
@@ -636,6 +654,21 @@ def test_catalog_contains_markitdown_mcp() -> None:
     record = bundle.mcps["markitdown"]
     assert record.kind == "pip"
     assert record.package == "markitdown-mcp"
+
+
+def test_catalog_contains_uvx_mcps() -> None:
+    bundle = load_catalog_bundle()
+
+    zen_docs = bundle.mcps["zen-of-docs"]
+    zen_languages = bundle.mcps["zen-of-languages"]
+    serena = bundle.mcps["serena"]
+
+    assert zen_docs.command == "uvx"
+    assert zen_docs.args == ["--from", "mcp-zen-of-docs", "mcp-zen-of-docs-server"]
+    assert zen_languages.command == "uvx"
+    assert zen_languages.args == ["--from", "mcp-zen-of-languages", "zen-mcp-server"]
+    assert serena.command == "uvx"
+    assert serena.args == ["--from", "git+https://github.com/oraios/serena", "serena", "start-mcp-server"]
 
 
 def test_azure_mcp_entry_includes_server_start_args(tmp_path: Path) -> None:
