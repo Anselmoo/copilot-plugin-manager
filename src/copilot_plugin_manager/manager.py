@@ -252,6 +252,60 @@ class PluginManager:
             return []
         return sorted(path for path in source.rglob("*") if path.is_symlink() and not path.exists())
 
+    def _resolve_microsoft_skill_directory(self, source_root: Path, candidate: Path) -> Path | None:
+        if not candidate.is_symlink():
+            return None
+        target_name = candidate.readlink().name
+        matches: list[Path] = []
+        direct_skill = source_root / ".github" / "skills" / target_name
+        if direct_skill.is_dir():
+            matches.append(direct_skill)
+        plugin_skills_root = source_root / ".github" / "plugins"
+        if plugin_skills_root.exists():
+            matches.extend(sorted(path for path in plugin_skills_root.glob(f"*/skills/{target_name}") if path.is_dir()))
+        if len(matches) != 1:
+            return None
+        return matches[0]
+
+    def _resolve_skill_symlink(self, source_name: str, source_root: Path, candidate: Path) -> Path | None:
+        if source_name != "microsoft-skills":
+            return None
+        return self._resolve_microsoft_skill_directory(source_root, candidate)
+
+    def _copy_skill_path(self, source_name: str, source_root: Path, source: Path, destination: Path) -> None:
+        if source.is_symlink() and not source.exists():
+            resolved = self._resolve_skill_symlink(source_name, source_root, source)
+            if resolved is None:
+                return
+            source = resolved
+        if not source.exists():
+            return
+        if destination.exists():
+            if destination.is_dir() and not destination.is_symlink():
+                shutil.rmtree(destination)
+            else:
+                destination.unlink()
+        if source.is_dir():
+            destination.mkdir(parents=True, exist_ok=True)
+            for child in sorted(source.iterdir(), key=lambda item: item.name):
+                self._copy_skill_path(source_name, source_root, child, destination / child.name)
+            return
+        destination.parent.mkdir(parents=True, exist_ok=True)
+        shutil.copy2(source, destination)
+
+    def _dangling_skill_symlinks(self, source_name: str, source_root: Path, source: Path) -> list[Path]:
+        if source.is_symlink() and not source.exists():
+            return [] if self._resolve_skill_symlink(source_name, source_root, source) is not None else [source]
+        if not source.exists() or not source.is_dir():
+            return []
+        broken: list[Path] = []
+        for path in source.rglob("*"):
+            if not path.is_symlink() or path.exists():
+                continue
+            if self._resolve_skill_symlink(source_name, source_root, path) is None:
+                broken.append(path)
+        return sorted(broken)
+
     def _title_from_path(self, source_path: str) -> str:
         stem = Path(source_path).stem
         parts = [part for part in re.split(r"[-_/]", stem) if part]
@@ -369,7 +423,11 @@ class PluginManager:
         }
         if kind == "agent":
             payload["entrypoints"] = [
-                {"source_path": entry.source_path, "local_output": entry.local_output}
+                {
+                    "source_path": entry.source_path,
+                    "local_output": entry.local_output,
+                    "commit_revision": entry.commit_revision,
+                }
                 for entry in sorted(
                     self.catalog.entrypoint_records(kind, provider=provider_name),
                     key=lambda entry: (entry.source_path, entry.local_output),
@@ -450,32 +508,68 @@ class PluginManager:
         for root in provider.roots:
             source = source_root / root
             if source.is_symlink() and not source.exists():
-                warnings.append(self._sync_warning(provider_name, root, "dangling symlink"))
-                continue
+                resolved_source = self._resolve_skill_symlink(provider.source, source_root, source)
+                if resolved_source is None:
+                    warnings.append(self._sync_warning(provider_name, root, "dangling symlink"))
+                    continue
+                source = resolved_source
             if not source.exists():
                 warnings.append(self._sync_warning(provider_name, root, "missing source root"))
                 continue
             if source.is_file():
                 destination = self.paths.skills_dir / f"{provider.prefix}__{source.stem}"
-                self._copy_fs_path(source, destination)
+                self._copy_skill_path(provider.source, source_root, source, destination)
                 outputs.append(destination.name)
                 continue
-            for directory in sorted(item for item in source.iterdir() if item.is_dir()):
+            for directory in sorted(item for item in source.iterdir() if item.is_dir() or item.is_symlink()):
+                if not directory.is_dir() and not directory.is_symlink():
+                    continue
                 dangling = [
                     self._sync_warning(
                         provider_name,
                         str(path.relative_to(source_root)).replace("\\", "/"),
                         "dangling symlink",
                     )
-                    for path in self._dangling_symlinks(directory)
+                    for path in self._dangling_skill_symlinks(provider.source, source_root, directory)
                 ]
                 destination = self.paths.skills_dir / f"{provider.prefix}__{directory.name}"
-                self._copy_fs_path(directory, destination)
+                if directory.is_symlink() and not directory.exists() and not self._resolve_skill_symlink(provider.source, source_root, directory):
+                    warnings.extend(dangling)
+                    continue
+                self._copy_skill_path(provider.source, source_root, directory, destination)
                 outputs.append(destination.name)
                 warnings.extend(dangling)
         synced_outputs = list(dict.fromkeys(outputs))
         self._record_provider_sync("skill", provider_name, provider.source, observed, synced_outputs, list(dict.fromkeys(warnings)))
         return synced_outputs
+
+    def _ensure_commit_available(self, checkout: Path, commit_revision: str) -> None:
+        result = self.runner.run(["git", "cat-file", "-e", f"{commit_revision}^{{commit}}"], cwd=checkout, check=False)
+        if result.returncode == 0:
+            return
+        self.runner.run(["git", "fetch", "--depth", "1", "origin", commit_revision], cwd=checkout)
+
+    def _read_agent_source_text(self, checkout: Path, source_path: str, entrypoint: EntrypointRecord | None) -> str:
+        normalized_path = source_path.replace("\\", "/")
+        if entrypoint is not None and entrypoint.commit_revision:
+            self._ensure_commit_available(checkout, entrypoint.commit_revision)
+            return self.runner.run(["git", "show", f"{entrypoint.commit_revision}:{normalized_path}"], cwd=checkout).stdout
+        source = checkout / normalized_path
+        return source.read_text()
+
+    def _write_agent_output(
+        self,
+        destination: Path,
+        source_text: str,
+        source_name: str,
+        source_path: str,
+        entrypoint: EntrypointRecord | None,
+    ) -> None:
+        rendered = self._render_normalized_agent(source_text, source_name, source_path, entrypoint)
+        if destination.exists():
+            destination.unlink()
+        destination.parent.mkdir(parents=True, exist_ok=True)
+        destination.write_text(rendered)
 
     def sync_agent_provider(
         self,
@@ -491,56 +585,78 @@ class PluginManager:
         observed = observed or self.current_source_state(source_root)
         self.paths.agents_dir.mkdir(parents=True, exist_ok=True)
         outputs: list[str] = []
-        for root in provider.roots:
-            source = source_root / root
-            if not source.exists():
-                continue
-            if source.is_file():
-                source_path = str(root).replace("\\", "/")
-                claim_key = (provider.source, source_path)
-                if claimed_source_paths is not None:
-                    if claim_key in claimed_source_paths:
-                        continue
-                    claimed_source_paths.add(claim_key)
-                destination = self.paths.agents_dir / self._agent_output_name(
-                    provider_name,
-                    provider.prefix,
-                    provider.source,
-                    source_path,
-                )
-                self._copy_agent_file(
-                    source,
-                    destination,
-                    provider.source,
-                    source_path,
-                    self._agent_entrypoint(provider_name, provider.source, source_path),
-                )
-                outputs.append(destination.name)
-                continue
-            for file_path in sorted(source.rglob("*.md")):
-                if file_path.name == "README.md":
+        entrypoints = sorted(self.catalog.entrypoint_records("agent", provider=provider_name), key=lambda entry: (entry.source_path, entry.local_output))
+        if entrypoints:
+            for entrypoint in entrypoints:
+                source_path = entrypoint.source_path
+                source = source_root / source_path
+                if not source.exists() and not (source_root / ".git").exists():
                     continue
-                relative = file_path.relative_to(source_root)
-                source_path = str(relative).replace("\\", "/")
                 claim_key = (provider.source, source_path)
                 if claimed_source_paths is not None:
                     if claim_key in claimed_source_paths:
                         continue
                     claimed_source_paths.add(claim_key)
-                destination = self.paths.agents_dir / self._agent_output_name(
-                    provider_name,
-                    provider.prefix,
-                    provider.source,
-                    source_path,
-                )
-                self._copy_agent_file(
-                    file_path,
+                destination = self.paths.agents_dir / entrypoint.local_output
+                self._write_agent_output(
                     destination,
+                    self._read_agent_source_text(source_root, source_path, entrypoint),
                     provider.source,
                     source_path,
-                    self._agent_entrypoint(provider_name, provider.source, source_path),
+                    entrypoint,
                 )
                 outputs.append(destination.name)
+        else:
+            for root in provider.roots:
+                source = source_root / root
+                if not source.exists():
+                    continue
+                if source.is_file():
+                    source_path = str(root).replace("\\", "/")
+                    claim_key = (provider.source, source_path)
+                    if claimed_source_paths is not None:
+                        if claim_key in claimed_source_paths:
+                            continue
+                        claimed_source_paths.add(claim_key)
+                    destination = self.paths.agents_dir / self._agent_output_name(
+                        provider_name,
+                        provider.prefix,
+                        provider.source,
+                        source_path,
+                    )
+                    self._copy_agent_file(
+                        source,
+                        destination,
+                        provider.source,
+                        source_path,
+                        self._agent_entrypoint(provider_name, provider.source, source_path),
+                    )
+                    outputs.append(destination.name)
+                    continue
+                for file_path in sorted(source.rglob("*.md")):
+                    if file_path.name == "README.md":
+                        continue
+                    relative = file_path.relative_to(source_root)
+                    source_path = str(relative).replace("\\", "/")
+                    claim_key = (provider.source, source_path)
+                    if claimed_source_paths is not None:
+                        if claim_key in claimed_source_paths:
+                            continue
+                        claimed_source_paths.add(claim_key)
+                    destination = self.paths.agents_dir / self._agent_output_name(
+                        provider_name,
+                        provider.prefix,
+                        provider.source,
+                        source_path,
+                    )
+                    self._copy_agent_file(
+                        file_path,
+                        destination,
+                        provider.source,
+                        source_path,
+                        self._agent_entrypoint(provider_name, provider.source, source_path),
+                    )
+                    outputs.append(destination.name)
         synced_outputs = list(dict.fromkeys(outputs))
         self._record_provider_sync("agent", provider_name, provider.source, observed, synced_outputs, [])
         return synced_outputs

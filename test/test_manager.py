@@ -21,6 +21,17 @@ class FakeRunner(ShellRunner):
         check: bool = True,
     ) -> CommandResult:
         self.calls.append(tuple(args))
+        if args[:3] == ["git", "rev-parse", "HEAD"]:
+            return CommandResult(tuple(args), "abc123\n", "", 0)
+        if args[:3] == ["git", "cat-file", "-e"]:
+            return CommandResult(tuple(args), "", "", 0)
+        if args[:4] == ["git", "fetch", "--depth", "1"]:
+            return CommandResult(tuple(args), "", "", 0)
+        if args[:2] == ["git", "show"]:
+            _, source_path = args[2].split(":", 1)
+            if cwd is None:
+                raise AssertionError("git show requires a checkout path in tests")
+            return CommandResult(tuple(args), (cwd / source_path).read_text(), "", 0)
         return CommandResult(
             tuple(args),
             "Installed plugins:\n  • awesome-copilot@awesome-copilot (v1.0.0)\n",
@@ -30,9 +41,14 @@ class FakeRunner(ShellRunner):
 
 
 class GitCloneRunner(FakeRunner):
-    def __init__(self, clone_layouts: dict[str, dict[str, str]] | None = None) -> None:
+    def __init__(
+        self,
+        clone_layouts: dict[str, dict[str, str]] | None = None,
+        available_commits: dict[str, set[str]] | None = None,
+    ) -> None:
         super().__init__()
         self.clone_layouts = clone_layouts or {}
+        self.available_commits = available_commits or {}
 
     def run(
         self,
@@ -44,6 +60,7 @@ class GitCloneRunner(FakeRunner):
         if args[:4] == ["git", "clone", "--depth", "1"]:
             destination = Path(args[-1])
             destination.mkdir(parents=True, exist_ok=True)
+            self.available_commits.setdefault(destination.name, set())
             for relative_path, content in self.clone_layouts.get(destination.name, {}).items():
                 target = destination / relative_path
                 target.parent.mkdir(parents=True, exist_ok=True)
@@ -53,6 +70,22 @@ class GitCloneRunner(FakeRunner):
             return CommandResult(tuple(args), "", "", 0)
         if args[:3] == ["git", "rev-parse", "HEAD"]:
             return CommandResult(tuple(args), "abc123\n", "", 0)
+        if args[:3] == ["git", "cat-file", "-e"]:
+            if cwd is None:
+                raise AssertionError("git cat-file requires a checkout path in tests")
+            commit = args[3].split("^{commit}", 1)[0]
+            present = commit in self.available_commits.setdefault(cwd.name, set())
+            return CommandResult(tuple(args), "", "", 0 if present else 1)
+        if args[:4] == ["git", "fetch", "--depth", "1"]:
+            if cwd is None:
+                raise AssertionError("git fetch requires a checkout path in tests")
+            self.available_commits.setdefault(cwd.name, set()).add(args[4])
+            return CommandResult(tuple(args), "", "", 0)
+        if args[:2] == ["git", "show"]:
+            if cwd is None:
+                raise AssertionError("git show requires a checkout path in tests")
+            _, source_path = args[2].split(":", 1)
+            return CommandResult(tuple(args), (cwd / source_path).read_text(), "", 0)
         return CommandResult(
             tuple(args),
             "Installed plugins:\n  • awesome-copilot@awesome-copilot (v1.0.0)\n",
@@ -178,6 +211,29 @@ def test_sync_skill_provider_skips_dangling_symlinks_and_records_warning(tmp_pat
     assert saved.warnings == manager.sync_warnings
 
 
+def test_sync_skill_provider_resolves_nested_microsoft_wrapper_symlinks(tmp_path: Path, monkeypatch) -> None:
+    monkeypatch.setenv("COPILOT_HOME", str(tmp_path / ".copilot"))
+    bundle = load_catalog_bundle()
+    paths = ManagerPaths.from_environment()
+    manager = PluginManager(bundle, paths, runner=FakeRunner())
+
+    project = tmp_path / "repo"
+    messaging_root = project / "external" / "microsoft-skills" / "skills" / "typescript" / "messaging"
+    messaging_root.mkdir(parents=True)
+    (messaging_root / "servicebus").symlink_to("../../../.github/skills/azure-servicebus-ts")
+    real_skill = project / "external" / "microsoft-skills" / ".github" / "plugins" / "azure-sdk-typescript" / "skills" / "azure-servicebus-ts"
+    real_skill.mkdir(parents=True)
+    (real_skill / "SKILL.md").write_text("# Azure Service Bus\n\nMessaging patterns.\n")
+
+    outputs = manager.sync_skill_provider("mskills-typescript", project)
+
+    copied_skill = paths.skills_dir / "mskills-typescript__messaging" / "servicebus" / "SKILL.md"
+    assert "mskills-typescript__messaging" in outputs
+    assert copied_skill.exists()
+    assert copied_skill.read_text() == "# Azure Service Bus\n\nMessaging patterns.\n"
+    assert manager.sync_warnings == []
+
+
 def test_sync_missing_skill_providers_retries_when_previous_sync_had_warnings(tmp_path: Path, monkeypatch) -> None:
     monkeypatch.setenv("COPILOT_HOME", str(tmp_path / ".copilot"))
     bundle = load_catalog_bundle()
@@ -240,6 +296,31 @@ def test_sync_agent_provider_normalizes_output_name_and_metadata(tmp_path: Path,
     assert content.startswith("<!--")
     assert "commit_revision:" in content
     assert "# Design Brand Guardian" in content
+
+
+def test_sync_agent_provider_fetches_catalog_commit_when_missing_from_checkout(tmp_path: Path, monkeypatch) -> None:
+    monkeypatch.setenv("COPILOT_HOME", str(tmp_path / ".copilot"))
+    bundle = load_catalog_bundle()
+    paths = ManagerPaths.from_environment()
+    runner = GitCloneRunner(
+        {
+            "agency-agents": {
+                "design/design-brand-guardian.md": "# Design Brand Guardian\n\nFetched from pinned commit.\n",
+            }
+        }
+    )
+    manager = PluginManager(bundle, paths, runner=runner)
+
+    project = tmp_path / "repo"
+    project.mkdir()
+
+    manager.sync_agent_provider("agency-design-brand-guardian", project)
+
+    generated = paths.agents_dir / "agency-design-brand-guardian__design__design-brand-guardian.agent.md"
+    assert generated.exists()
+    assert "Fetched from pinned commit." in generated.read_text()
+    assert any(call[:4] == ("git", "fetch", "--depth", "1") for call in runner.calls)
+    assert ("git", "show", "6254154899f510eb4a4de10561fecfc1f32ff17f:design/design-brand-guardian.md") in runner.calls
 
 
 def test_sync_missing_agent_providers_dedupes_overlapping_sources(tmp_path: Path, monkeypatch) -> None:
