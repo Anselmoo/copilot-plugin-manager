@@ -1,5 +1,7 @@
 from pathlib import Path
 
+import pytest
+
 from copilot_plugin_manager.catalog import load_catalog_bundle
 from copilot_plugin_manager.manager import PluginManager
 from copilot_plugin_manager.models import SourceState
@@ -351,15 +353,14 @@ def test_sync_agent_provider_reports_context_when_pinned_commit_fetch_fails(tmp_
     project = tmp_path / "repo"
     project.mkdir()
 
-    try:
+    with pytest.raises(
+        RuntimeError,
+        match=(
+            "Unable to load agent agency-design-brand-guardian:design/design-brand-guardian.md "
+            "from agency-agents at 6254154899f510eb4a4de10561fecfc1f32ff17f."
+        ),
+    ):
         manager.sync_agent_provider("agency-design-brand-guardian", project)
-    except RuntimeError as exc:
-        assert (
-            str(exc)
-            == "Unable to load agent agency-design-brand-guardian:design/design-brand-guardian.md from agency-agents at 6254154899f510eb4a4de10561fecfc1f32ff17f."
-        )
-    else:
-        raise AssertionError("sync_agent_provider should fail when fetching the pinned agent commit fails")
 
 
 def test_sync_missing_agent_providers_dedupes_overlapping_sources(tmp_path: Path, monkeypatch) -> None:

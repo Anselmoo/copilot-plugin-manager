@@ -604,7 +604,7 @@ class PluginManager:
                 destination = self.paths.agents_dir / entrypoint.local_output
                 try:
                     source_text = self._read_agent_source_text(source_root, source_path, entrypoint)
-                except CommandError as exc:
+                except (CommandError, OSError) as exc:
                     commit = entrypoint.commit_revision or "the current checkout"
                     raise RuntimeError(f"Unable to load agent {provider_name}:{source_path} from {provider.source} at {commit}.") from exc
                 self._write_agent_output(destination, source_text, provider.source, source_path, entrypoint)
