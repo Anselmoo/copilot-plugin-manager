@@ -38,6 +38,12 @@ copilot-plugin-manager --help
 
 ## Quick start
 
+Open the guided menu for the current repository context:
+
+```bash
+copilot-plugin-manager
+```
+
 List what is available:
 
 ```bash
@@ -61,7 +67,7 @@ copilot-plugin-manager repo-update --remote
 copilot-plugin-manager status
 ```
 
-`status` now surfaces repo-local profile files and any persisted sync warnings from the last third-party skill sync, so partial upstream-copy problems are easier to spot.
+`status` now surfaces repo-local profile files plus persisted sync and verification warnings, so partial syncs or “selected target does not match the applied environment” problems are easier to spot.
 
 If you maintain the bundled upstream catalogs, `uv run poe broken-links` catches dangling symlinks in the repository and initialized submodules before refresh or sync work.
 
@@ -80,7 +86,7 @@ uvx copilot-plugin-manager status
 _This section is generated from the bundled catalog data with `uv run poe generate-docs`._
 
 - `38` profiles
-- `28` themes
+- `29` themes
 - `53` plugins
 - `210` skill providers
 - `58` agent providers
@@ -104,7 +110,7 @@ See also:
 | `ts` | `core`, `frontend`, `typescript`, `testing` |
 | `ts-mcp` | `core`, `frontend`, `typescript`, `mcp`, `testing`, `mcp-agents` |
 | `ts-fullstack` | `core`, `frontend`, `typescript`, `mcp`, `testing`, `mcp-agents`, `devops` |
-| `python-plus-rust` | `core`, `python`, `data`, `testing` |
+| `python-plus-rust` | `core`, `python`, `rust`, `data`, `testing` |
 | `pydantic` | `core`, `python`, `openapi`, `testing` |
 | `fastapi-typer` | `core`, `python`, `openapi`, `testing` |
 | `backend` | `core`, `python`, `openapi`, `data`, `testing`, `security` |

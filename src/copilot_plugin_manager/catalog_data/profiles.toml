@@ -32,7 +32,7 @@ themes = ["core", "frontend", "typescript", "mcp", "testing", "mcp-agents"]
 themes = ["core", "frontend", "typescript", "mcp", "testing", "mcp-agents", "devops"]
 
 [profiles."python-plus-rust"]
-themes = ["core", "python", "data", "testing"]
+themes = ["core", "python", "rust", "data", "testing"]
 
 [profiles."pydantic"]
 themes = ["core", "python", "openapi", "testing"]

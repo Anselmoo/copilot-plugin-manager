@@ -23,6 +23,11 @@ plugins = []
 skills = ["kdense-broad"]
 agents = ["voltagent-python-pro", "voltagent-code-reviewer", "voltagent-debugger", "voltagent-refactoring-specialist", "voltagent-test-automator", "agency-engineering-backend-architect", "voltagent-security-auditor"]
 
+[themes."rust"]
+plugins = ["rust-mcp-development"]
+skills = ["mskills-rust"]
+agents = []
+
 [themes."frontend"]
 plugins = ["frontend-web-dev", "hve-design-thinking", "partners", "polyglot-test-agent", "testing-automation"]
 skills = ["anthropic-frontend-design", "anthropic-canvas-design", "anthropic-web-artifacts-builder", "mskills-typescript-frontend", "mskills-typescript-integration"]

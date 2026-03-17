@@ -1,5 +1,6 @@
 from __future__ import annotations
 
+import sys
 from enum import StrEnum
 from pathlib import Path
 from typing import Annotated, Literal, cast
@@ -20,6 +21,7 @@ from .rendering import (
     render_mcps,
     render_overview,
     render_plugins,
+    render_profiles,
     render_providers,
     render_repositories,
     render_status,
@@ -33,8 +35,8 @@ Install, update, inspect, and switch GitHub Copilot plugins, local skills, and l
 from one production-focused Python CLI.
 
 [bold]What happens by default?[/bold]
-Running [cyan]copilot-plugin-manager[/cyan] with no subcommand prints a repository-aware overview.
-If the current repository declares a Copilot profile hint, that target is resolved automatically.
+Running [cyan]copilot-plugin-manager[/cyan] with no subcommand opens a guided interactive menu
+when the terminal is interactive. Non-interactive sessions fall back to a compact status view.
 
 [bold]Main workflows[/bold]
 • [cyan]list[/cyan] to explore bundled catalogs and active state
@@ -89,6 +91,17 @@ class RepoProfileLocation(StrEnum):
     github = "github"
 
 
+class MenuAction(StrEnum):
+    status = "1"
+    profiles = "2"
+    themes = "3"
+    switch = "4"
+    switch_exclusive = "5"
+    update = "6"
+    repo_update = "7"
+    quit = "q"
+
+
 app = typer.Typer(
     name="copilot-plugin-manager",
     no_args_is_help=False,
@@ -129,6 +142,117 @@ def _print_sync_warnings(manager: PluginManager) -> None:
         console().print(render_sync_warnings(manager.sync_warnings))
 
 
+def _supports_interactive_menu() -> bool:
+    return sys.stdin.isatty() and sys.stdout.isatty()
+
+
+def _render_status_snapshot(manager: PluginManager, current: Path) -> None:
+    snapshot = manager.status_snapshot(current)
+    for renderable in render_status(snapshot, str(manager.paths.copilot_home)):
+        console().print(renderable)
+
+
+def _menu_table(manager: PluginManager, current: Path) -> Table:
+    active_name, _ = _active_target(manager, current)
+    repo_hint = manager.repo_profile_hint(current)
+    table = Table(title="Copilot Plugin Manager", box=box.ROUNDED, expand=True)
+    table.add_column("Key", style="cyan", no_wrap=True, width=4)
+    table.add_column("Action", style="bold white", no_wrap=True, width=20)
+    table.add_column("What it does", style="white", overflow="fold")
+    table.add_row("1", "status", "Show the current repo-aware Copilot state.")
+    table.add_row("2", "profiles", "Browse bundled profiles.")
+    table.add_row("3", "themes", "Browse bundled themes.")
+    table.add_row("4", "switch", "Activate a profile or theme.")
+    table.add_row("5", "switch-exclusive", "Activate a target and prune managed plugins not in it.")
+    table.add_row("6", "update", "Update managed content for this repository context.")
+    table.add_row("7", "repo-update", "Refresh tracked upstream source checkouts.")
+    table.add_row("q", "quit", "Exit the menu.")
+    subtitle = [
+        f"cwd: {current}",
+        f"active: {active_name or 'none'}",
+    ]
+    if repo_hint:
+        subtitle.append(f"repo hint: {repo_hint}")
+    table.caption = " | ".join(subtitle)
+    return table
+
+
+def _prompt_menu_action() -> MenuAction:
+    while True:
+        raw = typer.prompt("Choose an action", default=MenuAction.status.value).strip().lower()
+        if raw in {action.value for action in MenuAction}:
+            return MenuAction(raw)
+        console().print("[red]Unknown choice. Pick 1-7 or q.[/red]")
+
+
+def _prompt_managed_target(default: ManagedTarget = ManagedTarget.all) -> ManagedTarget:
+    choices = ", ".join(target.value for target in ManagedTarget)
+    while True:
+        raw = typer.prompt(f"Managed target [{choices}]", default=default.value).strip().lower()
+        try:
+            return ManagedTarget(raw)
+        except ValueError:
+            console().print(f"[red]Unknown target '{raw}'. Choose one of: {choices}.[/red]")
+
+
+def _maybe_save_repo_profile(manager: PluginManager, current: Path, target_name: str) -> None:
+    if not typer.confirm("Save this target as the repo profile hint?", default=False):
+        return
+    while True:
+        location = (
+            typer.prompt(
+                "Repo profile location [root/github]",
+                default=RepoProfileLocation.root.value,
+            )
+            .strip()
+            .lower()
+        )
+        try:
+            repo_location = RepoProfileLocation(location)
+        except ValueError:
+            console().print("[red]Unknown repo profile location. Choose 'root' or 'github'.[/red]")
+            continue
+        break
+    profile_path = manager.write_repo_profile(current, target_name, repo_location.value)
+    console().print(f"Saved repo profile hint to {profile_path}")
+
+
+def _run_interactive_menu(manager: PluginManager, current: Path) -> None:
+    while True:
+        console().print(_menu_table(manager, current))
+        action = _prompt_menu_action()
+        if action is MenuAction.quit:
+            return
+        match action:
+            case MenuAction.status:
+                _render_status_snapshot(manager, current)
+            case MenuAction.profiles:
+                console().print(render_profiles(manager.catalog))
+            case MenuAction.themes:
+                active_name, _ = _active_target(manager, current)
+                console().print(render_themes(manager.catalog, active_name or None))
+            case MenuAction.switch | MenuAction.switch_exclusive:
+                active_name, _ = _active_target(manager, current)
+                default_target = manager.repo_profile_hint(current) or active_name or "minimal"
+                target_name = typer.prompt("Target to activate", default=default_target).strip()
+                activation = manager.switch_target(
+                    target_name,
+                    current,
+                    exclusive_plugins=action is MenuAction.switch_exclusive,
+                )
+                console().print(build_target_tree(manager.catalog, activation))
+                _print_sync_warnings(manager)
+                _maybe_save_repo_profile(manager, current, activation.name)
+            case MenuAction.update:
+                manager.manage_target("update", _prompt_managed_target().value, current)
+                _print_sync_warnings(manager)
+            case MenuAction.repo_update:
+                revisions = manager.repo_update(current, remote=typer.confirm("Refresh remote refs too?", default=True))
+                console().print(_revision_table("Source revisions", revisions))
+        if not typer.confirm("Do you want to choose another action?", default=False):
+            return
+
+
 def _completion_command():
     return get_command(app)
 
@@ -146,22 +270,17 @@ def callback(
         ),
     ] = False,
 ) -> None:
-    """Render the default repository overview when no subcommand is selected."""
+    """Open the guided menu or fall back to a compact status view."""
     if version:
         typer.echo(__version__)
         raise typer.Exit()
     if ctx.invoked_subcommand is None:
         manager = get_manager()
-        current = Path.cwd().resolve()
-        repo_hint = manager.repo_profile_hint(current)
-        if repo_hint:
-            activation = manager.switch_target(repo_hint, current, exclusive_plugins=False)
-            console().print(build_target_tree(manager.catalog, activation))
-            _print_sync_warnings(manager)
+        current = _cwd(None)
+        if _supports_interactive_menu():
+            _run_interactive_menu(manager, current)
             raise typer.Exit()
-        _, active_target = _active_target(manager, current)
-        for renderable in render_overview(manager.catalog, active_target, repo_hint):
-            console().print(renderable)
+        _render_status_snapshot(manager, current)
         raise typer.Exit()
 
 
@@ -249,6 +368,31 @@ def status_command(
     snapshot = manager.status_snapshot(_cwd(cwd))
     for renderable in render_status(snapshot, str(manager.paths.copilot_home)):
         console().print(renderable)
+
+
+@app.command(
+    "menu",
+    short_help="Open the guided interactive menu.",
+    help="Open the guided interactive menu used by the default no-subcommand experience.",
+    epilog="Example:\n  copilot-plugin-manager menu",
+)
+def menu_command(
+    cwd: Annotated[
+        Path | None,
+        typer.Option(
+            "--cwd",
+            help="Working directory used for repository detection and menu actions.",
+            rich_help_panel="Repository context",
+        ),
+    ] = None,
+) -> None:
+    """Open the guided interactive menu."""
+    manager = get_manager()
+    current = _cwd(cwd)
+    if not _supports_interactive_menu():
+        _render_status_snapshot(manager, current)
+        return
+    _run_interactive_menu(manager, current)
 
 
 @app.command(

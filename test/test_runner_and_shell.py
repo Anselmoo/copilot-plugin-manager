@@ -7,6 +7,7 @@ from copilot_plugin_manager.catalog import load_catalog_bundle
 from copilot_plugin_manager.cli import app
 from copilot_plugin_manager.completion import completion_source, default_completion_path, shell_init_snippet
 from copilot_plugin_manager.models import ActivationTarget
+from copilot_plugin_manager.paths import ManagerPaths
 from copilot_plugin_manager.runner import parse_installed_plugins
 
 runner = CliRunner()
@@ -108,3 +109,47 @@ def test_cli_switch_can_save_repo_profile(monkeypatch, tmp_path) -> None:
     assert "Saved repo profile hint to" in result.stdout
     saved_path = tmp_path / ".github" / "copilot-profile"
     assert saved_path.read_text() == "python-core\n"
+
+
+def test_cli_default_invocation_opens_guided_menu(monkeypatch, tmp_path) -> None:
+    class StubManager:
+        def __init__(self) -> None:
+            self.catalog = load_catalog_bundle()
+            self.sync_warnings: list[str] = []
+            self.paths = ManagerPaths(
+                tmp_path / ".copilot",
+                tmp_path / ".copilot" / "copilot-plugin-manager",
+                tmp_path / ".copilot" / "skills",
+                tmp_path / ".copilot" / "agents",
+                tmp_path / ".copilot" / "active-profile",
+                tmp_path / ".copilot" / "copilot-plugin-manager" / "state.json",
+                tmp_path / ".copilot" / "copilot-plugin-manager" / "sources",
+            )
+
+        def read_active_target(self, cwd: Path) -> str:
+            return ""
+
+        def repo_profile_hint(self, cwd: Path) -> str:
+            return ""
+
+        def status_snapshot(self, cwd: Path) -> dict[str, object]:
+            return {
+                "repo_hint": "",
+                "repo_profile_file": "",
+                "active_target": None,
+                "installed_plugins": [],
+                "skill_count": 0,
+                "agent_count": 0,
+                "sync_warnings": [],
+                "last_verified_at": None,
+                "source_revisions": [],
+            }
+
+    monkeypatch.setattr("copilot_plugin_manager.cli.get_manager", lambda: StubManager())
+    monkeypatch.setattr("copilot_plugin_manager.cli._supports_interactive_menu", lambda: True)
+
+    result = runner.invoke(app, [], input="1\nn\n")
+
+    assert result.exit_code == 0
+    assert "Choose an action" in result.stdout
+    assert "Do you want to choose another action?" in result.stdout

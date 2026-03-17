@@ -27,6 +27,7 @@ Run the CLI locally with:
 
 ```bash
 uv run copilot-plugin-manager --help
+uv run copilot-plugin-manager
 ```
 
 ## Common tasks
@@ -91,7 +92,7 @@ Before opening a pull request:
 - update docs or examples if command behavior changed
 - add or update tests for behavior changes
 
-If you change repository-aware activation behavior, keep `README.md`, `docs/USAGE.md`, and the relevant CLI help examples aligned. In particular, repo-local hint handling (`.copilot-profile` / `.github/copilot-profile`) and `status` output are treated as maintained user-facing workflows.
+If you change repository-aware activation behavior, keep `README.md`, `docs/USAGE.md`, and the relevant CLI help examples aligned. In particular, repo-local hint handling (`.copilot-profile` / `.github/copilot-profile`), the guided no-arg menu flow, and `status` / verification output are treated as maintained user-facing workflows.
 
 ## Project layout
 

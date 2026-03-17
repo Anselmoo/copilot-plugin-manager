@@ -274,16 +274,19 @@ def render_status(status: dict[str, object], copilot_home: str) -> list[object]:
     installed_plugins = cast(list[dict[str, str | None]], status["installed_plugins"])
     source_revisions = cast(list[dict[str, str | int | None]], status["source_revisions"])
     sync_warnings = cast(list[str], status.get("sync_warnings", []))
+    verification_state = "warnings present" if sync_warnings else "verified"
     rows = [
-        ("Active target", active_target.name if active_target else "none"),
+        ("Selected target", active_target.name if active_target else "none"),
         ("Active type", active_target.kind if active_target else ""),
         ("Active themes", ", ".join(active_target.themes) if active_target else ""),
+        ("Target verification", verification_state),
+        ("Last verified", _short_timestamp(cast(str | None, status.get("last_verified_at")))),
         ("Repo profile", str(status["repo_hint"])),
         ("Repo profile file", str(status.get("repo_profile_file", ""))),
         ("Copilot home", copilot_home),
         ("Skill dirs", str(status["skill_count"])),
         ("Agent files", str(status["agent_count"])),
-        ("Sync warnings", str(len(sync_warnings))),
+        ("Warnings", str(len(sync_warnings))),
     ]
     plugin_table = _base_table("Installed plugins", header_style="bold blue")
     plugin_table.add_column("Name", style="blue", no_wrap=True, width=28)

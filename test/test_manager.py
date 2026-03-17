@@ -81,7 +81,9 @@ class GitCloneRunner(FakeRunner):
         if args[:4] == ["git", "fetch", "--depth", "1"]:
             if cwd is None:
                 raise AssertionError("git fetch requires a checkout path in tests")
-            self.available_commits.setdefault(cwd.name, set()).add(args[4])
+            if len(args) != 6:
+                raise AssertionError(f"Unexpected git fetch shape: {args}")
+            self.available_commits.setdefault(cwd.name, set()).add(args[5])
             return CommandResult(tuple(args), "", "", 0)
         if args[:2] == ["git", "show"]:
             if cwd is None:
@@ -355,10 +357,7 @@ def test_sync_agent_provider_reports_context_when_pinned_commit_fetch_fails(tmp_
 
     with pytest.raises(
         RuntimeError,
-        match=(
-            "Unable to load agent agency-design-brand-guardian:design/design-brand-guardian.md "
-            "from agency-agents at 6254154899f510eb4a4de10561fecfc1f32ff17f."
-        ),
+        match=("Unable to load agent agency-design-brand-guardian:design/design-brand-guardian.md from agency-agents at 6254154899f510eb4a4de10561fecfc1f32ff17f."),
     ):
         manager.sync_agent_provider("agency-design-brand-guardian", project)
 
@@ -500,3 +499,61 @@ def test_status_snapshot_includes_repo_profile_file_and_sync_warnings(tmp_path: 
 
     assert snapshot["repo_profile_file"] == str(project / ".copilot-profile")
     assert snapshot["sync_warnings"] == ["mskills-typescript: skipped skills/typescript/compute/playwright (dangling symlink)"]
+
+
+def test_switch_target_reconciles_even_when_target_matches_saved_state(tmp_path: Path, monkeypatch) -> None:
+    monkeypatch.setenv("COPILOT_HOME", str(tmp_path / ".copilot"))
+    bundle = load_catalog_bundle()
+    paths = ManagerPaths.from_environment()
+    manager = PluginManager(bundle, paths, runner=FakeRunner())
+    project = tmp_path / "repo"
+    project.mkdir()
+    target = bundle.resolve_target("minimal")
+    manager.state_store.write_repo_target(project, target, "minimal")
+
+    calls: list[tuple[str, tuple[str, ...]]] = []
+
+    monkeypatch.setattr(manager, "list_installed_plugins", lambda: [])
+    monkeypatch.setattr(
+        manager,
+        "_execute_actions",
+        lambda actions, cwd=None, description="Applying changes": calls.append(("plugins", tuple(action.description for action in actions))),
+    )
+    monkeypatch.setattr(
+        manager,
+        "_sync_missing_skill_providers",
+        lambda desired, cwd: calls.append(("skills", tuple(desired))),
+    )
+    monkeypatch.setattr(
+        manager,
+        "_sync_missing_agent_providers",
+        lambda desired, cwd: calls.append(("agents", tuple(desired))),
+    )
+    monkeypatch.setattr(manager, "_collect_target_verification_warnings", lambda target, exclusive_plugins=False: [])
+
+    manager.switch_target("minimal", project)
+
+    assert [name for name, _ in calls] == ["plugins", "skills", "agents"]
+
+
+def test_switch_target_persists_verification_warnings(tmp_path: Path, monkeypatch) -> None:
+    monkeypatch.setenv("COPILOT_HOME", str(tmp_path / ".copilot"))
+    bundle = load_catalog_bundle()
+    paths = ManagerPaths.from_environment()
+    manager = PluginManager(bundle, paths, runner=FakeRunner())
+    project = tmp_path / "repo"
+    project.mkdir()
+
+    monkeypatch.setattr(manager, "list_installed_plugins", lambda: [])
+    monkeypatch.setattr(manager, "_sync_missing_skill_providers", lambda desired, cwd: None)
+    monkeypatch.setattr(manager, "_sync_missing_agent_providers", lambda desired, cwd: None)
+    monkeypatch.setattr(manager, "_collect_target_verification_warnings", lambda target, exclusive_plugins=False: ["verification: missing plugin awesome-copilot"])
+
+    manager.switch_target("minimal", project)
+
+    repo_state = manager.state_store.read_repo_state(project)
+    assert repo_state is not None
+    assert repo_state.verification_warnings == ["verification: missing plugin awesome-copilot"]
+    snapshot = manager.status_snapshot(project)
+    assert snapshot["sync_warnings"] == ["verification: missing plugin awesome-copilot"]
+    assert snapshot["last_verified_at"] is not None

@@ -815,22 +815,84 @@ class PluginManager:
             item_label="Downloading agent provider",
         )
 
+    def _provider_outputs_present(self, kind: Literal["skill", "agent"], provider_name: str, root: Path) -> bool:
+        provider = self.catalog.provider_registry(kind)[provider_name]
+        stored = self.state_store.read_provider_state(kind, provider_name)
+        if stored is None:
+            return False
+        return self._existing_outputs(root, stored.outputs) or (not stored.outputs and self._prefixed_content_exists(root, provider.prefix))
+
+    def _collect_target_verification_warnings(
+        self,
+        target: ActivationTarget,
+        *,
+        exclusive_plugins: bool,
+    ) -> list[str]:
+        desired_plugins = set(self.catalog.target_items(target.themes, "plugins"))
+        desired_skills = set(self.catalog.target_items(target.themes, "skills"))
+        desired_agents = set(self.catalog.target_items(target.themes, "agents"))
+        managed_plugins = set(self.catalog.plugins)
+        warnings: list[str] = []
+
+        with self._new_progress() as progress:
+            task_id = progress.add_task("Verifying applied target", total=3)
+
+            progress.update(task_id, description="Verifying plugins")
+            try:
+                installed_plugins = set(self.list_installed_plugins())
+            except (CommandError, RuntimeError) as exc:
+                warnings.append(f"verification: unable to list installed plugins ({exc})")
+            else:
+                for plugin_name in sorted(desired_plugins - installed_plugins):
+                    warnings.append(f"verification: missing plugin {plugin_name}")
+                unexpected_plugins = (installed_plugins - desired_plugins) if exclusive_plugins else ((installed_plugins & managed_plugins) - desired_plugins)
+                for plugin_name in sorted(unexpected_plugins):
+                    warnings.append(f"verification: unexpected plugin still installed {plugin_name}")
+            progress.advance(task_id)
+
+            progress.update(task_id, description="Verifying skills")
+            for provider_name in sorted(desired_skills):
+                if not self._provider_outputs_present("skill", provider_name, self.paths.skills_dir):
+                    warnings.append(f"verification: missing synced skill content for {provider_name}")
+            for provider_name in sorted(set(self.catalog.skill_providers) - desired_skills):
+                provider = self.catalog.skill_providers[provider_name]
+                if self._prefixed_content_exists(self.paths.skills_dir, provider.prefix):
+                    warnings.append(f"verification: stale skill content still present for {provider_name}")
+            progress.advance(task_id)
+
+            progress.update(task_id, description="Verifying agents")
+            for provider_name in sorted(desired_agents):
+                if not self._provider_outputs_present("agent", provider_name, self.paths.agents_dir):
+                    warnings.append(f"verification: missing synced agent content for {provider_name}")
+            for provider_name in sorted(set(self.catalog.agent_providers) - desired_agents):
+                provider = self.catalog.agent_providers[provider_name]
+                if self._prefixed_content_exists(self.paths.agents_dir, provider.prefix):
+                    warnings.append(f"verification: stale agent content still present for {provider_name}")
+            progress.advance(task_id)
+
+        return warnings
+
     def switch_target(self, target_name: str, cwd: Path, exclusive_plugins: bool = False) -> ActivationTarget:
         self._reset_sync_warnings()
-        old_target_name = self.read_active_target(cwd)
         target = self.catalog.resolve_target(target_name)
-        if old_target_name == target.name:
-            return target
+        desired_skills = self.catalog.target_items(target.themes, "skills")
+        desired_agents = self.catalog.target_items(target.themes, "agents")
         self._remove_named_items(self.paths.skills_dir, LEGACY_SKILLS)
         self._remove_named_items(self.paths.agents_dir, LEGACY_AGENTS)
         installed = self.list_installed_plugins()
         actions = self.plugin_actions_for_switch(target.name, installed, exclusive=exclusive_plugins)
-        self._remove_unselected_skill_providers(self.catalog.target_items(target.themes, "skills"))
-        self._remove_unselected_agent_providers(self.catalog.target_items(target.themes, "agents"))
+        self._remove_unselected_skill_providers(desired_skills)
+        self._remove_unselected_agent_providers(desired_agents)
         self._execute_actions(actions, cwd=cwd, description="Reconciling plugins")
-        self._sync_missing_skill_providers(self.catalog.target_items(target.themes, "skills"), cwd)
-        self._sync_missing_agent_providers(self.catalog.target_items(target.themes, "agents"), cwd)
-        self.state_store.write_repo_target(cwd, target, self.repo_profile_hint(cwd) or None)
+        self._sync_missing_skill_providers(desired_skills, cwd)
+        self._sync_missing_agent_providers(desired_agents, cwd)
+        self._remember_sync_warnings(self._collect_target_verification_warnings(target, exclusive_plugins=exclusive_plugins))
+        self.state_store.write_repo_target(
+            cwd,
+            target,
+            self.repo_profile_hint(cwd) or None,
+            verification_warnings=self.sync_warnings,
+        )
         return target
 
     def repo_update(self, cwd: Path, remote: bool = True) -> dict[str, str | None]:
@@ -970,12 +1032,13 @@ class PluginManager:
 
     def status_snapshot(self, cwd: Path) -> dict[str, object]:
         repo_hint = self.repo_profile_hint(cwd)
+        repo_state = self.state_store.read_repo_state(cwd)
         repo_profile_file = next((str(candidate) for candidate in (self.repo_profile_path(cwd, "root"), self.repo_profile_path(cwd, "github")) if candidate.exists()), "")
         active_target_name = self.read_active_target(cwd)
         active_target = self.catalog.resolve_target(active_target_name) if active_target_name in {*self.catalog.profiles, *self.catalog.themes} else None
         skill_count = len([item for item in self.paths.skills_dir.iterdir() if item.is_dir()]) if self.paths.skills_dir.exists() else 0
         agent_count = len(list(self.paths.agents_dir.rglob("*.md"))) if self.paths.agents_dir.exists() else 0
-        sync_warnings: list[str] = []
+        sync_warnings: list[str] = list(repo_state.verification_warnings) if repo_state is not None else []
         source_revisions: list[dict[str, str | int | None]] = []
         for name in self.catalog.repositories:
             stored = self.state_store.read_source_state(name)
@@ -995,6 +1058,11 @@ class PluginManager:
             if stored_provider is None:
                 continue
             sync_warnings.extend(stored_provider.warnings)
+        for provider_name in self.catalog.agent_providers:
+            stored_provider = self.state_store.read_provider_state("agent", provider_name)
+            if stored_provider is None:
+                continue
+            sync_warnings.extend(stored_provider.warnings)
         return {
             "repo_hint": repo_hint,
             "repo_profile_file": repo_profile_file,
@@ -1003,6 +1071,7 @@ class PluginManager:
             "skill_count": skill_count,
             "agent_count": agent_count,
             "sync_warnings": list(dict.fromkeys(sync_warnings)),
+            "last_verified_at": repo_state.last_verified_at if repo_state is not None else None,
             "source_revisions": source_revisions,
         }
 
