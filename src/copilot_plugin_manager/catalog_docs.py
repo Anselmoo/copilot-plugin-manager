@@ -92,10 +92,13 @@ def render_themes_markdown(bundle: CatalogBundle) -> str:
         "| Profile | Themes | Plugins | Skills | Agents |",
         "| --- | --- | ---: | ---: | ---: |",
     ]
-    lines.extend(
-        f"| `{name}` | {_inline_codes(profile.themes)} | {len(bundle.target_items(profile.themes, 'plugins'))} | {len(bundle.target_items(profile.themes, 'skills'))} | {len(bundle.target_items(profile.themes, 'agents'))} |"  # noqa: E501
-        for name, profile in bundle.profiles.items()
-    )
+    for name, profile in bundle.profiles.items():
+        lines.append(
+            f"| `{name}` | {_inline_codes(profile.themes)} | "
+            f"{len(bundle.target_items(profile.themes, 'plugins'))} | "
+            f"{len(bundle.target_items(profile.themes, 'skills'))} | "
+            f"{len(bundle.target_items(profile.themes, 'agents'))} |"
+        )
     lines.extend(
         [
             "",
