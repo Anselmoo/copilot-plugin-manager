@@ -109,23 +109,18 @@ def _overview_panel(title: str, rows: list[tuple[str, str]]) -> Panel:
 
 
 def _short_revision(revision: str | None) -> str:
-    if not revision:
-        return ""
-    return revision[:12]
+    return revision[:12] if revision else ""
 
 
 def _short_timestamp(value: str | None) -> str:
-    if not value:
-        return ""
-    return value.replace("T", " ", 1)[:19]
+    return value.replace("T", " ", 1)[:19] if value else ""
 
 
 _PROFILE_BASE_THEMES = {"core", "testing", "mcp", "agents", "mcp-agents"}
 
 
 def _profile_focus(themes: list[str]) -> str:
-    thematic = [theme for theme in themes if theme not in _PROFILE_BASE_THEMES]
-    if thematic:
+    if thematic := [theme for theme in themes if theme not in _PROFILE_BASE_THEMES]:
         return ", ".join(thematic[:2])
     return ", ".join(themes[:2])
 

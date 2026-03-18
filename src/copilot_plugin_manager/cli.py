@@ -856,8 +856,7 @@ def mcp_remove_command(
     """Remove a named MCP server entry from global and/or local config."""
     current = _cwd(cwd) if cwd is not None else None
     manager = get_manager()
-    removed = manager.remove_mcp(name, current)
-    if removed:
+    if removed := manager.remove_mcp(name, current):  # noqa: F841
         console().print(f"[yellow]Removed MCP '{name}' from config.[/yellow]")
     else:
         console().print(f"[dim]MCP '{name}' was not present in config.[/dim]")
@@ -912,7 +911,7 @@ def mcp_move_command(
         manager.move_mcp_to_scope(name, resolved_scope, current)
     except KeyError as exc:
         console().print(f"[red]{exc}[/red]")
-        raise typer.Exit(1)
+        raise typer.Exit(1) from exc
     src = ".vscode/mcp.json" if resolved_scope == "global" else "~/.copilot/mcp-config.json"
     dst = "~/.copilot/mcp-config.json" if resolved_scope == "global" else ".vscode/mcp.json"
     console().print(f"[green]Moved MCP '{name}' from {src} → {dst}[/green]")

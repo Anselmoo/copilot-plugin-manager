@@ -46,9 +46,7 @@ def convert_plugin_reference_to_base_name(reference: str) -> str:
     trimmed = reference.strip()
     if "@" in trimmed:
         return trimmed.split("@", 1)[0]
-    if trimmed.count("/") >= 2:
-        return Path(trimmed).name
-    return trimmed
+    return Path(trimmed).name if trimmed.count("/") >= 2 else trimmed
 
 
 def parse_installed_plugins(output: str) -> list[InstalledPlugin]:

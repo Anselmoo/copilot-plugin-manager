@@ -156,8 +156,6 @@ class SourceState(BaseModel):
             return self.revision != previous.revision
         if self.revision or previous.revision:
             return self.revision != previous.revision
-        if self.manifest_version and previous.manifest_version:
-            return self.manifest_version != previous.manifest_version
         return self.manifest_version != previous.manifest_version
 
 

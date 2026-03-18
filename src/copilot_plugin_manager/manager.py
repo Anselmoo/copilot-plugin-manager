@@ -134,21 +134,20 @@ class PluginManager:
         desired_set = set(desired)
         managed_set = set(self.catalog.plugins)
         removals = installed_set - desired_set if exclusive else (installed_set & managed_set) - desired_set
-        actions: list[PlannedAction] = []
-        for plugin_name in desired:
-            if plugin_name not in installed_set:
-                actions.append(
-                    PlannedAction(
-                        category="plugin",
-                        description=f"Installing plugin {plugin_name}",
-                        command=(
-                            "copilot",
-                            "plugin",
-                            "install",
-                            self.catalog.plugin_install_source(plugin_name),
-                        ),
-                    )
-                )
+        actions: list[PlannedAction] = [
+            PlannedAction(
+                category="plugin",
+                description=f"Installing plugin {plugin_name}",
+                command=(
+                    "copilot",
+                    "plugin",
+                    "install",
+                    self.catalog.plugin_install_source(plugin_name),
+                ),
+            )
+            for plugin_name in desired
+            if plugin_name not in installed_set
+        ]
         for plugin_name in sorted(removals):
             actions.append(
                 PlannedAction(
@@ -206,8 +205,7 @@ class PluginManager:
         if isinstance(exc, shutil.Error) and exc.args:
             details = exc.args[0]
             if isinstance(details, list):
-                problem_paths = [str(source) for source, _destination, _message in details[:3]]
-                if problem_paths:
+                if problem_paths := [str(source) for source, _destination, _message in details[:3]]:
                     return f"copy failed for {', '.join(problem_paths)}"
             return str(exc)
         return str(exc)
@@ -259,9 +257,7 @@ class PluginManager:
             if candidate.exists():
                 return candidate
         cached = self.paths.sources_dir / source_name
-        if cached.exists():
-            return cached
-        return self._clone_source_checkout(source_name)
+        return cached if cached.exists() else self._clone_source_checkout(source_name)
 
     def _clone_source_checkout(self, source_name: str) -> Path:
         source = self.catalog.repository_details(source_name)
@@ -322,9 +318,7 @@ class PluginManager:
         plugin_skills_root = source_root / ".github" / "plugins"
         if plugin_skills_root.exists():
             matches.extend(sorted(path for path in plugin_skills_root.glob(f"*/skills/{target_name}") if path.is_dir()))
-        if len(matches) != 1:
-            return None
-        return matches[0]
+        return None if len(matches) != 1 else matches[0]
 
     def _resolve_skill_symlink(self, source_name: str, source_root: Path, candidate: Path) -> Path | None:
         if source_name != "microsoft-skills":
@@ -390,8 +384,7 @@ class PluginManager:
         if entrypoint is not None:
             return entrypoint.local_output
         flat = source_path.replace("/", "__").replace("\\", "__")
-        if flat.endswith(".md"):
-            flat = flat[:-3]
+        flat = flat.removesuffix(".md")
         return f"{provider_prefix}__{flat}.agent.md"
 
     def _render_normalized_agent(
@@ -664,14 +657,15 @@ class PluginManager:
         observed = observed or self.current_source_state(source_root)
         self.paths.agents_dir.mkdir(parents=True, exist_ok=True)
         outputs: list[str] = []
-        entrypoints = sorted(self.catalog.entrypoint_records("agent", provider=provider_name), key=lambda entry: (entry.source_path, entry.local_output))
-        if entrypoints:
+        if entrypoints := sorted(
+            self.catalog.entrypoint_records("agent", provider=provider_name),
+            key=lambda entry: (entry.source_path, entry.local_output),
+        ):
             for entrypoint in entrypoints:
                 source_path = entrypoint.source_path
                 source = source_root / source_path
-                if not source.exists():
-                    if not (source_root / ".git").exists():
-                        continue
+                if not source.exists() and not (source_root / ".git").exists():
+                    continue
                 claim_key = (provider.source, source_path)
                 if claimed_source_paths is not None:
                     if claim_key in claimed_source_paths:
@@ -979,12 +973,10 @@ class PluginManager:
         return warnings
 
     def _grouped_verification_messages(self, singular_prefix: str, plural_prefix: str, names: set[str]) -> list[str]:
-        ordered = sorted(names)
-        if not ordered:
+        if ordered := sorted(names):
+            return [f"{singular_prefix} {ordered[0]}"] if len(ordered) == 1 else [f"{plural_prefix} {', '.join(ordered)}"]
+        else:
             return []
-        if len(ordered) == 1:
-            return [f"{singular_prefix} {ordered[0]}"]
-        return [f"{plural_prefix} {', '.join(ordered)}"]
 
     def switch_target(self, target_name: str, cwd: Path, exclusive_plugins: bool = False) -> ActivationTarget:
         self._reset_sync_warnings()
@@ -1098,8 +1090,7 @@ class PluginManager:
             manifest = checkout / manifest_name
             if not manifest.exists():
                 continue
-            version = loader(manifest)
-            if version:
+            if version := loader(manifest):
                 return version, manifest_name
         return None, None
 
@@ -1221,9 +1212,7 @@ class PluginManager:
             data = json.loads(config_path.read_text())
         except (OSError, json.JSONDecodeError):
             return {}
-        if not isinstance(data, dict):
-            return {}
-        return data
+        return data if isinstance(data, dict) else {}
 
     def write_mcp_config(self, config: dict[str, object]) -> None:
         """Write the MCP config dict to ~/.copilot/mcp-config.json."""
@@ -1233,9 +1222,7 @@ class PluginManager:
 
     def _servers_from_config(self, config: dict[str, object]) -> dict[str, object]:
         servers = config.get("servers")
-        if not isinstance(servers, dict):
-            return {}
-        return cast(dict[str, object], servers)
+        return cast(dict[str, object], servers) if isinstance(servers, dict) else {}
 
     def _local_mcp_config_path(self, cwd: Path) -> Path:
         return cwd / ".vscode" / "mcp.json"
@@ -1249,9 +1236,7 @@ class PluginManager:
             data = json.loads(config_path.read_text())
         except (OSError, json.JSONDecodeError):
             return {}
-        if not isinstance(data, dict):
-            return {}
-        return cast(dict[str, object], data)
+        return cast(dict[str, object], data) if isinstance(data, dict) else {}
 
     def write_local_mcp_config(self, cwd: Path, config: dict[str, object]) -> None:
         """Write *config* to .vscode/mcp.json inside *cwd*."""
@@ -1290,7 +1275,7 @@ class PluginManager:
         try:
             result = self.runner.run(["npm", "view", package, "version"])
             version = result.stdout.strip()
-            return version if version else None
+            return version or None
         except (CommandError, RuntimeError):
             return None
 
@@ -1316,8 +1301,7 @@ class PluginManager:
                 # Match "Available versions: 1.2.3, 1.2.2, ..." (case-insensitive)
                 if stripped.lower().startswith("available versions:"):
                     versions_part = stripped.split(":", 1)[1].strip()
-                    first = versions_part.split(",")[0].strip()
-                    if first:
+                    if first := versions_part.split(",")[0].strip():
                         return first
         except (CommandError, RuntimeError):
             pass
