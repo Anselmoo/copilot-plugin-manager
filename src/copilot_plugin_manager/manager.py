@@ -89,14 +89,18 @@ class PluginManager:
     def repo_config_path(self, cwd: Path) -> Path:
         return self.paths.repo_config_file(cwd)
 
-    def read_repo_config(self, cwd: Path) -> RepoConfig:
+    def _load_repo_config(self, cwd: Path) -> tuple[RepoConfig, str | None]:
+        """Return the parsed repo config and an optional warning for broken files."""
         config_path = self.repo_config_path(cwd)
         if not config_path.exists():
-            return RepoConfig()
+            return RepoConfig(), None
         try:
-            return RepoConfig.model_validate(json.loads(config_path.read_text()))
+            return RepoConfig.model_validate(json.loads(config_path.read_text())), None
         except (OSError, json.JSONDecodeError, ValidationError):
-            return RepoConfig()
+            return RepoConfig(), f"Repo config {config_path} could not be parsed or validated. Defaults are in use."
+
+    def read_repo_config(self, cwd: Path) -> RepoConfig:
+        return self._load_repo_config(cwd)[0]
 
     def write_repo_config(
         self,
@@ -1424,7 +1428,7 @@ class PluginManager:
         repo_state = self.state_store.read_repo_state(cwd)
         repo_profile_file = next((str(candidate) for candidate in (self.repo_profile_path(cwd, "root"), self.repo_profile_path(cwd, "github")) if candidate.exists()), "")
         repo_config_path = self.repo_config_path(cwd)
-        repo_config = self.read_repo_config(cwd)
+        repo_config, config_warning = self._load_repo_config(cwd)
         resolved_agent_scope = self.agent_scope(cwd)
         resolved_mcp_scope = self.mcp_scope(cwd)
         agent_root = self.agent_output_dir(cwd, resolved_agent_scope)
@@ -1433,6 +1437,8 @@ class PluginManager:
         skill_count = len([item for item in self.paths.skills_dir.iterdir() if item.is_dir()]) if self.paths.skills_dir.exists() else 0
         agent_count = len(list(agent_root.rglob("*.md"))) if agent_root.exists() else 0
         sync_warnings: list[str] = list(repo_state.verification_warnings) if repo_state is not None else []
+        if config_warning:
+            sync_warnings.append(config_warning)
         source_revisions: list[dict[str, str | int | None]] = []
         for name in self.catalog.repositories:
             stored = self.state_store.read_source_state(name)
@@ -1855,7 +1861,7 @@ class PluginManager:
         ``"added"``, ``"updated"``, ``"skipped"``, or ``"removed"``.
         """
         results: dict[str, str] = {}
-        resolved_scope = self.mcp_scope(cwd, scope)
+        resolved_scope = scope if scope is not None else "global"
         config = self.read_local_mcp_config(cwd) if resolved_scope == "local" else self.read_mcp_config()
         servers = dict(self._servers_from_config(config))
 
