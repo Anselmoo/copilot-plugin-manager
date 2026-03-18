@@ -716,6 +716,21 @@ def test_sync_mcp_local_scope_requires_cwd(tmp_path: Path) -> None:
         manager.sync_mcp("context7", record, probe_version=False, scope="local")
 
 
+def test_sync_mcp_uses_repo_config_default_scope(tmp_path: Path) -> None:
+    manager = _make_manager(tmp_path)
+    record = McpRecord(kind="http", url="https://mcp.context7.com/mcp")
+    (tmp_path / ".git").mkdir()
+    manager.write_repo_config(tmp_path, mcp_scope="local")
+
+    state = manager.sync_mcp("context7", record, probe_version=False, cwd=tmp_path)
+
+    assert state.scope == "local"
+    assert "context7" not in _get_servers(manager)
+    local_config = manager.read_local_mcp_config(tmp_path)
+    local_servers = cast(dict[str, object], local_config.get("servers", {}))
+    assert "context7" in local_servers
+
+
 # ─── move_mcp_to_scope ───────────────────────────────────────────────────────
 
 
@@ -783,6 +798,20 @@ def test_reconcile_skips_locally_scoped_entries(tmp_path: Path) -> None:
     assert results.get("context7") == "skipped"
     # Should NOT appear in global config.
     assert "context7" not in _get_servers(manager)
+
+
+def test_reconcile_mcps_uses_repo_config_local_scope(tmp_path: Path) -> None:
+    manager = _make_manager(tmp_path, runner=NoNpmRunner())
+    (tmp_path / ".git").mkdir()
+    manager.write_repo_config(tmp_path, mcp_scope="local")
+
+    results = manager.reconcile_mcps(tmp_path, probe_version=False)
+
+    assert results["context7"] in {"added", "updated", "skipped"}
+    assert "context7" not in _get_servers(manager)
+    local_config = manager.read_local_mcp_config(tmp_path)
+    local_servers = cast(dict[str, object], local_config.get("servers", {}))
+    assert "context7" in local_servers
 
 
 def test_scope_persists_in_state(tmp_path: Path) -> None:

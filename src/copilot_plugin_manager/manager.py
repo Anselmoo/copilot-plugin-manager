@@ -10,10 +10,11 @@ from datetime import UTC, datetime
 from pathlib import Path
 from typing import Literal, cast
 
+from pydantic import ValidationError
 from rich.progress import BarColumn, Progress, SpinnerColumn, TaskProgressColumn, TextColumn, TimeElapsedColumn
 
 from .catalog import CatalogBundle
-from .models import ActivationTarget, EntrypointRecord, McpRecord, McpSyncState, PlannedAction, RepositorySource, SourceState
+from .models import ActivationTarget, EntrypointRecord, McpRecord, McpSyncState, PlannedAction, RepoConfig, RepositorySource, SourceState
 from .paths import ManagerPaths, find_project_root, find_repo_profile
 from .runner import CommandError, ShellRunner, parse_installed_plugins
 from .state import StateStore
@@ -85,6 +86,55 @@ class PluginManager:
         profile_path.write_text(target_name + "\n")
         return profile_path
 
+    def repo_config_path(self, cwd: Path) -> Path:
+        return self.paths.repo_config_file(cwd)
+
+    def read_repo_config(self, cwd: Path) -> RepoConfig:
+        config_path = self.repo_config_path(cwd)
+        if not config_path.exists():
+            return RepoConfig()
+        try:
+            return RepoConfig.model_validate(json.loads(config_path.read_text()))
+        except (OSError, json.JSONDecodeError, ValidationError):
+            return RepoConfig()
+
+    def write_repo_config(
+        self,
+        cwd: Path,
+        *,
+        agent_scope: Literal["global", "local"] | None = None,
+        mcp_scope: Literal["global", "local"] | None = None,
+        mcp_profile: str | None = None,
+    ) -> Path:
+        config = self.read_repo_config(cwd)
+        if agent_scope is not None:
+            config.agents.scope = agent_scope
+        if mcp_scope is not None:
+            config.mcps.scope = mcp_scope
+        if mcp_profile is not None:
+            config.mcps.profile = mcp_profile or None
+        config_path = self.repo_config_path(cwd)
+        config_path.parent.mkdir(parents=True, exist_ok=True)
+        config_path.write_text(config.model_dump_json(indent=2) + "\n")
+        return config_path
+
+    def agent_scope(self, cwd: Path, scope: Literal["global", "local"] | None = None) -> Literal["global", "local"]:
+        if scope is not None:
+            return scope
+        return self.read_repo_config(cwd).agents.scope or "global"
+
+    def mcp_scope(self, cwd: Path, scope: Literal["global", "local"] | None = None) -> Literal["global", "local"]:
+        if scope is not None:
+            return scope
+        return self.read_repo_config(cwd).mcps.scope or "global"
+
+    def mcp_profile(self, cwd: Path) -> str | None:
+        return self.read_repo_config(cwd).mcps.profile
+
+    def agent_output_dir(self, cwd: Path, scope: Literal["global", "local"] | None = None) -> Path:
+        resolved_scope = self.agent_scope(cwd, scope)
+        return self.paths.local_agents_dir(cwd) if resolved_scope == "local" else self.paths.agents_dir
+
     def read_active_target(self, cwd: Path) -> str:
         repo_state = self.state_store.read_repo_state(cwd)
         if repo_state and repo_state.active_target:
@@ -92,6 +142,59 @@ class PluginManager:
         if self.paths.legacy_active_target_file.exists():
             return self.paths.legacy_active_target_file.read_text().strip()
         return ""
+
+    def _resolve_repo_workflow_target(self, cwd: Path, target_name: str | None = None) -> ActivationTarget:
+        if target_name is not None:
+            return self.catalog.resolve_target(target_name)
+        for candidate_name in (self.repo_profile_hint(cwd), self.read_active_target(cwd)):
+            if not candidate_name:
+                continue
+            try:
+                return self.catalog.resolve_target(candidate_name)
+            except KeyError:
+                continue
+        raise RuntimeError("No repo target is configured. Run `copilot-plugin-manager repo-init <profile-or-theme>` or `copilot-plugin-manager switch <profile-or-theme>` first.")
+
+    def initialize_repo(
+        self,
+        cwd: Path,
+        *,
+        target_name: str | None = None,
+        location: Literal["root", "github"] = "root",
+        agent_scope: Literal["global", "local"] | None = None,
+        mcp_scope: Literal["global", "local"] | None = None,
+        mcp_profile: str | None = None,
+        force: bool = False,
+    ) -> tuple[ActivationTarget, Path, Path | None]:
+        activation = self._resolve_repo_workflow_target(cwd, target_name)
+        existing_hint = self.repo_profile_hint(cwd)
+        if existing_hint and existing_hint != activation.name and not force:
+            raise RuntimeError(f"Repo target hint already points to '{existing_hint}'. Pass --force to replace it with '{activation.name}'.")
+        profile_path = self.repo_profile_path(cwd, location)
+        if profile_path.exists():
+            current_value = profile_path.read_text().strip()
+            if current_value and current_value != activation.name and not force:
+                raise RuntimeError(f"Repo target hint already exists at {profile_path}. Pass --force to replace '{current_value}' with '{activation.name}'.")
+        written_profile = self.write_repo_profile(cwd, activation.name, location)
+        config_path: Path | None = None
+        if agent_scope is not None or mcp_scope is not None or mcp_profile is not None:
+            config_path = self.write_repo_config(
+                cwd,
+                agent_scope=agent_scope,
+                mcp_scope=mcp_scope,
+                mcp_profile=mcp_profile,
+            )
+        return activation, written_profile, config_path
+
+    def cleanup_repo(
+        self,
+        cwd: Path,
+        *,
+        target_name: str | None = None,
+        agent_scope: Literal["global", "local"] | None = None,
+    ) -> ActivationTarget:
+        activation = self._resolve_repo_workflow_target(cwd, target_name)
+        return self.switch_target(activation.name, cwd, exclusive_plugins=True, agent_scope=agent_scope)
 
     def _reset_sync_warnings(self) -> None:
         self.sync_warnings = []
@@ -379,8 +482,17 @@ class PluginManager:
         provider_prefix: str,
         provider_source: str,
         source_path: str,
+        *,
+        scope: Literal["global", "local"] = "global",
+        destination_root: Path | None = None,
     ) -> str:
         entrypoint = self._agent_entrypoint(provider_name, provider_source, source_path)
+        if scope == "local":
+            local_name = f"{Path(source_path).stem}.agent.md"
+            if destination_root is None or not (destination_root / local_name).exists():
+                return local_name
+            flat = source_path.replace("/", "__").replace("\\", "__").removesuffix(".md")
+            return f"{provider_prefix}__{flat}.agent.md"
         if entrypoint is not None:
             return entrypoint.local_output
         flat = source_path.replace("/", "__").replace("\\", "__")
@@ -402,6 +514,8 @@ class PluginManager:
             f"source: {source_name}",
             f"source_path: {source_path}",
         ]
+        if entrypoint and entrypoint.source_url:
+            metadata_lines.append(f"source_url: {entrypoint.source_url}")
         if entrypoint and entrypoint.commit_revision:
             metadata_lines.append(f"commit_revision: {entrypoint.commit_revision}")
         if entrypoint and entrypoint.commit_date:
@@ -501,8 +615,11 @@ class PluginManager:
         observed: SourceState,
         root: Path,
         prefix: str,
+        *,
+        scope: Literal["global", "local"] = "global",
+        cwd: Path | None = None,
     ) -> bool:
-        stored = self.state_store.read_provider_state(kind, provider_name)
+        stored = self.state_store.read_provider_state(kind, provider_name, scope=scope, cwd=cwd)
         if stored is None or stored.source != provider_source:
             return False
         if stored.warnings:
@@ -526,6 +643,9 @@ class PluginManager:
         observed: SourceState,
         outputs: list[str],
         warnings: list[str],
+        *,
+        scope: Literal["global", "local"] = "global",
+        cwd: Path | None = None,
     ) -> None:
         if outputs or warnings:
             self.state_store.write_provider_state(
@@ -536,14 +656,36 @@ class PluginManager:
                 outputs,
                 warnings,
                 self._provider_definition_signature(kind, provider_name),
+                scope=scope,
+                cwd=cwd,
             )
             self._remember_sync_warnings(warnings)
             return
-        self.state_store.clear_provider_state(kind, provider_name)
+        self.state_store.clear_provider_state(kind, provider_name, scope=scope, cwd=cwd)
 
-    def _clear_provider_states(self, kind: Literal["skill", "agent"], provider_names: list[str]) -> None:
+    def _clear_provider_states(
+        self,
+        kind: Literal["skill", "agent"],
+        provider_names: list[str],
+        *,
+        scope: Literal["global", "local"] = "global",
+        cwd: Path | None = None,
+    ) -> None:
         for provider_name in provider_names:
-            self.state_store.clear_provider_state(kind, provider_name)
+            self.state_store.clear_provider_state(kind, provider_name, scope=scope, cwd=cwd)
+
+    def _remove_agent_provider_outputs(
+        self,
+        provider_name: str,
+        root: Path,
+        *,
+        scope: Literal["global", "local"],
+        cwd: Path,
+    ) -> None:
+        stored = self.state_store.read_provider_state("agent", provider_name, scope=scope, cwd=cwd if scope == "local" else None)
+        if stored is None or not stored.outputs:
+            return
+        self._remove_named_items(root, stored.outputs)
 
     def _claim_agent_source_paths(self, provider_name: str, claimed_source_paths: set[tuple[str, str]]) -> None:
         for entry in self.catalog.entrypoint_records("agent", provider=provider_name):
@@ -651,11 +793,14 @@ class PluginManager:
         claimed_source_paths: set[tuple[str, str]] | None = None,
         source_root: Path | None = None,
         observed: SourceState | None = None,
+        scope: Literal["global", "local"] | None = None,
     ) -> list[str]:
         provider = self.catalog.agent_providers[provider_name]
         source_root = source_root or self._resolve_source_checkout(provider.source, cwd)
         observed = observed or self.current_source_state(source_root)
-        self.paths.agents_dir.mkdir(parents=True, exist_ok=True)
+        resolved_scope = self.agent_scope(cwd, scope)
+        destination_root = self.agent_output_dir(cwd, resolved_scope)
+        destination_root.mkdir(parents=True, exist_ok=True)
         outputs: list[str] = []
         if entrypoints := sorted(
             self.catalog.entrypoint_records("agent", provider=provider_name),
@@ -671,7 +816,15 @@ class PluginManager:
                     if claim_key in claimed_source_paths:
                         continue
                     claimed_source_paths.add(claim_key)
-                destination = self.paths.agents_dir / entrypoint.local_output
+                destination_name = self._agent_output_name(
+                    provider_name,
+                    provider.prefix,
+                    provider.source,
+                    source_path,
+                    scope=resolved_scope,
+                    destination_root=destination_root,
+                )
+                destination = destination_root / destination_name
                 try:
                     source_text = self._read_agent_source_text(source_root, source_path, entrypoint)
                 except (CommandError, OSError) as exc:
@@ -691,11 +844,13 @@ class PluginManager:
                         if claim_key in claimed_source_paths:
                             continue
                         claimed_source_paths.add(claim_key)
-                    destination = self.paths.agents_dir / self._agent_output_name(
+                    destination = destination_root / self._agent_output_name(
                         provider_name,
                         provider.prefix,
                         provider.source,
                         source_path,
+                        scope=resolved_scope,
+                        destination_root=destination_root,
                     )
                     self._copy_agent_file(
                         source,
@@ -716,11 +871,13 @@ class PluginManager:
                         if claim_key in claimed_source_paths:
                             continue
                         claimed_source_paths.add(claim_key)
-                    destination = self.paths.agents_dir / self._agent_output_name(
+                    destination = destination_root / self._agent_output_name(
                         provider_name,
                         provider.prefix,
                         provider.source,
                         source_path,
+                        scope=resolved_scope,
+                        destination_root=destination_root,
                     )
                     self._copy_agent_file(
                         file_path,
@@ -731,7 +888,16 @@ class PluginManager:
                     )
                     outputs.append(destination.name)
         synced_outputs = list(dict.fromkeys(outputs))
-        self._record_provider_sync("agent", provider_name, provider.source, observed, synced_outputs, [])
+        self._record_provider_sync(
+            "agent",
+            provider_name,
+            provider.source,
+            observed,
+            synced_outputs,
+            [],
+            scope=resolved_scope,
+            cwd=cwd if resolved_scope == "local" else None,
+        )
         return synced_outputs
 
     def _sync_skill_providers(
@@ -765,11 +931,14 @@ class PluginManager:
         *,
         task_title: str,
         item_label: str,
+        scope: Literal["global", "local"] | None = None,
     ) -> None:
         ordered = self.catalog.preferred_provider_order("agent", provider_names)
         if not ordered:
             return
 
+        resolved_scope = self.agent_scope(cwd, scope)
+        destination_root = self.agent_output_dir(cwd, resolved_scope)
         claimed_source_paths: set[tuple[str, str]] = set()
         with self._new_progress() as progress:
             task_id = progress.add_task(task_title, total=len(ordered))
@@ -785,19 +954,25 @@ class PluginManager:
                     provider_name,
                     provider.source,
                     observed,
-                    self.paths.agents_dir,
+                    destination_root,
                     provider.prefix,
+                    scope=resolved_scope,
+                    cwd=cwd if resolved_scope == "local" else None,
                 ):
                     self._claim_agent_source_paths(provider_name, claimed_source_paths)
                     progress.advance(task_id)
                     continue
-                self._remove_by_prefix(self.paths.agents_dir, [provider.prefix])
+                if resolved_scope == "local":
+                    self._remove_agent_provider_outputs(provider_name, destination_root, scope=resolved_scope, cwd=cwd)
+                else:
+                    self._remove_by_prefix(destination_root, [provider.prefix])
                 self.sync_agent_provider(
                     provider_name,
                     cwd,
                     claimed_source_paths=claimed_source_paths,
                     source_root=source_root,
                     observed=observed,
+                    scope=resolved_scope,
                 )
                 progress.advance(task_id)
 
@@ -817,41 +992,64 @@ class PluginManager:
             return
         raise ValueError(f"Unknown skill operation: {operation}")
 
-    def manage_agents(self, operation: str, cwd: Path) -> None:
+    def manage_agents(
+        self,
+        operation: str,
+        cwd: Path,
+        *,
+        scope: Literal["global", "local"] | None = None,
+    ) -> None:
+        resolved_scope = self.agent_scope(cwd, scope)
+        destination_root = self.agent_output_dir(cwd, resolved_scope)
         if operation in {"install", "update"}:
             self._sync_agent_providers(
                 list(self.catalog.agent_providers),
                 cwd,
                 task_title="Syncing agent providers",
                 item_label="Syncing agent provider",
+                scope=resolved_scope,
             )
             return
         if operation == "delete":
             provider_names = list(self.catalog.agent_providers)
-            self._remove_by_prefix(self.paths.agents_dir, [provider.prefix for provider in self.catalog.agent_providers.values()])
-            self._clear_provider_states("agent", provider_names)
+            if resolved_scope == "local":
+                for provider_name in provider_names:
+                    self._remove_agent_provider_outputs(provider_name, destination_root, scope=resolved_scope, cwd=cwd)
+            else:
+                self._remove_by_prefix(destination_root, [provider.prefix for provider in self.catalog.agent_providers.values()])
+            self._clear_provider_states("agent", provider_names, scope=resolved_scope, cwd=cwd if resolved_scope == "local" else None)
             return
         raise ValueError(f"Unknown agent operation: {operation}")
 
-    def manage_target(self, operation: str, target: str, cwd: Path) -> None:
+    def manage_target(
+        self,
+        operation: str,
+        target: str,
+        cwd: Path,
+        *,
+        agent_scope: Literal["global", "local"] | None = None,
+        mcp_scope: Literal["global", "local"] | None = None,
+    ) -> None:
         self._reset_sync_warnings()
+        resolved_agent_scope = self.agent_scope(cwd, agent_scope)
+        resolved_mcp_scope = self.mcp_scope(cwd, mcp_scope)
         match target:
             case "all":
                 self.manage_plugins(operation)
                 self.manage_skills(operation, cwd)
-                self.manage_agents(operation, cwd)
-                self.manage_mcps(operation, cwd)
+                self.manage_agents(operation, cwd, scope=resolved_agent_scope)
+                self.manage_mcps(operation, cwd, scope=resolved_mcp_scope)
             case "plugins":
                 self.manage_plugins(operation)
             case "skills":
                 self.manage_skills(operation, cwd)
             case "agents":
-                self.manage_agents(operation, cwd)
+                self.manage_agents(operation, cwd, scope=resolved_agent_scope)
             case "mcps":
-                self.manage_mcps(operation, cwd)
+                self.manage_mcps(operation, cwd, scope=resolved_mcp_scope)
             case "thirdparty":
                 self.manage_skills(operation, cwd)
-                self.manage_agents(operation, cwd)
+                self.manage_agents(operation, cwd, scope=resolved_agent_scope)
             case _:
                 raise ValueError(f"Unknown target: {target}")
         if operation == "delete" and self.paths.legacy_active_target_file.exists():
@@ -862,10 +1060,22 @@ class PluginManager:
         self._remove_by_prefix(self.paths.skills_dir, [self.catalog.skill_providers[name].prefix for name in removed])
         self._clear_provider_states("skill", removed)
 
-    def _remove_unselected_agent_providers(self, desired: list[str]) -> None:
+    def _remove_unselected_agent_providers(
+        self,
+        desired: list[str],
+        cwd: Path,
+        *,
+        scope: Literal["global", "local"] | None = None,
+    ) -> None:
+        resolved_scope = self.agent_scope(cwd, scope)
         removed = [name for name in self.catalog.agent_providers if name not in set(desired)]
-        self._remove_by_prefix(self.paths.agents_dir, [self.catalog.agent_providers[name].prefix for name in removed])
-        self._clear_provider_states("agent", removed)
+        destination_root = self.agent_output_dir(cwd, resolved_scope)
+        if resolved_scope == "local":
+            for provider_name in removed:
+                self._remove_agent_provider_outputs(provider_name, destination_root, scope=resolved_scope, cwd=cwd)
+        else:
+            self._remove_by_prefix(destination_root, [self.catalog.agent_providers[name].prefix for name in removed])
+        self._clear_provider_states("agent", removed, scope=resolved_scope, cwd=cwd if resolved_scope == "local" else None)
 
     def _sync_missing_skill_providers(self, desired: list[str], cwd: Path) -> None:
         self._sync_skill_providers(
@@ -875,7 +1085,13 @@ class PluginManager:
             item_label="Downloading skill provider",
         )
 
-    def _sync_missing_agent_providers(self, desired: list[str], cwd: Path) -> None:
+    def _sync_missing_agent_providers(
+        self,
+        desired: list[str],
+        cwd: Path,
+        *,
+        scope: Literal["global", "local"] | None = None,
+    ) -> None:
         if not desired:
             return
         self._sync_agent_providers(
@@ -883,11 +1099,20 @@ class PluginManager:
             cwd,
             task_title="Downloading agent providers",
             item_label="Downloading agent provider",
+            scope=scope,
         )
 
-    def _provider_outputs_present(self, kind: Literal["skill", "agent"], provider_name: str, root: Path) -> bool:
+    def _provider_outputs_present(
+        self,
+        kind: Literal["skill", "agent"],
+        provider_name: str,
+        root: Path,
+        *,
+        scope: Literal["global", "local"] = "global",
+        cwd: Path | None = None,
+    ) -> bool:
         provider = self.catalog.provider_registry(kind)[provider_name]
-        stored = self.state_store.read_provider_state(kind, provider_name)
+        stored = self.state_store.read_provider_state(kind, provider_name, scope=scope, cwd=cwd)
         if stored is None:
             return False
         return self._existing_outputs(root, stored.outputs) or (not stored.outputs and self._prefixed_content_exists(root, provider.prefix))
@@ -896,13 +1121,17 @@ class PluginManager:
         self,
         target: ActivationTarget,
         *,
+        cwd: Path,
         exclusive_plugins: bool,
+        agent_scope: Literal["global", "local"] | None = None,
     ) -> list[str]:
         desired_plugins = set(self.catalog.target_items(target.themes, "plugins"))
         desired_skills = set(self.catalog.target_items(target.themes, "skills"))
         desired_agents = set(self.catalog.target_items(target.themes, "agents"))
         managed_plugins = set(self.catalog.plugins)
         warnings: list[str] = []
+        resolved_agent_scope = self.agent_scope(cwd, agent_scope)
+        agent_root = self.agent_output_dir(cwd, resolved_agent_scope)
 
         with self._new_progress() as progress:
             task_id = progress.add_task("Verifying applied target", total=3)
@@ -948,7 +1177,17 @@ class PluginManager:
             progress.advance(task_id)
 
             progress.update(task_id, description="Verifying agents")
-            missing_agents = {provider_name for provider_name in desired_agents if not self._provider_outputs_present("agent", provider_name, self.paths.agents_dir)}
+            missing_agents = {
+                provider_name
+                for provider_name in desired_agents
+                if not self._provider_outputs_present(
+                    "agent",
+                    provider_name,
+                    agent_root,
+                    scope=resolved_agent_scope,
+                    cwd=cwd if resolved_agent_scope == "local" else None,
+                )
+            }
             warnings.extend(
                 self._grouped_verification_messages(
                     "verification: missing synced agent content for",
@@ -956,11 +1195,24 @@ class PluginManager:
                     missing_agents,
                 )
             )
-            stale_agents = {
-                provider_name
-                for provider_name in set(self.catalog.agent_providers) - desired_agents
-                if self._prefixed_content_exists(self.paths.agents_dir, self.catalog.agent_providers[provider_name].prefix)
-            }
+            if resolved_agent_scope == "local":
+                stale_agents = {
+                    provider_name
+                    for provider_name in set(self.catalog.agent_providers) - desired_agents
+                    if self._provider_outputs_present(
+                        "agent",
+                        provider_name,
+                        agent_root,
+                        scope=resolved_agent_scope,
+                        cwd=cwd,
+                    )
+                }
+            else:
+                stale_agents = {
+                    provider_name
+                    for provider_name in set(self.catalog.agent_providers) - desired_agents
+                    if self._prefixed_content_exists(agent_root, self.catalog.agent_providers[provider_name].prefix)
+                }
             warnings.extend(
                 self._grouped_verification_messages(
                     "verification: stale agent content still present for",
@@ -978,17 +1230,25 @@ class PluginManager:
         else:
             return []
 
-    def switch_target(self, target_name: str, cwd: Path, exclusive_plugins: bool = False) -> ActivationTarget:
+    def switch_target(
+        self,
+        target_name: str,
+        cwd: Path,
+        exclusive_plugins: bool = False,
+        agent_scope: Literal["global", "local"] | None = None,
+    ) -> ActivationTarget:
         self._reset_sync_warnings()
         target = self.catalog.resolve_target(target_name)
         desired_skills = self.catalog.target_items(target.themes, "skills")
         desired_agents = self.catalog.target_items(target.themes, "agents")
+        resolved_agent_scope = self.agent_scope(cwd, agent_scope)
+        agent_root = self.agent_output_dir(cwd, resolved_agent_scope)
         self._remove_named_items(self.paths.skills_dir, LEGACY_SKILLS)
-        self._remove_named_items(self.paths.agents_dir, LEGACY_AGENTS)
+        self._remove_named_items(agent_root, LEGACY_AGENTS)
         installed = self.list_installed_plugins()
         actions = self.plugin_actions_for_switch(target.name, installed, exclusive=exclusive_plugins)
         self._remove_unselected_skill_providers(desired_skills)
-        self._remove_unselected_agent_providers(desired_agents)
+        self._remove_unselected_agent_providers(desired_agents, cwd, scope=resolved_agent_scope)
         self._execute_actions(
             actions,
             cwd=cwd,
@@ -996,8 +1256,15 @@ class PluginManager:
             parallel_workers=self._parallel_workers(len(actions)),
         )
         self._sync_missing_skill_providers(desired_skills, cwd)
-        self._sync_missing_agent_providers(desired_agents, cwd)
-        self._remember_sync_warnings(self._collect_target_verification_warnings(target, exclusive_plugins=exclusive_plugins))
+        self._sync_missing_agent_providers(desired_agents, cwd, scope=resolved_agent_scope)
+        self._remember_sync_warnings(
+            self._collect_target_verification_warnings(
+                target,
+                cwd=cwd,
+                exclusive_plugins=exclusive_plugins,
+                agent_scope=resolved_agent_scope,
+            )
+        )
         self.state_store.write_repo_target(
             cwd,
             target,
@@ -1153,12 +1420,18 @@ class PluginManager:
 
     def status_snapshot(self, cwd: Path) -> dict[str, object]:
         repo_hint = self.repo_profile_hint(cwd)
+        repo_hint_target = self.catalog.resolve_target(repo_hint) if repo_hint in {*self.catalog.profiles, *self.catalog.themes} else None
         repo_state = self.state_store.read_repo_state(cwd)
         repo_profile_file = next((str(candidate) for candidate in (self.repo_profile_path(cwd, "root"), self.repo_profile_path(cwd, "github")) if candidate.exists()), "")
+        repo_config_path = self.repo_config_path(cwd)
+        repo_config = self.read_repo_config(cwd)
+        resolved_agent_scope = self.agent_scope(cwd)
+        resolved_mcp_scope = self.mcp_scope(cwd)
+        agent_root = self.agent_output_dir(cwd, resolved_agent_scope)
         active_target_name = self.read_active_target(cwd)
         active_target = self.catalog.resolve_target(active_target_name) if active_target_name in {*self.catalog.profiles, *self.catalog.themes} else None
         skill_count = len([item for item in self.paths.skills_dir.iterdir() if item.is_dir()]) if self.paths.skills_dir.exists() else 0
-        agent_count = len(list(self.paths.agents_dir.rglob("*.md"))) if self.paths.agents_dir.exists() else 0
+        agent_count = len(list(agent_root.rglob("*.md"))) if agent_root.exists() else 0
         sync_warnings: list[str] = list(repo_state.verification_warnings) if repo_state is not None else []
         source_revisions: list[dict[str, str | int | None]] = []
         for name in self.catalog.repositories:
@@ -1180,13 +1453,26 @@ class PluginManager:
                 continue
             sync_warnings.extend(stored_provider.warnings)
         for provider_name in self.catalog.agent_providers:
-            stored_provider = self.state_store.read_provider_state("agent", provider_name)
+            stored_provider = self.state_store.read_provider_state(
+                "agent",
+                provider_name,
+                scope=resolved_agent_scope,
+                cwd=cwd if resolved_agent_scope == "local" else None,
+            )
             if stored_provider is None:
                 continue
             sync_warnings.extend(stored_provider.warnings)
         return {
             "repo_hint": repo_hint,
+            "repo_hint_kind": repo_hint_target.kind if repo_hint_target is not None else "",
+            "repo_hint_themes": repo_hint_target.themes if repo_hint_target is not None else [],
             "repo_profile_file": repo_profile_file,
+            "repo_config_file": str(repo_config_path) if repo_config_path.exists() else "",
+            "repo_config": repo_config.model_dump(mode="json"),
+            "agent_scope": resolved_agent_scope,
+            "agent_root": str(agent_root),
+            "mcp_scope": resolved_mcp_scope,
+            "mcp_profile": repo_config.mcps.profile,
             "active_target": active_target,
             "installed_plugins": self.installed_plugins_details(),
             "skill_count": skill_count,
@@ -1371,15 +1657,16 @@ class PluginManager:
         record: McpRecord,
         *,
         probe_version: bool = True,
-        scope: Literal["global", "local"] = "global",
+        scope: Literal["global", "local"] | None = None,
         cwd: Path | None = None,
     ) -> McpSyncState:
         """Add or update a single MCP entry in the config and record its state.
 
-        When *scope* is ``"local"`` the entry is written to
+        When the resolved *scope* is ``"local"`` the entry is written to
         ``.vscode/mcp.json`` inside *cwd* instead of the global config.
-        *cwd* must be provided when *scope* is ``"local"``.
+        *cwd* must be provided when the resolved scope is ``"local"``.
         """
+        resolved_scope = self.mcp_scope(cwd or Path.cwd(), scope) if (scope is None and cwd is not None) else (scope or "global")
         installed_version: str | None = None
         installed_sha: str | None = None
 
@@ -1396,7 +1683,7 @@ class PluginManager:
 
         entry = self.build_mcp_server_entry(name, record, installed_version)
 
-        if scope == "local":
+        if resolved_scope == "local":
             if cwd is None:
                 raise ValueError("cwd must be provided when scope='local'")
             local_config = self.read_local_mcp_config(cwd)
@@ -1419,7 +1706,7 @@ class PluginManager:
             installed_version=record.pinned_tag or installed_version,
             installed_sha=installed_sha,
             config_signature=self._mcp_config_signature(entry),
-            scope=scope,
+            scope=resolved_scope,
             updated_at=datetime.now(UTC).isoformat(),
         )
         self.state_store.write_mcp_state(mcp_state)
@@ -1519,44 +1806,29 @@ class PluginManager:
         *,
         probe_version: bool = False,
         cwd: Path | None = None,
+        scope: Literal["global", "local"] = "global",
     ) -> bool:
-        """Return True when the existing config entry matches what we would write.
-
-        When *probe_version* is True and the entry is an unversioned npm/pip
-        package, the registry is probed for the latest version; if that differs
-        from the stored version the entry is treated as stale and False is
-        returned so the caller will update it.
-
-        When *cwd* is provided, entries that were moved to local scope are
-        validated against the local ``.vscode/mcp.json``; if the entry is no
-        longer present there it is treated as needing a global add.
-        """
+        """Return True when the existing config entry matches what we would write."""
         stored = self.state_store.read_mcp_state(name)
         if stored is None:
             return False
-        # If the entry has been deliberately moved to local scope, skip it in
-        # global reconciliation – but only if the local config still contains it.
-        if stored.scope == "local":
+        if scope == "global" and stored.scope == "local":
             if cwd is not None:
                 local_servers = dict(self._servers_from_config(self.read_local_mcp_config(cwd)))
                 if name in local_servers:
                     return True
-                # The local config no longer has this entry; fall through so
-                # reconcile_mcps re-adds it to the global config.
             else:
                 return True
+        if scope == "local" and stored.scope == "global":
+            return False
         if name not in servers:
             return False
-        # HTTP MCPs are current as long as the URL hasn't changed.
         if record.kind == "http":
             existing = servers[name]
             if not isinstance(existing, dict):
                 return False
             existing_typed = cast(dict[str, object], existing)
             return existing_typed.get("url") == record.url
-        # For npm/pip: when probing is enabled and the package is not pinned,
-        # compare the stored version against the live registry version.  If
-        # a newer version is available, treat the entry as stale.
         if probe_version and not record.pinned_tag and record.package:
             latest: str | None = None
             if record.kind == "npm":
@@ -1565,7 +1837,6 @@ class PluginManager:
                 latest = self.probe_mcp_pip_version(record.package)
             if latest is not None and latest != stored.installed_version:
                 return False
-        # For npm/pip/local: compare config signatures.
         expected_entry = self.build_mcp_server_entry(name, record, stored.installed_version)
         return stored.config_signature == self._mcp_config_signature(expected_entry)
 
@@ -1576,19 +1847,19 @@ class PluginManager:
         probe_version: bool = True,
         extra_servers: dict[str, object] | None = None,
         remove_unlisted: bool = False,
+        scope: Literal["global", "local"] | None = None,
     ) -> dict[str, str]:
-        """Sync all catalog MCPs (plus any local ones from .vscode/mcp.json).
+        """Sync catalog MCPs into the resolved target scope.
 
         Returns a mapping of ``name → action`` where action is one of
         ``"added"``, ``"updated"``, ``"skipped"``, or ``"removed"``.
         """
         results: dict[str, str] = {}
-        config = self.read_mcp_config()
+        resolved_scope = self.mcp_scope(cwd, scope)
+        config = self.read_local_mcp_config(cwd) if resolved_scope == "local" else self.read_mcp_config()
         servers = dict(self._servers_from_config(config))
 
-        # Merge in any local MCP definitions from the repo's .vscode/mcp.json.
-        local_servers = extra_servers if extra_servers is not None else self.discover_local_mcps(cwd)
-
+        local_servers = extra_servers if extra_servers is not None else (self.discover_local_mcps(cwd) if resolved_scope == "global" else {})
         desired_names: set[str] = set(self.catalog.mcps)
 
         with self._new_progress() as progress:
@@ -1597,54 +1868,56 @@ class PluginManager:
 
             for mcp_name, record in self.catalog.mcps.items():
                 progress.update(task_id, description=f"Syncing MCP {mcp_name}")
-                if self._mcp_entry_current(mcp_name, record, servers, probe_version=probe_version, cwd=cwd):
+                if self._mcp_entry_current(
+                    mcp_name,
+                    record,
+                    servers,
+                    probe_version=probe_version,
+                    cwd=cwd,
+                    scope=resolved_scope,
+                ):
                     results[mcp_name] = "skipped"
                 else:
                     action = "updated" if mcp_name in servers else "added"
-                    self.sync_mcp(mcp_name, record, probe_version=probe_version)
+                    self.sync_mcp(mcp_name, record, probe_version=probe_version, scope=resolved_scope, cwd=cwd)
                     results[mcp_name] = action
-                    # Refresh servers after write.
-                    servers = dict(self._servers_from_config(self.read_mcp_config()))
+                    refreshed = self.read_local_mcp_config(cwd) if resolved_scope == "local" else self.read_mcp_config()
+                    servers = dict(self._servers_from_config(refreshed))
                 progress.advance(task_id)
 
-            for local_name, local_entry in local_servers.items():
-                progress.update(task_id, description=f"Syncing local MCP {local_name}")
-                desired_names.add(local_name)
-                # If a catalog MCP has been deliberately moved to local scope,
-                # it was already handled (skipped) in the catalog loop above.
-                # Don't re-add it to the global config here.
-                if local_name in self.catalog.mcps:
-                    stored_for_local = self.state_store.read_mcp_state(local_name)
-                    if stored_for_local is not None and stored_for_local.scope == "local":
-                        results.setdefault(local_name, "skipped")
+            if resolved_scope == "global":
+                for local_name, local_entry in local_servers.items():
+                    progress.update(task_id, description=f"Syncing local MCP {local_name}")
+                    desired_names.add(local_name)
+                    if local_name in self.catalog.mcps:
+                        stored_for_local = self.state_store.read_mcp_state(local_name)
+                        if stored_for_local is not None and stored_for_local.scope == "local":
+                            results.setdefault(local_name, "skipped")
+                            progress.advance(task_id)
+                            continue
+                    if not isinstance(local_entry, dict):
+                        results[local_name] = "skipped"
                         progress.advance(task_id)
                         continue
-                if not isinstance(local_entry, dict):
-                    results[local_name] = "skipped"
+                    typed_entry = cast(dict[str, object], local_entry)
+                    safe_entry: dict[str, object] = {k: v for k, v in typed_entry.items() if k != "env"}
+                    action = "updated" if local_name in servers else "added"
+                    servers[local_name] = safe_entry
+                    fresh_config = self.read_mcp_config()
+                    fresh_config["servers"] = servers
+                    self.write_mcp_config(fresh_config)
+                    mcp_state = McpSyncState(
+                        kind="local",
+                        name=local_name,
+                        config_signature=self._mcp_config_signature(safe_entry),
+                        updated_at=datetime.now(UTC).isoformat(),
+                    )
+                    self.state_store.write_mcp_state(mcp_state)
+                    results[local_name] = action
                     progress.advance(task_id)
-                    continue
-                typed_entry = cast(dict[str, object], local_entry)
-                # Strip env vars before merging into the global (user-wide) config
-                # to avoid persisting repo-specific secrets outside the repository.
-                safe_entry: dict[str, object] = {k: v for k, v in typed_entry.items() if k != "env"}
-                action = "updated" if local_name in servers else "added"
-                servers[local_name] = safe_entry
-                # Write the updated servers dict back to disk.
-                fresh_config = self.read_mcp_config()
-                fresh_config["servers"] = servers
-                self.write_mcp_config(fresh_config)
-                mcp_state = McpSyncState(
-                    kind="local",
-                    name=local_name,
-                    config_signature=self._mcp_config_signature(safe_entry),
-                    updated_at=datetime.now(UTC).isoformat(),
-                )
-                self.state_store.write_mcp_state(mcp_state)
-                results[local_name] = action
-                progress.advance(task_id)
 
         if remove_unlisted:
-            config = self.read_mcp_config()
+            config = self.read_local_mcp_config(cwd) if resolved_scope == "local" else self.read_mcp_config()
             servers = dict(self._servers_from_config(config))
             for existing_name in list(servers):
                 if existing_name not in desired_names:
@@ -1652,26 +1925,38 @@ class PluginManager:
                     self.state_store.clear_mcp_state(existing_name)
                     results[existing_name] = "removed"
             config["servers"] = servers
-            self.write_mcp_config(config)
+            if resolved_scope == "local":
+                self.write_local_mcp_config(cwd, config)
+            else:
+                self.write_mcp_config(config)
 
         return results
 
-    def manage_mcps(self, operation: str, cwd: Path) -> dict[str, str]:
-        """Top-level MCP management dispatch.
-
-        Supported operations: ``"install"`` / ``"update"`` (both call
-        ``reconcile_mcps`` with version probing enabled), and ``"delete"``
-        (removes all catalog MCPs from both global and local configs).
-        """
+    def manage_mcps(
+        self,
+        operation: str,
+        cwd: Path,
+        *,
+        scope: Literal["global", "local"] | None = None,
+    ) -> dict[str, str]:
+        """Top-level MCP management dispatch."""
+        resolved_scope = self.mcp_scope(cwd, scope)
         if operation in {"install", "update"}:
-            # Both install and update probe the registry for newer versions so
-            # that ``copilot-plugin-manager update mcps`` always refreshes to
-            # the latest available version.
-            return self.reconcile_mcps(cwd, probe_version=True)
+            return self.reconcile_mcps(cwd, probe_version=True, scope=resolved_scope)
         if operation == "delete":
             results: dict[str, str] = {}
             for name in list(self.catalog.mcps):
-                removed = self.remove_mcp(name, cwd)
+                if resolved_scope == "local":
+                    local_config = self.read_local_mcp_config(cwd)
+                    local_servers = dict(self._servers_from_config(local_config))
+                    removed = name in local_servers
+                    if removed:
+                        del local_servers[name]
+                        local_config["servers"] = local_servers
+                        self.write_local_mcp_config(cwd, local_config)
+                        self.state_store.clear_mcp_state(name)
+                else:
+                    removed = self.remove_mcp(name, None)
                 results[name] = "removed" if removed else "skipped"
             return results
         raise ValueError(f"Unknown MCP operation: {operation}")

@@ -23,6 +23,7 @@ from .rendering import (
     render_plugins,
     render_profiles,
     render_providers,
+    render_repo_config,
     render_repositories,
     render_status,
     render_sync_warnings,
@@ -42,6 +43,8 @@ when the terminal is interactive. Non-interactive sessions fall back to a compac
 • [cyan]list[/cyan] to explore bundled catalogs and active state
 • [cyan]install[/cyan], [cyan]update[/cyan], or [cyan]delete[/cyan] to manage plugins / skills / agents
 • [cyan]switch[/cyan] or [cyan]switch-exclusive[/cyan] to activate a profile or theme
+• [cyan]repo-init[/cyan] to write repo-local target state explicitly
+• [cyan]repo-cleanup[/cyan] to reconcile stale managed repo content explicitly
 • [cyan]repo-update[/cyan] to refresh upstream sources before syncing third-party content
 """
 
@@ -49,8 +52,10 @@ APP_EPILOG = """\b
 Quick start:
   copilot-plugin-manager repo-update --remote
   copilot-plugin-manager list overview
-  copilot-plugin-manager install thirdparty
-  copilot-plugin-manager switch minimal
+  copilot-plugin-manager repo-init minimal --agent-scope local
+  copilot-plugin-manager repo-config --agent-scope local
+  copilot-plugin-manager repo-cleanup
+  copilot-plugin-manager completion init bash
 
 Tip:
   Use copilot-plugin-manager COMMAND -h for examples and command-specific guidance.
@@ -118,13 +123,19 @@ class ListMenuAction(StrEnum):
 app = typer.Typer(
     name="copilot-plugin-manager",
     no_args_is_help=False,
-    add_completion=True,
+    add_completion=False,
     invoke_without_command=True,
     rich_markup_mode="rich",
     help=APP_HELP,
     epilog=APP_EPILOG,
     context_settings={"help_option_names": ["-h", "--help"]},
 )
+completion_app = typer.Typer(
+    no_args_is_help=True,
+    rich_markup_mode="rich",
+    help="Manage shell completion snippets, scripts, and installed completion files.",
+)
+app.add_typer(completion_app, name="completion", short_help="Manage shell completion.")
 
 
 def get_manager() -> PluginManager:
@@ -207,6 +218,7 @@ def _menu_table(manager: PluginManager, current: Path) -> Table:
     ]
     if repo_hint:
         subtitle.append(f"repo hint: {repo_hint}")
+    subtitle.append(_scope_caption(manager, current))
     table.caption = " | ".join(subtitle)
     return table
 
@@ -229,22 +241,33 @@ def _prompt_managed_target(default: ManagedTarget = ManagedTarget.all) -> Manage
             console().print(f"[red]Unknown target '{raw}'. Choose one of: {choices}.[/red]")
 
 
+def _scope_caption(manager: PluginManager, current: Path) -> str:
+    agent_scope_getter = getattr(manager, "agent_scope", None)
+    mcp_scope_getter = getattr(manager, "mcp_scope", None)
+    mcp_profile_getter = getattr(manager, "mcp_profile", None)
+    return (
+        f"agent scope: {agent_scope_getter(current) if callable(agent_scope_getter) else 'global'}"
+        f" | mcp scope: {mcp_scope_getter(current) if callable(mcp_scope_getter) else 'global'}"
+        f" | mcp profile: {(mcp_profile_getter(current) if callable(mcp_profile_getter) else None) or 'none'}"
+    )
+
+
 def _maybe_save_repo_profile(manager: PluginManager, current: Path, target_name: str) -> None:
-    if not _confirm_text("Save this target as the repo profile hint?", default=False):
+    if not _confirm_text("Save this target as the repo-local target hint?", default=False):
         return
     while True:
         location = _prompt_text(
-            "Repo profile location [root/github]",
+            "Repo target hint location [root/github]",
             default=RepoProfileLocation.root.value,
         ).lower()
         try:
             repo_location = RepoProfileLocation(location)
         except ValueError:
-            console().print("[red]Unknown repo profile location. Choose 'root' or 'github'.[/red]")
+            console().print("[red]Unknown repo target hint location. Choose 'root' or 'github'.[/red]")
             continue
         break
     profile_path = manager.write_repo_profile(current, target_name, repo_location.value)
-    console().print(f"Saved repo profile hint to {profile_path}")
+    console().print(f"Saved repo target hint to {profile_path}")
 
 
 def _run_interactive_menu(manager: PluginManager, current: Path) -> None:
@@ -331,7 +354,7 @@ def _list_menu_table(manager: PluginManager, current: Path) -> Table:
     table.add_row("8", "mcps", "Managed MCP catalog.")
     table.add_row("9", "all", "Full catalog dump.")
     table.add_row("q", "quit", "Exit the catalog browser.")
-    table.caption = f"cwd: {current} | active: {active_name or 'none'}"
+    table.caption = f"cwd: {current} | active: {active_name or 'none'} | {_scope_caption(manager, current)}"
     return table
 
 
@@ -508,10 +531,32 @@ def install_command(
             rich_help_panel="Repository context",
         ),
     ] = None,
+    agent_scope: Annotated[
+        str | None,
+        typer.Option(
+            "--agent-scope",
+            help="Override the effective agent scope for this command. Defaults to the repo config when omitted.",
+            rich_help_panel="Scope",
+        ),
+    ] = None,
+    mcp_scope: Annotated[
+        str | None,
+        typer.Option(
+            "--mcp-scope",
+            help="Override the effective MCP scope for this command. Defaults to the repo config when omitted.",
+            rich_help_panel="Scope",
+        ),
+    ] = None,
 ) -> None:
     """Install the selected managed content scope."""
     manager = get_manager()
-    manager.manage_target("install", target.value, _cwd(cwd))
+    manager.manage_target(
+        "install",
+        target.value,
+        _cwd(cwd),
+        agent_scope=_parse_scope(agent_scope) if agent_scope is not None else None,
+        mcp_scope=_parse_scope(mcp_scope) if mcp_scope is not None else None,
+    )
     _print_sync_warnings(manager)
 
 
@@ -534,10 +579,32 @@ def update_command(
             rich_help_panel="Repository context",
         ),
     ] = None,
+    agent_scope: Annotated[
+        str | None,
+        typer.Option(
+            "--agent-scope",
+            help="Override the effective agent scope for this command. Defaults to the repo config when omitted.",
+            rich_help_panel="Scope",
+        ),
+    ] = None,
+    mcp_scope: Annotated[
+        str | None,
+        typer.Option(
+            "--mcp-scope",
+            help="Override the effective MCP scope for this command. Defaults to the repo config when omitted.",
+            rich_help_panel="Scope",
+        ),
+    ] = None,
 ) -> None:
     """Update the selected managed content scope."""
     manager = get_manager()
-    manager.manage_target("update", target.value, _cwd(cwd))
+    manager.manage_target(
+        "update",
+        target.value,
+        _cwd(cwd),
+        agent_scope=_parse_scope(agent_scope) if agent_scope is not None else None,
+        mcp_scope=_parse_scope(mcp_scope) if mcp_scope is not None else None,
+    )
     _print_sync_warnings(manager)
 
 
@@ -560,16 +627,47 @@ def delete_command(
             rich_help_panel="Repository context",
         ),
     ] = None,
+    agent_scope: Annotated[
+        str | None,
+        typer.Option(
+            "--agent-scope",
+            help="Override the effective agent scope for this command. Defaults to the repo config when omitted.",
+            rich_help_panel="Scope",
+        ),
+    ] = None,
+    mcp_scope: Annotated[
+        str | None,
+        typer.Option(
+            "--mcp-scope",
+            help="Override the effective MCP scope for this command. Defaults to the repo config when omitted.",
+            rich_help_panel="Scope",
+        ),
+    ] = None,
 ) -> None:
     """Delete the selected managed content scope."""
-    get_manager().manage_target("delete", target.value, _cwd(cwd))
+    get_manager().manage_target(
+        "delete",
+        target.value,
+        _cwd(cwd),
+        agent_scope=_parse_scope(agent_scope) if agent_scope is not None else None,
+        mcp_scope=_parse_scope(mcp_scope) if mcp_scope is not None else None,
+    )
 
 
 @app.command(
     "switch",
     short_help="Activate a profile or theme.",
-    help=("Switch to a profile or theme while preserving unrelated installed plugins when possible. Use this for a safer day-to-day activation flow."),
-    epilog="\b\nExamples:\n  copilot-plugin-manager switch minimal\n  copilot-plugin-manager switch docs --cwd /path/to/repo",
+    help=(
+        "Switch to a profile or theme while preserving unrelated installed plugins when possible. "
+        "Use [cyan]list profiles[/cyan], [cyan]list themes[/cyan], or [cyan]docs/THEMES.md[/cyan] "
+        "to inspect the current composition before saving a repo-local target hint."
+    ),
+    epilog=(
+        "\b\nExamples:\n"
+        "  copilot-plugin-manager list profiles\n"
+        "  copilot-plugin-manager switch minimal\n"
+        "  copilot-plugin-manager switch minimal --cwd /path/to/repo --save-repo-profile"
+    ),
 )
 def switch_command(
     target: Annotated[
@@ -588,7 +686,7 @@ def switch_command(
         bool,
         typer.Option(
             "--save-repo-profile",
-            help="Write the selected target into a repo-local profile hint file for easier future activation.",
+            help="Write the selected profile or theme into a repo-local target hint file for easier future activation.",
             rich_help_panel="Repository context",
         ),
     ] = False,
@@ -596,27 +694,49 @@ def switch_command(
         RepoProfileLocation,
         typer.Option(
             "--repo-profile-location",
-            help="Where to write the repo-local profile hint when --save-repo-profile is used.",
+            help="Where to write the repo-local target hint when --save-repo-profile is used.",
             rich_help_panel="Repository context",
         ),
     ] = RepoProfileLocation.root,
+    agent_scope: Annotated[
+        str | None,
+        typer.Option(
+            "--agent-scope",
+            help="Override the effective agent scope for this command. Defaults to the repo config when omitted.",
+            rich_help_panel="Scope",
+        ),
+    ] = None,
 ) -> None:
     """Switch to a profile or theme without aggressively pruning unrelated plugins."""
     manager = get_manager()
     current = _cwd(cwd)
-    activation = manager.switch_target(target, current, exclusive_plugins=False)
+    activation = manager.switch_target(
+        target,
+        current,
+        exclusive_plugins=False,
+        agent_scope=_parse_scope(agent_scope) if agent_scope is not None else None,
+    )
     console().print(build_target_tree(manager.catalog, activation))
     if save_repo_profile:
         profile_path = manager.write_repo_profile(current, activation.name, repo_profile_location.value)
-        console().print(f"Saved repo profile hint to {profile_path}")
+        console().print(f"Saved repo target hint to {profile_path}")
     _print_sync_warnings(manager)
 
 
 @app.command(
     "switch-exclusive",
     short_help="Activate a profile or theme exclusively.",
-    help=("Switch to a profile or theme and prune managed plugins that are not part of the target. Use this when you want strict alignment with the selected setup."),
-    epilog="Example:\n  copilot-plugin-manager switch-exclusive minimal",
+    help=(
+        "Switch to a profile or theme and prune managed plugins that are not part of the target. "
+        "Use [cyan]list profiles[/cyan], [cyan]list themes[/cyan], or [cyan]docs/THEMES.md[/cyan] "
+        "to inspect the current composition before saving a repo-local target hint."
+    ),
+    epilog=(
+        "\b\nExamples:\n"
+        "  copilot-plugin-manager list themes\n"
+        "  copilot-plugin-manager switch-exclusive minimal\n"
+        "  copilot-plugin-manager switch-exclusive minimal --cwd /path/to/repo --save-repo-profile"
+    ),
 )
 def switch_exclusive_command(
     target: Annotated[
@@ -635,7 +755,7 @@ def switch_exclusive_command(
         bool,
         typer.Option(
             "--save-repo-profile",
-            help="Write the selected target into a repo-local profile hint file for easier future activation.",
+            help="Write the selected profile or theme into a repo-local target hint file for easier future activation.",
             rich_help_panel="Repository context",
         ),
     ] = False,
@@ -643,19 +763,32 @@ def switch_exclusive_command(
         RepoProfileLocation,
         typer.Option(
             "--repo-profile-location",
-            help="Where to write the repo-local profile hint when --save-repo-profile is used.",
+            help="Where to write the repo-local target hint when --save-repo-profile is used.",
             rich_help_panel="Repository context",
         ),
     ] = RepoProfileLocation.root,
+    agent_scope: Annotated[
+        str | None,
+        typer.Option(
+            "--agent-scope",
+            help="Override the effective agent scope for this command. Defaults to the repo config when omitted.",
+            rich_help_panel="Scope",
+        ),
+    ] = None,
 ) -> None:
     """Switch to a profile or theme and keep managed plugins aligned exactly to the target."""
     manager = get_manager()
     current = _cwd(cwd)
-    activation = manager.switch_target(target, current, exclusive_plugins=True)
+    activation = manager.switch_target(
+        target,
+        current,
+        exclusive_plugins=True,
+        agent_scope=_parse_scope(agent_scope) if agent_scope is not None else None,
+    )
     console().print(build_target_tree(manager.catalog, activation))
     if save_repo_profile:
         profile_path = manager.write_repo_profile(current, activation.name, repo_profile_location.value)
-        console().print(f"Saved repo profile hint to {profile_path}")
+        console().print(f"Saved repo target hint to {profile_path}")
     _print_sync_warnings(manager)
 
 
@@ -722,8 +855,8 @@ def _mcp_results_table(title: str, results: dict[str, str]) -> None:
     console().print(table)
 
 
-def _parse_mcp_scope(scope: str) -> Literal["global", "local"]:
-    """Validate and return a typed MCP scope literal, exiting on unknown values."""
+def _parse_scope(scope: str) -> Literal["global", "local"]:
+    """Validate and return a typed scope literal, exiting on unknown values."""
     if scope not in {"global", "local"}:
         console().print(f"[red]Unknown scope '{scope}'. Use 'global' or 'local'.[/red]")
         raise typer.Exit(1)
@@ -820,7 +953,7 @@ def mcp_add_command(
     ] = None,
 ) -> None:
     """Add or refresh a single MCP server entry from the catalog."""
-    resolved_scope = _parse_mcp_scope(scope)
+    resolved_scope = _parse_scope(scope)
     current = _cwd(cwd)
     manager = get_manager()
     if name not in manager.catalog.mcps:
@@ -904,7 +1037,7 @@ def mcp_move_command(
     ] = None,
 ) -> None:
     """Move an MCP entry between global (~/.copilot/mcp-config.json) and local (.vscode/mcp.json) scope."""
-    resolved_scope = _parse_mcp_scope(to)
+    resolved_scope = _parse_scope(to)
     current = _cwd(cwd)
     manager = get_manager()
     try:
@@ -918,12 +1051,303 @@ def mcp_move_command(
 
 
 @app.command(
-    "shell-init",
+    "repo-init",
+    short_help="Initialize repo-local target state.",
+    help=(
+        "Explicitly write a repo-local target hint file and optional repo config for the selected repository. "
+        "Use this when [cyan]status[/cyan] shows no repo hint yet and you want a safe, explicit initialization step."
+    ),
+    epilog=(
+        "\b\nExamples:\n"
+        "  copilot-plugin-manager repo-init minimal\n"
+        "  copilot-plugin-manager repo-init --cwd /path/to/repo --repo-profile-location github\n"
+        "  copilot-plugin-manager repo-init minimal --agent-scope local --mcp-scope local --mcp-profile team"
+    ),
+)
+def repo_init_command(
+    target: Annotated[
+        str | None,
+        typer.Argument(help="Optional profile or theme name to persist. Defaults to the current active target when omitted."),
+    ] = None,
+    cwd: Annotated[
+        Path | None,
+        typer.Option(
+            "--cwd",
+            help="Working directory used to locate the repository root and repo-local config files.",
+            rich_help_panel="Repository context",
+        ),
+    ] = None,
+    repo_profile_location: Annotated[
+        RepoProfileLocation,
+        typer.Option(
+            "--repo-profile-location",
+            help="Where to write the repo-local target hint file.",
+            rich_help_panel="Repository context",
+        ),
+    ] = RepoProfileLocation.root,
+    agent_scope: Annotated[
+        str | None,
+        typer.Option(
+            "--agent-scope",
+            help="Persist the default repo agent scope: 'global' or 'local'.",
+            rich_help_panel="Preferences",
+        ),
+    ] = None,
+    mcp_scope: Annotated[
+        str | None,
+        typer.Option(
+            "--mcp-scope",
+            help="Persist the default repo MCP scope: 'global' or 'local'.",
+            rich_help_panel="Preferences",
+        ),
+    ] = None,
+    mcp_profile: Annotated[
+        str | None,
+        typer.Option(
+            "--mcp-profile",
+            help="Persist the preferred repo MCP profile name.",
+            rich_help_panel="Preferences",
+        ),
+    ] = None,
+    force: Annotated[
+        bool,
+        typer.Option(
+            "--force",
+            help="Replace an existing repo target hint when it points at a different target.",
+            rich_help_panel="Safety",
+        ),
+    ] = False,
+) -> None:
+    """Initialize repo-local target state without applying plugins, skills, or agents."""
+    manager = get_manager()
+    current = _cwd(cwd)
+    try:
+        activation, profile_path, config_path = manager.initialize_repo(
+            current,
+            target_name=target,
+            location=repo_profile_location.value,
+            agent_scope=_parse_scope(agent_scope) if agent_scope is not None else None,
+            mcp_scope=_parse_scope(mcp_scope) if mcp_scope is not None else None,
+            mcp_profile=mcp_profile,
+            force=force,
+        )
+    except (KeyError, RuntimeError) as exc:
+        console().print(f"[red]{exc}[/red]")
+        raise typer.Exit(1) from exc
+    console().print(build_target_tree(manager.catalog, activation))
+    console().print(f"[green]Initialized repo profile at {profile_path}[/green]")
+    if config_path is not None:
+        console().print(f"[green]Updated repo settings at {config_path}[/green]")
+
+
+@app.command(
+    "repo-cleanup",
+    short_help="Reconcile repo-managed content.",
+    help=(
+        "Explicitly clean up repo-managed plugins, skills, and agents for the selected target. "
+        "This runs an exclusive reconciliation pass to remove stale managed content and reinstall missing managed content."
+    ),
+    epilog=(
+        "\b\nExamples:\n"
+        "  copilot-plugin-manager repo-cleanup\n"
+        "  copilot-plugin-manager repo-cleanup minimal\n"
+        "  copilot-plugin-manager repo-cleanup --cwd /path/to/repo --agent-scope local"
+    ),
+)
+def repo_cleanup_command(
+    target: Annotated[
+        str | None,
+        typer.Argument(help="Optional profile or theme name to reconcile. Defaults to the repo hint or active target."),
+    ] = None,
+    cwd: Annotated[
+        Path | None,
+        typer.Option(
+            "--cwd",
+            help="Working directory used for repository-specific cleanup.",
+            rich_help_panel="Repository context",
+        ),
+    ] = None,
+    agent_scope: Annotated[
+        str | None,
+        typer.Option(
+            "--agent-scope",
+            help="Override the effective agent scope for this cleanup pass.",
+            rich_help_panel="Scope",
+        ),
+    ] = None,
+) -> None:
+    """Reconcile managed repo content explicitly when warnings show stale or missing state."""
+    manager = get_manager()
+    current = _cwd(cwd)
+    try:
+        activation = manager.cleanup_repo(
+            current,
+            target_name=target,
+            agent_scope=_parse_scope(agent_scope) if agent_scope is not None else None,
+        )
+    except (KeyError, RuntimeError) as exc:
+        console().print(f"[red]{exc}[/red]")
+        raise typer.Exit(1) from exc
+    console().print(build_target_tree(manager.catalog, activation))
+    console().print(f"[green]Reconciled repo-managed content for {activation.name}[/green]")
+    _print_sync_warnings(manager)
+
+
+@app.command(
+    "repo-config",
+    short_help="View or update repo-local settings.",
+    help=(
+        "Inspect or write [cyan].github/copilot-plugin-manager.json[/cyan] for the selected repository. "
+        "Use this alongside the repo target hint files ([cyan].copilot-profile[/cyan] or "
+        "[cyan].github/copilot-profile[/cyan]) to persist repo-local agent scope, MCP scope, "
+        "and the preferred MCP profile."
+    ),
+    epilog=(
+        "\b\nExamples:\n"
+        "  copilot-plugin-manager repo-config\n"
+        "  copilot-plugin-manager repo-config --agent-scope local --cwd /path/to/repo\n"
+        "  copilot-plugin-manager switch minimal --cwd /path/to/repo --save-repo-profile\n"
+        "  copilot-plugin-manager repo-config --mcp-scope local --mcp-profile team"
+    ),
+)
+def repo_config_command(
+    cwd: Annotated[
+        Path | None,
+        typer.Option(
+            "--cwd",
+            help="Working directory used to locate the repository root and repo config file.",
+            rich_help_panel="Repository context",
+        ),
+    ] = None,
+    agent_scope: Annotated[
+        str | None,
+        typer.Option(
+            "--agent-scope",
+            help="Persist the default repo agent scope: 'global' or 'local'.",
+            rich_help_panel="Preferences",
+        ),
+    ] = None,
+    mcp_scope: Annotated[
+        str | None,
+        typer.Option(
+            "--mcp-scope",
+            help="Persist the default repo MCP scope: 'global' or 'local'.",
+            rich_help_panel="Preferences",
+        ),
+    ] = None,
+    mcp_profile: Annotated[
+        str | None,
+        typer.Option(
+            "--mcp-profile",
+            help="Persist the preferred repo MCP profile name.",
+            rich_help_panel="Preferences",
+        ),
+    ] = None,
+    clear_mcp_profile: Annotated[
+        bool,
+        typer.Option(
+            "--clear-mcp-profile",
+            help="Remove any stored repo MCP profile preference.",
+            rich_help_panel="Preferences",
+        ),
+    ] = False,
+) -> None:
+    """Show or update the repo-local config used to resolve agent and MCP defaults."""
+    manager = get_manager()
+    current = _cwd(cwd)
+    if agent_scope is not None or mcp_scope is not None or mcp_profile is not None or clear_mcp_profile:
+        config_path = manager.write_repo_config(
+            current,
+            agent_scope=_parse_scope(agent_scope) if agent_scope is not None else None,
+            mcp_scope=_parse_scope(mcp_scope) if mcp_scope is not None else None,
+            mcp_profile="" if clear_mcp_profile else mcp_profile,
+        )
+        console().print(f"[green]Updated repo config at {config_path}[/green]")
+    snapshot = manager.status_snapshot(current)
+    console().print(render_repo_config(snapshot, str(manager.paths.copilot_home)))
+
+
+@completion_app.command(
+    "init",
     short_help="Print shell completion setup.",
     help=(
         "Print a shell-specific startup snippet for bash, zsh, fish, PowerShell, or Nushell. "
         "Use this for quick setup in your shell config. For managed files, use "
-        "[cyan]completion-script[/cyan] or [cyan]completion-install[/cyan]."
+        "[cyan]completion install[/cyan] or [cyan]completion script[/cyan]."
+    ),
+    epilog=(
+        '\b\nExamples:\n  eval "$(copilot-plugin-manager completion init bash)"\n'
+        "  copilot-plugin-manager completion init powershell\n"
+        "  copilot-plugin-manager completion init nushell"
+    ),
+)
+def completion_init_command(
+    shell: Annotated[
+        ShellName,
+        typer.Argument(help="Shell to generate an init snippet for."),
+    ],
+) -> None:
+    """Print a completion/init snippet for the requested shell."""
+    typer.echo(shell_init_snippet(shell.value))
+
+
+@completion_app.command(
+    "script",
+    short_help="Print a full shell completion script.",
+    help=("Render the full completion source for a supported shell. Redirect this output to inspect it, save it manually, or pair it with [cyan]completion install[/cyan]."),
+    epilog=(
+        "\b\nExamples:\n  copilot-plugin-manager completion script bash\n  copilot-plugin-manager completion script fish > ~/.config/fish/completions/copilot-plugin-manager.fish"
+    ),
+)
+def completion_script_subcommand(
+    shell: Annotated[
+        ShellName,
+        typer.Argument(help="Shell to generate a completion script for."),
+    ],
+) -> None:
+    """Print the full completion source for the requested shell."""
+    typer.echo(completion_source(_completion_command(), shell.value))
+
+
+@completion_app.command(
+    "install",
+    short_help="Write a shell completion file.",
+    help=("Write the generated completion script to a user-level location for the selected shell. Use [cyan]--path[/cyan] to override the destination."),
+    epilog=(
+        "\b\nExamples:\n"
+        "  copilot-plugin-manager completion install fish\n"
+        "  copilot-plugin-manager completion install bash --path ~/.local/share/bash-completion/completions/copilot-plugin-manager"
+    ),
+)
+def completion_install_subcommand(
+    shell: Annotated[
+        ShellName,
+        typer.Argument(help="Shell to install a completion file for."),
+    ],
+    path: Annotated[
+        Path | None,
+        typer.Option(
+            "--path",
+            help="Optional output path for the generated completion file.",
+            rich_help_panel="Output control",
+        ),
+    ] = None,
+) -> None:
+    """Install a generated completion file for the requested shell."""
+    target = install_completion_script(_completion_command(), shell.value, path=path)
+    typer.echo(f"Installed {shell.value} completion to {target}")
+    if message := install_completion_message(shell.value, target):
+        typer.echo(message)
+
+
+@app.command(
+    "shell-init",
+    short_help="Print shell completion setup.",
+    hidden=True,
+    help=(
+        "Print a shell-specific startup snippet for bash, zsh, fish, PowerShell, or Nushell. "
+        "Use this for quick setup in your shell config. For managed files, use "
+        "[cyan]completion script[/cyan] or [cyan]completion install[/cyan]."
     ),
     epilog=('\b\nExamples:\n  eval "$(copilot-plugin-manager shell-init bash)"\n  copilot-plugin-manager shell-init powershell\n  copilot-plugin-manager shell-init nushell'),
 )
@@ -940,7 +1364,8 @@ def shell_init_command(
 @app.command(
     "completion-script",
     short_help="Print a full shell completion script.",
-    help=("Render the full completion source for a supported shell. Redirect this output to inspect it, save it manually, or pair it with [cyan]completion-install[/cyan]."),
+    hidden=True,
+    help=("Render the full completion source for a supported shell. Redirect this output to inspect it, save it manually, or pair it with [cyan]completion install[/cyan]."),
     epilog=(
         "\b\nExamples:\n  copilot-plugin-manager completion-script bash\n  copilot-plugin-manager completion-script fish > ~/.config/fish/completions/copilot-plugin-manager.fish"
     ),
@@ -958,6 +1383,7 @@ def completion_script_command(
 @app.command(
     "completion-install",
     short_help="Write a shell completion file.",
+    hidden=True,
     help=("Write the generated completion script to a user-level location for the selected shell. Use [cyan]--path[/cyan] to override the destination."),
     epilog=(
         "\b\nExamples:\n"

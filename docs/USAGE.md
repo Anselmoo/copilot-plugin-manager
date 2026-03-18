@@ -91,49 +91,104 @@ Generated entrypoint data also records:
 copilot-plugin-manager
 copilot-plugin-manager menu
 copilot-plugin-manager list [overview|all|sources|profiles|themes|plugins|skills|agents|mcps]
+copilot-plugin-manager repo-init [profile-or-theme] [--repo-profile-location root|github] [--agent-scope global|local] [--mcp-scope global|local] [--mcp-profile NAME] [--force]
+copilot-plugin-manager repo-cleanup [profile-or-theme] [--agent-scope global|local]
+copilot-plugin-manager repo-config [--agent-scope global|local] [--mcp-scope global|local] [--mcp-profile NAME]
 copilot-plugin-manager status
-copilot-plugin-manager install [all|plugins|skills|agents|thirdparty]
-copilot-plugin-manager update [all|plugins|skills|agents|thirdparty]
-copilot-plugin-manager delete [all|plugins|skills|agents|thirdparty]
-copilot-plugin-manager switch <profile-or-theme> [--save-repo-profile] [--repo-profile-location root|github]
-copilot-plugin-manager switch-exclusive <profile-or-theme> [--save-repo-profile] [--repo-profile-location root|github]
+copilot-plugin-manager install [all|plugins|skills|agents|thirdparty] [--agent-scope global|local] [--mcp-scope global|local]
+copilot-plugin-manager update [all|plugins|skills|agents|thirdparty] [--agent-scope global|local] [--mcp-scope global|local]
+copilot-plugin-manager delete [all|plugins|skills|agents|thirdparty] [--agent-scope global|local] [--mcp-scope global|local]
+copilot-plugin-manager switch <profile-or-theme> [--agent-scope global|local] [--save-repo-profile] [--repo-profile-location root|github]
+copilot-plugin-manager switch-exclusive <profile-or-theme> [--agent-scope global|local] [--save-repo-profile] [--repo-profile-location root|github]
 copilot-plugin-manager repo-update [--remote/--no-remote]
 copilot-plugin-manager self-update
-copilot-plugin-manager shell-init <bash|zsh|fish|powershell|nushell>
-copilot-plugin-manager completion-script <bash|zsh|fish|powershell|nushell>
-copilot-plugin-manager completion-install <bash|zsh|fish|powershell|nushell> [--path PATH]
+copilot-plugin-manager completion init <bash|zsh|fish|powershell|nushell>
+copilot-plugin-manager completion script <bash|zsh|fish|powershell|nushell>
+copilot-plugin-manager completion install <bash|zsh|fish|powershell|nushell> [--path PATH]
 ```
 
 `copilot-plugin-manager` with no subcommand now opens a guided interactive menu when running in an interactive terminal. In non-interactive contexts, it falls back to a compact status view.
 
 `copilot-plugin-manager list` follows the same pattern: in an interactive terminal it opens a catalog browser with focused views for overview, profiles, themes, sources, plugins, skills, agents, and MCPs. In non-interactive contexts, or when you pass a section explicitly, it renders that specific section directly.
 
+## Repo config and scoped sync
+
+Repository-local settings are split intentionally:
+
+- `.copilot-profile` or `.github/copilot-profile` stores the selected profile or theme name for the repo.
+- `.github/copilot-plugin-manager.json` stores repo-local defaults for agent scope, MCP scope, and preferred MCP profile.
+
+Before writing either file, inspect the current bundled composition with:
+
+```bash
+copilot-plugin-manager list profiles
+copilot-plugin-manager list themes
+```
+
+You can also review `docs/THEMES.md` for the generated profile/theme composition reference.
+
+Use the shared repo config file at `.github/copilot-plugin-manager.json` when you want repository-local defaults for agent and MCP scope:
+
+```bash
+copilot-plugin-manager repo-config --agent-scope local
+copilot-plugin-manager repo-config --mcp-scope local --mcp-profile team
+copilot-plugin-manager repo-config
+```
+
+Use `repo-init` when a repository does not have a target hint yet and you want to create one explicitly without changing installed plugins, skills, or agents:
+
+```bash
+copilot-plugin-manager repo-init python-core
+copilot-plugin-manager repo-init --repo-profile-location github
+copilot-plugin-manager repo-init python-core --agent-scope local --mcp-scope local --mcp-profile team
+```
+
+Use `repo-cleanup` when `status` surfaces verification warnings about missing or unexpected managed content and you want an explicit cleanup pass:
+
+```bash
+copilot-plugin-manager repo-cleanup
+copilot-plugin-manager repo-cleanup python-core
+copilot-plugin-manager repo-cleanup --agent-scope local
+```
+
+When agent scope is `local`, synced agents are rewritten into `.github/agents/*.agent.md` using basename-oriented names. Global scope keeps provider-prefixed outputs in `~/.copilot/agents`.
+
+You can also override the effective scope per command without changing the saved repo config:
+
+```bash
+copilot-plugin-manager install thirdparty --agent-scope local
+copilot-plugin-manager update mcps --mcp-scope local
+copilot-plugin-manager switch python-core --agent-scope local
+```
+
 ## Shell setup
 
-Use `shell-init` for quick startup-file snippets:
+Use `completion init` for quick startup-file snippets:
 
 ```bash
-uv run copilot-plugin-manager shell-init bash
-uv run copilot-plugin-manager shell-init zsh
-uv run copilot-plugin-manager shell-init fish
-uv run copilot-plugin-manager shell-init powershell
-uv run copilot-plugin-manager shell-init nushell
+uv run copilot-plugin-manager completion init bash
+uv run copilot-plugin-manager completion init zsh
+uv run copilot-plugin-manager completion init fish
+uv run copilot-plugin-manager completion init powershell
+uv run copilot-plugin-manager completion init nushell
 ```
 
-Use `completion-script` to inspect the full generated source:
+Use `completion script` to inspect the full generated source:
 
 ```bash
-uv run copilot-plugin-manager completion-script bash
-uv run copilot-plugin-manager completion-script powershell
+uv run copilot-plugin-manager completion script bash
+uv run copilot-plugin-manager completion script powershell
 ```
 
-Use `completion-install` to write a completion file to a user-level location:
+Use `completion install` to write a completion file to a user-level location:
 
 ```bash
-uv run copilot-plugin-manager completion-install fish
-uv run copilot-plugin-manager completion-install bash
-uv run copilot-plugin-manager completion-install nushell
+uv run copilot-plugin-manager completion install fish
+uv run copilot-plugin-manager completion install bash
+uv run copilot-plugin-manager completion install nushell
 ```
+
+Legacy top-level aliases (`shell-init`, `completion-script`, and `completion-install`) are still available for existing scripts, but they are hidden from the main help output.
 
 Notes by shell:
 
@@ -163,17 +218,24 @@ export COPILOT_PLUGINS_ASCII=1
 
 ## Repo-local profile management
 
-Use `switch` or `switch-exclusive` with `--save-repo-profile` to write the selected target into a repo-local hint file:
+Use `switch` or `switch-exclusive` with `--save-repo-profile` to write the selected profile or theme into a repo-local target hint file:
 
 ```bash
-copilot-plugin-manager switch python-core --save-repo-profile
-copilot-plugin-manager switch ts --save-repo-profile --repo-profile-location github
+copilot-plugin-manager switch <profile-or-theme> --save-repo-profile
+copilot-plugin-manager switch <profile-or-theme> --save-repo-profile --repo-profile-location github
+copilot-plugin-manager status
 ```
 
 `--repo-profile-location root` writes `.copilot-profile` in the detected project root. `--repo-profile-location github` writes `.github/copilot-profile`.
+
+After saving a repo-local target hint, use `status` to confirm the resolved target type, themes, and any repo-local scope defaults from `.github/copilot-plugin-manager.json`.
+
+If you want to initialize the repo-local hint without changing the active installation, prefer `repo-init`.
 
 ## Sync warnings
 
 When a third-party provider contains missing or dangling entries, the manager skips the broken paths, persists a warning in state, and shows those warnings in `status` output.
 
 Profile switches also run a post-apply verification step. If the requested target was selected but the applied plugins / skills / agents do not fully match, the manager persists a strong verification warning instead of silently claiming success.
+
+When those verification warnings mention missing or unexpected managed content, run `repo-cleanup` for an explicit reconciliation pass.

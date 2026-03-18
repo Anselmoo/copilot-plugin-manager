@@ -203,7 +203,7 @@ def test_build_skill_entrypoints_resolves_microsoft_symlink_entries_to_real_skil
 
     assert len(entrypoints) == 1
     assert entrypoints[0]["source_path"] == "skills/python/data/blob"
-    assert seen_pathspecs == [".github/plugins/azure-sdk-python/skills/azure-storage-blob-py"]
+    assert seen_pathspecs == [".github/plugins/azure-sdk-python/skills/azure-storage-blob-py/SKILL.md"]
     assert entrypoints[0]["source_url"] == "https://github.com/microsoft/skills/tree/main/.github/plugins/azure-sdk-python/skills/azure-storage-blob-py"
     assert entrypoints[0]["title"] == "Azure Storage Blob"
     assert entrypoints[0]["local_name"] == "blob"
@@ -246,3 +246,105 @@ def test_build_skill_entrypoints_falls_back_to_blob_url_when_microsoft_symlink_t
     assert entrypoints[0]["source_path"] == "skills/python/data/blob"
     assert entrypoints[0]["source_url"] == "https://github.com/microsoft/skills/blob/main/skills/python/data/blob"
     assert entrypoints[0]["title"] == "Blob"
+
+
+def test_build_skill_entrypoints_uses_skill_root_metadata_instead_of_nested_helper_dirs(tmp_path: Path, monkeypatch) -> None:
+    refresh_catalog = load_refresh_catalog_module()
+    monkeypatch.setattr(refresh_catalog, "ROOT", tmp_path)
+    monkeypatch.setattr(refresh_catalog, "now_iso", lambda: "2026-03-14T00:00:00+00:00")
+    monkeypatch.setattr(refresh_catalog, "git_revision", lambda _: "revision")
+    seen_pathspecs: list[str] = []
+
+    def fake_git_commit_metadata_map(_repo_root: Path, pathspecs: list[str]) -> dict[str, tuple[str, str]]:
+        seen_pathspecs.extend(pathspecs)
+        return {path: ("commit", "2026-03-14T00:00:00+00:00") for path in pathspecs}
+
+    monkeypatch.setattr(refresh_catalog, "git_commit_metadata_map", fake_git_commit_metadata_map)
+
+    skill_root = tmp_path / "external" / "anthropics-skills" / "skills" / "claude-api"
+    skill_root.mkdir(parents=True)
+    (skill_root / "SKILL.md").write_text("# Claude API\n\nAPI implementation guidance.\n", encoding="utf-8")
+    (skill_root / "python").mkdir()
+    (skill_root / "shared").mkdir()
+
+    skills = {
+        "anthropic-claude-api": {
+            "source": "anthropics-skills",
+            "prefix": "anthropic-claude-api",
+            "roots": ["skills/claude-api"],
+        }
+    }
+    repositories = {
+        "anthropics-skills": {
+            "owner": "anthropics",
+            "repo": "skills",
+            "submodule_path": "external/anthropics-skills",
+        }
+    }
+
+    entrypoints = refresh_catalog.build_skill_entrypoints(skills, repositories, {})
+
+    assert entrypoints == [
+        {
+            "kind": "skill",
+            "source": "anthropics-skills",
+            "provider": "anthropic-claude-api",
+            "source_path": "skills/claude-api",
+            "local_name": "claude-api",
+            "local_output": "anthropic-claude-api__claude-api",
+            "title": "Claude API",
+            "description": "API implementation guidance.",
+            "source_url": "https://github.com/anthropics/skills/tree/main/skills/claude-api",
+            "tags": ["skill", "general", "anthropic", "frontend", "ui"],
+            "commit_revision": "commit",
+            "commit_date": "2026-03-14T00:00:00+00:00",
+            "approval_date": None,
+            "measured_revision": "revision",
+            "measured_at": "2026-03-14T00:00:00+00:00",
+            "first_seen_at": "2026-03-14T00:00:00+00:00",
+            "last_seen_at": "2026-03-14T00:00:00+00:00",
+        }
+    ]
+    assert seen_pathspecs == ["skills/claude-api/SKILL.md"]
+
+
+def test_build_skill_entrypoints_retries_nested_root_at_parent_skill_directory(tmp_path: Path, monkeypatch) -> None:
+    refresh_catalog = load_refresh_catalog_module()
+    monkeypatch.setattr(refresh_catalog, "ROOT", tmp_path)
+    monkeypatch.setattr(refresh_catalog, "now_iso", lambda: "2026-03-14T00:00:00+00:00")
+    monkeypatch.setattr(refresh_catalog, "git_revision", lambda _: "revision")
+    seen_pathspecs: list[str] = []
+
+    def fake_git_commit_metadata_map(_repo_root: Path, pathspecs: list[str]) -> dict[str, tuple[str, str]]:
+        seen_pathspecs.extend(pathspecs)
+        return {path: ("commit", "2026-03-14T00:00:00+00:00") for path in pathspecs}
+
+    monkeypatch.setattr(refresh_catalog, "git_commit_metadata_map", fake_git_commit_metadata_map)
+
+    skill_root = tmp_path / "external" / "kdense-science" / "scientific-skills" / "arboreto"
+    scripts_root = skill_root / "scripts"
+    scripts_root.mkdir(parents=True)
+    (skill_root / "SKILL.md").write_text("# Arboreto\n\nGRN inference helpers.\n", encoding="utf-8")
+
+    skills = {
+        "kdense-arboreto": {
+            "source": "kdense-science",
+            "prefix": "kdense-arboreto",
+            "roots": ["scientific-skills/arboreto/scripts"],
+        }
+    }
+    repositories = {
+        "kdense-science": {
+            "owner": "K-Dense-AI",
+            "repo": "claude-scientific-skills",
+            "submodule_path": "external/kdense-science",
+        }
+    }
+
+    entrypoints = refresh_catalog.build_skill_entrypoints(skills, repositories, {})
+
+    assert len(entrypoints) == 1
+    assert entrypoints[0]["source_path"] == "scientific-skills/arboreto"
+    assert entrypoints[0]["source_url"] == "https://github.com/K-Dense-AI/claude-scientific-skills/tree/main/scientific-skills/arboreto"
+    assert entrypoints[0]["title"] == "Arboreto"
+    assert seen_pathspecs == ["scientific-skills/arboreto/SKILL.md"]

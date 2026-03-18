@@ -6,22 +6,22 @@ These bundled catalogs build on the upstream repositories tracked by this projec
 
 | Source | Owner / Repo | License | Providers | Files | Description |
 | --- | --- | --- | ---: | ---: | --- |
-| `awesome-copilot` | `github/awesome-copilot` | MIT | 0 | 53 | Marketplace plugin source used by the main awesome-copilot ecosystem. |
-| `anthropics-skills` | `anthropics/skills` | See repository | 18 | 45 | Anthropic skill packs synced as local skill folders. |
-| `kdense-science` | `K-Dense-AI/claude-scientific-skills` | MIT | 176 | 270 | Scientific and research-focused skill packs. |
-| `microsoft-hve-core` | `microsoft/hve-core` | MIT | 0 | 0 | Microsoft HVE plugin collections for planning, security, GitHub, and data work. |
-| `microsoft-skills` | `microsoft/skills` | MIT | 16 | 85 | Language-specific Microsoft skills packs. |
 | `agency-agents` | `msitarzewski/agency-agents` | MIT | 21 | 167 | Role/division-based agent bundles. |
+| `anthropics-skills` | `anthropics/skills` | See repository | 18 | 17 | Anthropic skill packs synced as local skill folders. |
+| `awesome-copilot` | `github/awesome-copilot` | MIT | 0 | 53 | Marketplace plugin source used by the main awesome-copilot ecosystem. |
+| `kdense-science` | `K-Dense-AI/claude-scientific-skills` | MIT | 176 | 175 | Scientific and research-focused skill packs. |
+| `microsoft-hve-core` | `microsoft/hve-core` | MIT | 0 | 0 | Microsoft HVE plugin collections for planning, security, GitHub, and data work. |
+| `microsoft-skills` | `microsoft/skills` | MIT | 11 | 47 | Language-specific Microsoft skills packs. |
 | `voltagent-subagents` | `VoltAgent/awesome-claude-code-subagents` | MIT | 37 | 131 | Category-based Claude Code subagents grouped by workflow theme. |
 
 ## Repository details
 
-### `awesome-copilot`
+### `agency-agents`
 
-- URL: <https://github.com/github/awesome-copilot>
-- Submodule path: `external/awesome-copilot`
-- Tags: plugins
-- Use when: Use when you want marketplace plugins from the GitHub awesome-copilot ecosystem.
+- URL: <https://github.com/msitarzewski/agency-agents>
+- Submodule path: `external/agency-agents`
+- Tags: agents
+- Use when: Use when you want organization-style agent teams grouped by function.
 
 ### `anthropics-skills`
 
@@ -29,6 +29,13 @@ These bundled catalogs build on the upstream repositories tracked by this projec
 - Submodule path: `external/anthropics-skills`
 - Tags: skills
 - Use when: Use when you want Anthropic-maintained local skills for common workflows.
+
+### `awesome-copilot`
+
+- URL: <https://github.com/github/awesome-copilot>
+- Submodule path: `external/awesome-copilot`
+- Tags: plugins
+- Use when: Use when you want marketplace plugins from the GitHub awesome-copilot ecosystem.
 
 ### `kdense-science`
 
@@ -50,13 +57,6 @@ These bundled catalogs build on the upstream repositories tracked by this projec
 - Submodule path: `external/microsoft-skills`
 - Tags: skills
 - Use when: Use when you want Microsoft-curated language skill packs.
-
-### `agency-agents`
-
-- URL: <https://github.com/msitarzewski/agency-agents>
-- Submodule path: `external/agency-agents`
-- Tags: agents
-- Use when: Use when you want organization-style agent teams grouped by function.
 
 ### `voltagent-subagents`
 

@@ -3,6 +3,7 @@ from __future__ import annotations
 from pathlib import Path
 
 from .catalog import CatalogBundle, load_catalog_bundle
+from .rendering import _ordered_profiles
 
 README_SECTION_START = "<!-- generated:catalog-overview:start -->"
 README_SECTION_END = "<!-- generated:catalog-overview:end -->"
@@ -31,7 +32,7 @@ def render_readme_section(bundle: CatalogBundle) -> str:
         "| Profile | Themes |",
         "| --- | --- |",
     ]
-    lines.extend(f"| `{name}` | {_inline_codes(profile.themes)} |" for name, profile in bundle.profiles.items())
+    lines.extend(f"| `{name}` | {_inline_codes(themes)} |" for name, _focus, themes in _ordered_profiles(bundle))
     return "\n".join(lines).rstrip() + "\n"
 
 
@@ -46,7 +47,7 @@ def render_credits_markdown(bundle: CatalogBundle) -> str:
         "| Source | Owner / Repo | License | Providers | Files | Description |",
         "| --- | --- | --- | ---: | ---: | --- |",
     ]
-    for name in bundle.repositories:
+    for name in sorted(bundle.repositories):
         metadata = bundle.repository_metadata(name)
         summary = bundle.source_entrypoint_summary(name)
         lines.append(f"| `{name}` | `{metadata['owner_repo']}` | {metadata['license']} | {summary['provider_count']} | {summary['file_count']} | {metadata['description']} |")
@@ -57,7 +58,7 @@ def render_credits_markdown(bundle: CatalogBundle) -> str:
             "",
         ]
     )
-    for name in bundle.repositories:
+    for name in sorted(bundle.repositories):
         metadata = bundle.repository_metadata(name)
         lines.extend(
             [
@@ -92,12 +93,12 @@ def render_themes_markdown(bundle: CatalogBundle) -> str:
         "| Profile | Themes | Plugins | Skills | Agents |",
         "| --- | --- | ---: | ---: | ---: |",
     ]
-    for name, profile in bundle.profiles.items():
+    for name, _focus, themes in _ordered_profiles(bundle):
         lines.append(
-            f"| `{name}` | {_inline_codes(profile.themes)} | "
-            f"{len(bundle.target_items(profile.themes, 'plugins'))} | "
-            f"{len(bundle.target_items(profile.themes, 'skills'))} | "
-            f"{len(bundle.target_items(profile.themes, 'agents'))} |"
+            f"| `{name}` | {_inline_codes(themes)} | "
+            f"{len(bundle.target_items(themes, 'plugins'))} | "
+            f"{len(bundle.target_items(themes, 'skills'))} | "
+            f"{len(bundle.target_items(themes, 'agents'))} |"
         )
     lines.extend(
         [
@@ -106,14 +107,15 @@ def render_themes_markdown(bundle: CatalogBundle) -> str:
             "",
         ]
     )
-    for name, theme in bundle.themes.items():
+    for name in sorted(bundle.themes):
+        theme = bundle.themes[name]
         lines.extend(
             [
                 f"### `{name}`",
                 "",
-                f"- Plugins ({len(theme.plugins)}): {_inline_codes(theme.plugins)}",
-                f"- Skills ({len(theme.skills)}): {_inline_codes(theme.skills)}",
-                f"- Agents ({len(theme.agents)}): {_inline_codes(theme.agents)}",
+                f"- Plugins ({len(theme.plugins)}): {_inline_codes(sorted(theme.plugins))}",
+                f"- Skills ({len(theme.skills)}): {_inline_codes(sorted(theme.skills))}",
+                f"- Agents ({len(theme.agents)}): {_inline_codes(sorted(theme.agents))}",
                 "",
             ]
         )

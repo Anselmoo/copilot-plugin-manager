@@ -1,6 +1,6 @@
 [project]
 name = "copilot-plugin-manager"
-version = "0.1.4"
+version = "0.1.5"
 description = "Python-first GitHub Copilot plugin, skill, and agent manager"
 readme = "README.md"
 authors = [{ name = "Anselm Hahn", email = "Anselm.Hahn@gmail.com" }]
@@ -94,8 +94,9 @@ output-format = "full"
  generate-docs = { cmd = "python scripts/generate_docs.py", help = "Regenerate markdown docs for credits, theme compositions, and the README catalog overview." }
  _refresh-catalog = { cmd = "python scripts/refresh_catalog.py", help = "Regenerate plugin and entrypoint metadata from upstream submodules without legacy bootstrap files." }
  _refresh-catalog-reset = { cmd = "python scripts/refresh_catalog.py --hard-reset", help = "Hard-reset entrypoint provenance history and rebuild provider metadata from upstream source files." }
-refresh-catalog = { sequence = ["_refresh-catalog", "generate-docs"], help = "Regenerate catalog metadata and refresh generated markdown docs." }
-refresh-catalog-reset = { sequence = ["_refresh-catalog-reset", "generate-docs"], help = "Hard-reset catalog provenance data and refresh generated markdown docs." }
+ _validate-catalog = { cmd = "python scripts/refresh_catalog.py --validate-only", help = "Validate catalog source discovery and compiled output metadata without rewriting catalog files." }
+ refresh-catalog = { sequence = ["_refresh-catalog", "_validate-catalog", "generate-docs"], help = "Regenerate catalog metadata, validate compiled outputs, and refresh generated markdown docs." }
+ refresh-catalog-reset = { sequence = ["_refresh-catalog-reset", "_validate-catalog", "generate-docs"], help = "Hard-reset catalog provenance data, validate compiled outputs, and refresh generated markdown docs." }
 _build-dist = { cmd = "uv build", help = "Build source and wheel distributions." }
 _check-dist = { shell = "twine check dist/*", help = "Validate built distributions." }
 build = { sequence = [

@@ -12,7 +12,7 @@ It keeps Copilot setup management focused and reproducible:
 
 - compose setups from profiles and themes
 - install, update, and prune plugins
-- sync local skills and agents into `~/.copilot`
+- sync local skills plus agent outputs into either `~/.copilot` or `<repo>/.github/agents`
 - track repository-aware state under `~/.copilot/copilot-plugin-manager`
 - refresh bundled catalogs from curated upstream sources
 
@@ -60,8 +60,25 @@ Activate a setup for the current repository:
 
 ```bash
 copilot-plugin-manager switch python-core
+copilot-plugin-manager switch python-core --agent-scope local
 copilot-plugin-manager switch python-core --save-repo-profile
 copilot-plugin-manager switch-exclusive python-mcp
+```
+
+Initialize or clean up repo-local state explicitly:
+
+```bash
+copilot-plugin-manager repo-init python-core
+copilot-plugin-manager repo-init --agent-scope local --mcp-scope local --mcp-profile team
+copilot-plugin-manager repo-cleanup
+```
+
+Opt a repository into local agent and MCP behavior with the shared repo config:
+
+```bash
+copilot-plugin-manager repo-config --agent-scope local
+copilot-plugin-manager repo-config --mcp-scope local --mcp-profile team
+copilot-plugin-manager status
 ```
 
 Refresh upstream sources and inspect state:
@@ -71,7 +88,19 @@ copilot-plugin-manager repo-update --remote
 copilot-plugin-manager status
 ```
 
-`status` now surfaces repo-local profile files plus persisted sync and verification warnings, so partial syncs or “selected target does not match the applied environment” problems are easier to spot.
+`status` now surfaces the repo-local target hint, the resolved theme composition, repo settings files, and persisted sync / verification warnings, so partial syncs or “selected target does not match the applied environment” problems are easier to spot.
+
+When `status` shows verification warnings about missing or unexpected managed content, run `copilot-plugin-manager repo-cleanup` to reconcile the repo explicitly instead of relying on a read-only command to mutate state.
+
+For repository-local setup, treat the files as complementary:
+
+- `.copilot-profile` or `.github/copilot-profile` stores the selected profile or theme name for the repository.
+- `.github/copilot-plugin-manager.json` stores repo-local agent/MCP defaults such as scope and preferred MCP profile.
+- `copilot-plugin-manager status` lets you confirm both files and the effective resolved composition after catalog changes.
+
+When bundled profile/theme composition changes, check `copilot-plugin-manager list profiles`, `copilot-plugin-manager list themes`, or `docs/THEMES.md` before writing a new repo-local target hint.
+
+When agent scope is `local`, synced agents are rewritten into `.github/agents/*.agent.md` using basename-friendly filenames such as `regular.agent.md`. Global scope keeps provider-prefixed outputs under `~/.copilot/agents`.
 
 If you maintain the bundled upstream catalogs, `uv run poe broken-links` catches dangling symlinks in the repository and initialized submodules before refresh or sync work.
 
@@ -90,8 +119,8 @@ uvx copilot-plugin-manager status
 <!-- generated:catalog-overview:start -->
 _This section is generated from the bundled catalog data with `uv run poe generate-docs`._
 
-- `38` profiles
-- `29` themes
+- `39` profiles
+- `30` themes
 - `53` plugins
 - `210` skill providers
 - `58` agent providers
@@ -104,65 +133,68 @@ See also:
 
 | Profile | Themes |
 | --- | --- |
+| `drug-discovery` | `bioinformatics`, `chemistry`, `core`, `data`, `python`, `research`, `science` |
+| `everything` | `agents`, `bioinformatics`, `chemistry`, `clinical`, `core`, `data`, `devops`, `docs`, `docs-design`, `dotnet`, `enterprise`, `frontend`, `github`, `infra`, `mcp`, `mcp-agents`, `ml-ai`, `openapi`, `planning`, `python`, `python-agents`, `python-cloud`, `quantum`, `research`, `science`, `security`, `specialized`, `testing`, `typescript` |
+| `bioinformatics` | `bioinformatics`, `core`, `data`, `python`, `research`, `science` |
+| `healthcare` | `clinical`, `core`, `data`, `planning`, `python`, `research`, `science` |
 | `minimal` | `core` |
-| `docs` | `core`, `docs`, `python`, `testing` |
+| `enterprise` | `core`, `data`, `devops`, `enterprise`, `testing` |
+| `fullstack` | `core`, `data`, `frontend`, `python`, `testing`, `typescript` |
+| `agentic-fullstack` | `core`, `data`, `frontend`, `mcp-agents`, `python`, `python-agents`, `security`, `testing`, `typescript` |
+| `data-ai` | `core`, `data`, `ml-ai`, `research`, `science` |
+| `ml-engineering` | `core`, `data`, `ml-ai`, `python`, `science`, `testing` |
+| `data-science` | `core`, `data`, `ml-ai`, `python`, `research`, `science`, `testing` |
+| `backend` | `core`, `data`, `openapi`, `python`, `security`, `testing` |
+| `backend-api` | `core`, `data`, `openapi`, `python`, `security`, `testing` |
+| `science` | `core`, `data`, `python`, `science` |
+| `python-plus-rust` | `core`, `data`, `python`, `rust`, `testing` |
+| `scientific-programming` | `core`, `data`, `python`, `research`, `science` |
+| `dotnet-dev` | `core`, `devops`, `dotnet`, `testing` |
+| `ts-fullstack` | `core`, `devops`, `frontend`, `mcp`, `mcp-agents`, `testing`, `typescript` |
+| `devops-sec` | `core`, `devops`, `github`, `security` |
+| `infra-platform` | `core`, `devops`, `github`, `infra`, `security` |
+| `python-dev` | `core`, `devops`, `python`, `testing` |
+| `python-cloud` | `core`, `devops`, `python`, `python-cloud`, `testing` |
 | `docs-lite` | `core`, `docs` |
 | `docs-pro` | `core`, `docs`, `docs-design`, `planning`, `testing` |
-| `python-dev` | `core`, `python`, `testing`, `devops` |
+| `research` | `core`, `docs`, `planning`, `research`, `science` |
+| `docs` | `core`, `docs`, `python`, `testing` |
+| `frontend-design` | `core`, `docs-design`, `frontend`, `testing`, `typescript` |
+| `polyglot` | `core`, `dotnet`, `python`, `security`, `testing`, `typescript` |
+| `enterprise-architect` | `core`, `enterprise`, `github`, `planning`, `security`, `testing` |
+| `ts` | `core`, `frontend`, `testing`, `typescript` |
+| `ts-mcp` | `core`, `frontend`, `mcp`, `mcp-agents`, `testing`, `typescript` |
+| `planner` | `core`, `github`, `planning` |
+| `fastapi-typer` | `core`, `openapi`, `python`, `testing` |
+| `pydantic` | `core`, `openapi`, `python`, `testing` |
 | `python-core` | `core`, `python`, `testing` |
-| `python-agents` | `core`, `python`, `testing`, `python-agents` |
-| `python-mcp` | `core`, `python`, `mcp`, `testing`, `python-agents`, `mcp-agents` |
-| `ts` | `core`, `frontend`, `typescript`, `testing` |
-| `ts-mcp` | `core`, `frontend`, `typescript`, `mcp`, `testing`, `mcp-agents` |
-| `ts-fullstack` | `core`, `frontend`, `typescript`, `mcp`, `testing`, `mcp-agents`, `devops` |
-| `python-plus-rust` | `core`, `python`, `rust`, `data`, `testing` |
-| `pydantic` | `core`, `python`, `openapi`, `testing` |
-| `fastapi-typer` | `core`, `python`, `openapi`, `testing` |
-| `backend` | `core`, `python`, `openapi`, `data`, `testing`, `security` |
 | `mcp-dev` | `core`, `mcp`, `python`, `testing` |
-| `frontend-design` | `core`, `frontend`, `typescript`, `docs-design`, `testing` |
-| `backend-api` | `core`, `python`, `openapi`, `data`, `testing`, `security` |
-| `fullstack` | `core`, `frontend`, `typescript`, `python`, `testing`, `data` |
-| `agentic-fullstack` | `core`, `frontend`, `typescript`, `python`, `testing`, `data`, `security`, `python-agents`, `mcp-agents` |
-| `dotnet-dev` | `core`, `dotnet`, `testing`, `devops` |
-| `polyglot` | `core`, `python`, `typescript`, `dotnet`, `testing`, `security` |
-| `science` | `core`, `science`, `python`, `data` |
-| `scientific-programming` | `core`, `science`, `python`, `data`, `research` |
-| `bioinformatics` | `core`, `python`, `bioinformatics`, `science`, `research`, `data` |
-| `drug-discovery` | `core`, `python`, `chemistry`, `bioinformatics`, `science`, `research`, `data` |
-| `ml-engineering` | `core`, `python`, `ml-ai`, `data`, `testing`, `science` |
-| `quantum-computing` | `core`, `python`, `quantum`, `science`, `research` |
-| `healthcare` | `core`, `python`, `clinical`, `science`, `research`, `data`, `planning` |
-| `data-ai` | `core`, `data`, `ml-ai`, `science`, `research` |
-| `data-science` | `core`, `data`, `ml-ai`, `python`, `research`, `science`, `testing` |
-| `research` | `core`, `docs`, `science`, `research`, `planning` |
-| `devops-sec` | `core`, `devops`, `security`, `github` |
-| `infra-platform` | `core`, `infra`, `devops`, `security`, `github` |
-| `planner` | `core`, `planning`, `github` |
-| `enterprise` | `core`, `enterprise`, `data`, `testing`, `devops` |
-| `enterprise-architect` | `core`, `enterprise`, `planning`, `security`, `github`, `testing` |
-| `everything` | `core`, `docs`, `docs-design`, `python`, `python-agents`, `typescript`, `dotnet`, `frontend`, `mcp`, `mcp-agents`, `testing`, `science`, `bioinformatics`, `ml-ai`, `chemistry`, `quantum`, `clinical`, `openapi`, `enterprise`, `data`, `devops`, `infra`, `security`, `planning`, `github`, `research`, `specialized`, `agents` |
+| `python-agents` | `core`, `python`, `python-agents`, `testing` |
+| `python-mcp` | `core`, `mcp`, `mcp-agents`, `python`, `python-agents`, `testing` |
+| `quantum-computing` | `core`, `python`, `quantum`, `research`, `science` |
 <!-- generated:catalog-overview:end -->
 
 ## Shell completion
 
-Quick shell-init snippets:
+The visible completion workflow now lives under a single `completion` command:
 
 ```bash
-copilot-plugin-manager shell-init bash
-copilot-plugin-manager shell-init zsh
-copilot-plugin-manager shell-init fish
-copilot-plugin-manager shell-init powershell
-copilot-plugin-manager shell-init nushell
+copilot-plugin-manager completion init bash
+copilot-plugin-manager completion init zsh
+copilot-plugin-manager completion init fish
+copilot-plugin-manager completion init powershell
+copilot-plugin-manager completion init nushell
 ```
 
 Managed completion files:
 
 ```bash
-copilot-plugin-manager completion-install fish
-copilot-plugin-manager completion-install bash
-copilot-plugin-manager completion-script powershell
+copilot-plugin-manager completion install fish
+copilot-plugin-manager completion install bash
+copilot-plugin-manager completion script powershell
 ```
+
+Legacy top-level aliases (`shell-init`, `completion-script`, and `completion-install`) still work for backward compatibility.
 
 ## From source
 
