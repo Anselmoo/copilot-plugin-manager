@@ -48,9 +48,9 @@ class CatalogBundle(BaseModel):
             return plugin.source_url
         install_source = self.plugin_install_source(name)
         if match := re.match(r"^(?P<plugin>[^@]+)@awesome-copilot$", install_source):
-            return f"https://github.com/github/awesome-copilot/tree/main/plugins/{match.group('plugin')}"
+            return f"https://github.com/github/awesome-copilot/tree/main/plugins/{match['plugin']}"
         if match := re.match(r"^(?P<owner>[^/]+)/(?P<repo>[^/]+)/(?P<path>.+)$", install_source):
-            return f"https://github.com/{match.group('owner')}/{match.group('repo')}/tree/main/{match.group('path')}"
+            return f"https://github.com/{match['owner']}/{match['repo']}/tree/main/{match['path']}"
         return f"https://github.com/search?q={name}&type=repositories"
 
     def plugin_description(self, name: str) -> str:
@@ -72,10 +72,10 @@ class CatalogBundle(BaseModel):
         if plugin and plugin.use_when:
             return plugin.use_when
         patterns = use_when_rules()
-        for pattern, description in patterns.items():
-            if re.search(pattern, name):
-                return description
-        return "Use when this plugin matches the workflow or domain you want available in Copilot."
+        return next(
+            (description for pattern, description in patterns.items() if re.search(pattern, name)),
+            "Use when this plugin matches the workflow or domain you want available in Copilot.",
+        )
 
     def plugin_version(self, name: str) -> str:
         plugin = self.plugins.get(name)
@@ -86,9 +86,7 @@ class CatalogBundle(BaseModel):
 
     def plugin_tags(self, name: str) -> list[str]:
         plugin = self.plugins.get(name)
-        if plugin and plugin.tags:
-            return plugin.tags
-        return classify_tags(name)
+        return plugin.tags if plugin and plugin.tags else classify_tags(name)
 
     def plugin_details(self, name: str) -> dict[str, str]:
         return {
@@ -347,10 +345,10 @@ def default_provider_description(name: str, owner: str, repo: str, kind: str) ->
         r"^mskills-": "Microsoft language- or topic-specific skill bundle.",
         r"^kdense": "K-Dense scientific or research-oriented skill pack.",
     }
-    for pattern, description in patterns.items():
-        if re.search(pattern, name):
-            return description
-    return f"Local {kind} provider backed by {owner}/{repo}."
+    return next(
+        (description for pattern, description in patterns.items() if re.search(pattern, name)),
+        f"Local {kind} provider backed by {owner}/{repo}.",
+    )
 
 
 def default_provider_use_when(name: str, owner: str, repo: str, kind: str) -> str:
@@ -363,10 +361,10 @@ def default_provider_use_when(name: str, owner: str, repo: str, kind: str) -> st
         r"^mskills-": "Use when you want Microsoft skills for a specific language or topic area.",
         r"^kdense": "Use when you need scientific research, literature, or data-analysis focused skills.",
     }
-    for pattern, description in patterns.items():
-        if re.search(pattern, name):
-            return description
-    return f"Use when you want this {kind} provider synced from {owner}/{repo}."
+    return next(
+        (description for pattern, description in patterns.items() if re.search(pattern, name)),
+        f"Use when you want this {kind} provider synced from {owner}/{repo}.",
+    )
 
 
 def _read_toml(path: str, root: Path | None = None) -> dict[str, object]:

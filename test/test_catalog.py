@@ -1,4 +1,5 @@
 from copilot_plugin_manager.catalog import load_catalog_bundle
+from copilot_plugin_manager.rendering import _ordered_profiles, _profile_focus
 
 
 def test_catalog_bundle_counts() -> None:
@@ -8,7 +9,7 @@ def test_catalog_bundle_counts() -> None:
     assert len(bundle.skill_providers) == 210
     assert len(bundle.agent_providers) == 58
     assert len(bundle.entrypoints) > len(bundle.plugins)
-    assert len(bundle.themes) == 28
+    assert len(bundle.themes) == 29
     assert len(bundle.profiles) == 38
 
 
@@ -24,11 +25,19 @@ def test_resolve_added_curated_profiles() -> None:
 
     assert bundle.resolve_target("ts").themes == ["core", "frontend", "typescript", "testing"]
     assert bundle.resolve_target("ts-mcp").themes == ["core", "frontend", "typescript", "mcp", "testing", "mcp-agents"]
-    assert bundle.resolve_target("python-plus-rust").themes == ["core", "python", "data", "testing"]
+    assert bundle.resolve_target("python-plus-rust").themes == ["core", "python", "rust", "data", "testing"]
     assert bundle.resolve_target("pydantic").themes == ["core", "python", "openapi", "testing"]
     assert bundle.resolve_target("fastapi-typer").themes == ["core", "python", "openapi", "testing"]
     assert bundle.resolve_target("backend").themes == bundle.resolve_target("backend-api").themes
     assert bundle.resolve_target("scientific-programming").themes == ["core", "science", "python", "data", "research"]
+
+
+def test_rust_theme_exposes_rust_specific_content() -> None:
+    bundle = load_catalog_bundle()
+    rust_theme = bundle.themes["rust"]
+
+    assert "rust-mcp-development" in rust_theme.plugins
+    assert "mskills-rust" in rust_theme.skills
 
 
 def test_plugin_and_repository_metadata_are_enriched() -> None:
@@ -113,3 +122,41 @@ def test_agent_provider_metadata_is_extracted_from_target_files() -> None:
     assert "specific VoltAgent specialist or workflow agent" not in provider["use_when"]
     assert "code review" in provider["description"].lower()
     assert "use when you need" in provider["use_when"].lower()
+
+
+def test_themes_only_reference_catalogued_plugins() -> None:
+    bundle = load_catalog_bundle()
+
+    missing = {
+        theme_name: [plugin_name for plugin_name in theme.plugins if plugin_name not in bundle.plugins]
+        for theme_name, theme in bundle.themes.items()
+        if any(plugin_name not in bundle.plugins for plugin_name in theme.plugins)
+    }
+
+    assert missing == {}
+
+
+def test_kdense_skill_provider_roots_include_scientific_skills_prefix() -> None:
+    bundle = load_catalog_bundle()
+
+    offenders = {
+        name: provider.roots
+        for name, provider in bundle.skill_providers.items()
+        if provider.source == "kdense-science" and any(not root.startswith("scientific-skills/") for root in provider.roots)
+    }
+
+    assert offenders == {}
+
+
+def test_profile_focus_prefers_non_base_themes() -> None:
+    assert _profile_focus(["core", "python", "testing"]) == "python"
+    assert _profile_focus(["core", "frontend", "typescript", "mcp", "testing"]) == "frontend, typescript"
+
+
+def test_profiles_are_ordered_by_focus_then_name() -> None:
+    bundle = load_catalog_bundle()
+
+    ordered_names = [name for name, _focus, _themes in _ordered_profiles(bundle)]
+
+    assert ordered_names.index("docs") < ordered_names.index("python-core")
+    assert ordered_names.index("python-core") < ordered_names.index("science")

@@ -45,7 +45,7 @@ def repo_key(path: Path) -> str:
 def find_repo_profile(start: Path, home: Path | None = None) -> str:
     current = start.resolve()
     stop = (home or Path.home()).resolve()
-    while current != current.parent and current != stop:
+    while current not in [current.parent, stop]:
         for hint in PROFILE_HINT_PATHS:
             candidate = current / hint
             if candidate.exists():

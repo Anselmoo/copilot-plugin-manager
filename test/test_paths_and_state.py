@@ -24,13 +24,15 @@ def test_state_store_persists_repo_mapping(tmp_path: Path, monkeypatch) -> None:
     repo.mkdir()
     target = ActivationTarget(name="docs", kind="profile", themes=["core", "docs"])
 
-    store.write_repo_target(repo, target, "docs")
+    store.write_repo_target(repo, target, "docs", verification_warnings=["verification: missing plugin pdf"])
     saved = store.read_repo_state(repo)
 
     assert saved is not None
     assert saved.active_target == "docs"
     assert saved.active_kind == "profile"
     assert saved.repo_profile_hint == "docs"
+    assert saved.verification_warnings == ["verification: missing plugin pdf"]
+    assert saved.last_verified_at is not None
 
 
 def test_state_store_normalizes_repo_mapping_to_project_root(tmp_path: Path, monkeypatch) -> None:

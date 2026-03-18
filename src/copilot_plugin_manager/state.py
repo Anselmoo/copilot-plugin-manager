@@ -46,9 +46,19 @@ class StateStore:
     def source_has_changed(self, source_name: str, observed: SourceState) -> bool:
         return observed.has_comparable_change(self.read_source_state(source_name))
 
-    def write_repo_target(self, cwd: Path, target: ActivationTarget, repo_profile_hint: str | None) -> None:
+    def write_repo_target(
+        self,
+        cwd: Path,
+        target: ActivationTarget,
+        repo_profile_hint: str | None,
+        verification_warnings: list[str] | None = None,
+    ) -> None:
         state = self.load()
-        state.repositories[repo_key(self._repo_state_path(cwd))] = RepoState.from_target(target, repo_profile_hint)
+        state.repositories[repo_key(self._repo_state_path(cwd))] = RepoState.from_target(
+            target,
+            repo_profile_hint,
+            verification_warnings=verification_warnings,
+        )
         self.save(state)
         self.paths.legacy_active_target_file.parent.mkdir(parents=True, exist_ok=True)
         self.paths.legacy_active_target_file.write_text(target.name + "\n")

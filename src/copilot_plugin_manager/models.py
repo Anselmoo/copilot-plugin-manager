@@ -118,16 +118,26 @@ class RepoState(BaseModel):
     active_kind: Literal["profile", "theme"] | None = None
     active_themes: list[str] = Field(default_factory=list)
     repo_profile_hint: str | None = None
+    verification_warnings: list[str] = Field(default_factory=list)
+    last_verified_at: str | None = None
     updated_at: str | None = None
 
     @classmethod
-    def from_target(cls, target: ActivationTarget, repo_profile_hint: str | None) -> "RepoState":
+    def from_target(
+        cls,
+        target: ActivationTarget,
+        repo_profile_hint: str | None,
+        verification_warnings: list[str] | None = None,
+    ) -> "RepoState":
+        observed_at = datetime.now(UTC).isoformat()
         return cls(
             active_target=target.name,
             active_kind=target.kind,
             active_themes=target.themes,
             repo_profile_hint=repo_profile_hint,
-            updated_at=datetime.now(UTC).isoformat(),
+            verification_warnings=list(dict.fromkeys(verification_warnings or [])),
+            last_verified_at=observed_at,
+            updated_at=observed_at,
         )
 
 
@@ -146,8 +156,6 @@ class SourceState(BaseModel):
             return self.revision != previous.revision
         if self.revision or previous.revision:
             return self.revision != previous.revision
-        if self.manifest_version and previous.manifest_version:
-            return self.manifest_version != previous.manifest_version
         return self.manifest_version != previous.manifest_version
 
 
@@ -182,3 +190,4 @@ class PlannedAction:
     category: Literal["plugin", "skill", "agent", "mcp", "repo", "state", "info"]
     description: str
     command: tuple[str, ...] | None = None
+    check: bool = True

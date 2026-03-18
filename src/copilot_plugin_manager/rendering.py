@@ -56,7 +56,7 @@ def get_glyphs() -> Glyphs:
 
 
 def console() -> Console:
-    return Console(soft_wrap=False)
+    return Console(soft_wrap=True)
 
 
 def _base_table(title: str, header_style: str = "bold white") -> Table:
@@ -109,23 +109,49 @@ def _overview_panel(title: str, rows: list[tuple[str, str]]) -> Panel:
 
 
 def _short_revision(revision: str | None) -> str:
-    if not revision:
-        return ""
-    return revision[:12]
+    return revision[:12] if revision else ""
 
 
 def _short_timestamp(value: str | None) -> str:
-    if not value:
-        return ""
-    return value.replace("T", " ", 1)[:19]
+    return value.replace("T", " ", 1)[:19] if value else ""
+
+
+_PROFILE_BASE_THEMES = {"core", "testing", "mcp", "agents", "mcp-agents"}
+
+
+def _profile_focus(themes: list[str]) -> str:
+    if thematic := [theme for theme in themes if theme not in _PROFILE_BASE_THEMES]:
+        return ", ".join(thematic[:2])
+    return ", ".join(themes[:2])
+
+
+def _ordered_profiles(bundle: CatalogBundle) -> list[tuple[str, str, list[str]]]:
+    ordered = []
+    for name, profile in bundle.profiles.items():
+        focus = _profile_focus(profile.themes)
+        ordered.append((name, focus, profile.themes))
+    return sorted(
+        ordered,
+        key=lambda item: (
+            item[1] == "all themes",
+            item[1],
+            len(item[2]),
+            item[0],
+        ),
+    )
 
 
 def render_profiles(bundle: CatalogBundle) -> Table:
     table = _base_table("Profiles", header_style="bold green")
     table.add_column("Profile", style="green", no_wrap=True, width=24)
+    table.add_column("Focus", style="cyan", no_wrap=True, width=22)
     table.add_column("Themes", style="white", overflow="fold")
-    for name, profile in bundle.profiles.items():
-        table.add_row(name, "all themes" if name == "everything" else ", ".join(profile.themes))
+    for name, focus, themes in _ordered_profiles(bundle):
+        table.add_row(
+            name,
+            "all themes" if name == "everything" else focus,
+            "all themes" if name == "everything" else ", ".join(themes),
+        )
     return table
 
 
@@ -274,16 +300,19 @@ def render_status(status: dict[str, object], copilot_home: str) -> list[object]:
     installed_plugins = cast(list[dict[str, str | None]], status["installed_plugins"])
     source_revisions = cast(list[dict[str, str | int | None]], status["source_revisions"])
     sync_warnings = cast(list[str], status.get("sync_warnings", []))
+    verification_state = "warnings present" if sync_warnings else "verified"
     rows = [
-        ("Active target", active_target.name if active_target else "none"),
+        ("Selected target", active_target.name if active_target else "none"),
         ("Active type", active_target.kind if active_target else ""),
         ("Active themes", ", ".join(active_target.themes) if active_target else ""),
+        ("Target verification", verification_state),
+        ("Last verified", _short_timestamp(cast(str | None, status.get("last_verified_at")))),
         ("Repo profile", str(status["repo_hint"])),
         ("Repo profile file", str(status.get("repo_profile_file", ""))),
         ("Copilot home", copilot_home),
         ("Skill dirs", str(status["skill_count"])),
         ("Agent files", str(status["agent_count"])),
-        ("Sync warnings", str(len(sync_warnings))),
+        ("Warnings", str(len(sync_warnings))),
     ]
     plugin_table = _base_table("Installed plugins", header_style="bold blue")
     plugin_table.add_column("Name", style="blue", no_wrap=True, width=28)
@@ -313,8 +342,5 @@ def render_status(status: dict[str, object], copilot_home: str) -> list[object]:
 
 
 def render_sync_warnings(warnings: list[str]) -> Panel:
-    table = Table(show_header=False, box=None, expand=True, padding=(0, 1), collapse_padding=True)
-    table.add_column("Warning", style="yellow", overflow="fold")
-    for warning in warnings:
-        table.add_row(warning)
-    return Panel(table, title="Sync warnings", border_style="yellow", box=box.ROUNDED, expand=True)
+    lines = "\n".join(f"- {warning}" for warning in warnings)
+    return Panel(lines, title="Sync warnings", border_style="yellow", box=box.ROUNDED, expand=True)

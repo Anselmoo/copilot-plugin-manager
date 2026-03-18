@@ -88,7 +88,9 @@ Generated entrypoint data also records:
 ## Command reference
 
 ```text
-copilot-plugin-manager list [overview|all|sources|profiles|themes|plugins|skills|agents]
+copilot-plugin-manager
+copilot-plugin-manager menu
+copilot-plugin-manager list [overview|all|sources|profiles|themes|plugins|skills|agents|mcps]
 copilot-plugin-manager status
 copilot-plugin-manager install [all|plugins|skills|agents|thirdparty]
 copilot-plugin-manager update [all|plugins|skills|agents|thirdparty]
@@ -101,6 +103,10 @@ copilot-plugin-manager shell-init <bash|zsh|fish|powershell|nushell>
 copilot-plugin-manager completion-script <bash|zsh|fish|powershell|nushell>
 copilot-plugin-manager completion-install <bash|zsh|fish|powershell|nushell> [--path PATH]
 ```
+
+`copilot-plugin-manager` with no subcommand now opens a guided interactive menu when running in an interactive terminal. In non-interactive contexts, it falls back to a compact status view.
+
+`copilot-plugin-manager list` follows the same pattern: in an interactive terminal it opens a catalog browser with focused views for overview, profiles, themes, sources, plugins, skills, agents, and MCPs. In non-interactive contexts, or when you pass a section explicitly, it renders that specific section directly.
 
 ## Shell setup
 
@@ -143,6 +149,7 @@ For quick one-off execution without installing the package into your environment
 
 ```bash
 uvx copilot-plugin-manager status
+uvx copilot-plugin-manager list
 uvx copilot-plugin-manager list profiles
 ```
 
@@ -167,4 +174,6 @@ copilot-plugin-manager switch ts --save-repo-profile --repo-profile-location git
 
 ## Sync warnings
 
-When a third-party skill provider contains missing or dangling entries, the manager now skips the broken paths, persists a warning in state, and shows those warnings in `status` output. This makes partial syncs visible without aborting the entire profile switch.
+When a third-party provider contains missing or dangling entries, the manager skips the broken paths, persists a warning in state, and shows those warnings in `status` output.
+
+Profile switches also run a post-apply verification step. If the requested target was selected but the applied plugins / skills / agents do not fully match, the manager persists a strong verification warning instead of silently claiming success.

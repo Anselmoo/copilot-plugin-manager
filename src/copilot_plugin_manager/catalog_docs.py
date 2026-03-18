@@ -31,8 +31,7 @@ def render_readme_section(bundle: CatalogBundle) -> str:
         "| Profile | Themes |",
         "| --- | --- |",
     ]
-    for name, profile in bundle.profiles.items():
-        lines.append(f"| `{name}` | {_inline_codes(profile.themes)} |")
+    lines.extend(f"| `{name}` | {_inline_codes(profile.themes)} |" for name, profile in bundle.profiles.items())
     return "\n".join(lines).rstrip() + "\n"
 
 

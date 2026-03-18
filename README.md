@@ -38,13 +38,23 @@ copilot-plugin-manager --help
 
 ## Quick start
 
-List what is available:
+Open the guided menu for the current repository context:
 
 ```bash
+copilot-plugin-manager
+```
+
+Browse what is available:
+
+```bash
+copilot-plugin-manager list
 copilot-plugin-manager list profiles
 copilot-plugin-manager list themes
 copilot-plugin-manager list sources
+copilot-plugin-manager list mcps
 ```
+
+In an interactive terminal, bare `list` opens a compact catalog browser instead of dumping every section at once. Use an explicit section such as `list overview` when you want a stable non-interactive view for scripts or copy/paste output.
 
 Activate a setup for the current repository:
 
@@ -61,13 +71,14 @@ copilot-plugin-manager repo-update --remote
 copilot-plugin-manager status
 ```
 
-`status` now surfaces repo-local profile files and any persisted sync warnings from the last third-party skill sync, so partial upstream-copy problems are easier to spot.
+`status` now surfaces repo-local profile files plus persisted sync and verification warnings, so partial syncs or “selected target does not match the applied environment” problems are easier to spot.
 
 If you maintain the bundled upstream catalogs, `uv run poe broken-links` catches dangling symlinks in the repository and initialized submodules before refresh or sync work.
 
 If you prefer one-off execution with `uvx`, the same commands work there too:
 
 ```bash
+uvx copilot-plugin-manager list
 uvx copilot-plugin-manager list profiles
 uvx copilot-plugin-manager status
 ```
@@ -80,7 +91,7 @@ uvx copilot-plugin-manager status
 _This section is generated from the bundled catalog data with `uv run poe generate-docs`._
 
 - `38` profiles
-- `28` themes
+- `29` themes
 - `53` plugins
 - `210` skill providers
 - `58` agent providers
@@ -104,7 +115,7 @@ See also:
 | `ts` | `core`, `frontend`, `typescript`, `testing` |
 | `ts-mcp` | `core`, `frontend`, `typescript`, `mcp`, `testing`, `mcp-agents` |
 | `ts-fullstack` | `core`, `frontend`, `typescript`, `mcp`, `testing`, `mcp-agents`, `devops` |
-| `python-plus-rust` | `core`, `python`, `data`, `testing` |
+| `python-plus-rust` | `core`, `python`, `rust`, `data`, `testing` |
 | `pydantic` | `core`, `python`, `openapi`, `testing` |
 | `fastapi-typer` | `core`, `python`, `openapi`, `testing` |
 | `backend` | `core`, `python`, `openapi`, `data`, `testing`, `security` |
