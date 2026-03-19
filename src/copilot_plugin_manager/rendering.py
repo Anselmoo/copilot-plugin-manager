@@ -130,15 +130,7 @@ def _ordered_profiles(bundle: CatalogBundle) -> list[tuple[str, str, list[str]]]
     for name, profile in bundle.profiles.items():
         focus = _profile_focus(profile.themes)
         ordered.append((name, focus, profile.themes))
-    return sorted(
-        ordered,
-        key=lambda item: (
-            item[1] == "all themes",
-            item[1],
-            len(item[2]),
-            item[0],
-        ),
-    )
+    return sorted(ordered, key=lambda item: item[0])
 
 
 def render_profiles(bundle: CatalogBundle) -> Table:
@@ -300,6 +292,7 @@ def render_repo_config(status: dict[str, object], copilot_home: str) -> Panel:
         ("Hint themes", repo_hint_themes),
         ("Repo hint file", str(status.get("repo_profile_file", "")) or "not written"),
         ("Repo settings file", str(status.get("repo_config_file", "")) or "not written"),
+        ("Project catalog file", str(status.get("project_catalog_file", "")) or "not written"),
         ("Agent scope", str(status.get("agent_scope", "global"))),
         ("Agent root", str(status.get("agent_root", ""))),
         ("MCP scope", str(status.get("mcp_scope", "global"))),

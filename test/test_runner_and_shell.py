@@ -184,7 +184,52 @@ def test_cli_default_invocation_opens_guided_menu(monkeypatch, tmp_path) -> None
 
     assert result.exit_code == 0
     assert "Choose an action" in result.stdout
+    assert "catalog" in result.stdout
     assert "Do you want to choose another action?" in result.stdout
+
+
+def test_cli_menu_browse_action_opens_catalog_browser(monkeypatch, tmp_path) -> None:
+    class StubManager:
+        def __init__(self) -> None:
+            self.catalog = load_catalog_bundle()
+            self.sync_warnings: list[str] = []
+            self.paths = ManagerPaths(
+                tmp_path / ".copilot",
+                tmp_path / ".copilot" / "copilot-plugin-manager",
+                tmp_path / ".copilot" / "skills",
+                tmp_path / ".copilot" / "agents",
+                tmp_path / ".copilot" / "active-profile",
+                tmp_path / ".copilot" / "copilot-plugin-manager" / "state.json",
+                tmp_path / ".copilot" / "copilot-plugin-manager" / "sources",
+            )
+
+        def read_active_target(self, cwd: Path) -> str:
+            return ""
+
+        def repo_profile_hint(self, cwd: Path) -> str:
+            return ""
+
+        def status_snapshot(self, cwd: Path) -> dict[str, object]:
+            return {
+                "repo_hint": "",
+                "repo_profile_file": "",
+                "active_target": None,
+                "installed_plugins": [],
+                "skill_count": 0,
+                "agent_count": 0,
+                "sync_warnings": [],
+                "last_verified_at": None,
+                "source_revisions": [],
+            }
+
+    monkeypatch.setattr("copilot_plugin_manager.cli.get_manager", lambda: StubManager())
+    monkeypatch.setattr("copilot_plugin_manager.cli._supports_interactive_menu", lambda: True)
+
+    result = runner.invoke(app, ["menu"], input="2\n1\nn\nn\n")
+
+    assert result.exit_code == 0
+    assert "Catalog browser" in result.stdout
+    assert "Choose a catalog view" in result.stdout
 
 
 def test_cli_list_without_section_opens_catalog_browser(monkeypatch, tmp_path) -> None:
@@ -208,6 +253,26 @@ def test_cli_list_without_section_opens_catalog_browser(monkeypatch, tmp_path) -
     assert "Catalog browser" in result.stdout
     assert "Choose a catalog view" in result.stdout
     assert "Browse another catalog view?" in result.stdout
+
+
+def test_cli_catalog_group_renders_requested_section(monkeypatch, tmp_path) -> None:
+    class StubManager:
+        def __init__(self) -> None:
+            self.catalog = load_catalog_bundle()
+            self.sync_warnings: list[str] = []
+
+        def read_active_target(self, cwd: Path) -> str:
+            return ""
+
+        def repo_profile_hint(self, cwd: Path) -> str:
+            return ""
+
+    monkeypatch.setattr("copilot_plugin_manager.cli.get_manager", lambda: StubManager())
+
+    result = runner.invoke(app, ["catalog", "themes", "--cwd", str(tmp_path)])
+
+    assert result.exit_code == 0
+    assert "Themes" in result.stdout
 
 
 def test_cli_install_can_override_agent_and_mcp_scope(monkeypatch, tmp_path) -> None:

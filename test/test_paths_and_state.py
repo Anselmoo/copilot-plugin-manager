@@ -110,6 +110,7 @@ def test_manager_paths_repo_helpers_resolve_repo_local_config_and_agents(tmp_pat
 
     assert paths.repo_root(nested) == repo
     assert paths.repo_config_file(nested) == repo / ".github" / "copilot-plugin-manager.json"
+    assert paths.project_catalog_file(nested) == repo / ".github" / "copilot-project-catalog.toml"
     assert paths.local_agents_dir(nested) == repo / ".github" / "agents"
 
 

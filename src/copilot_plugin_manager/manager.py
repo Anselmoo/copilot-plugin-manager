@@ -14,7 +14,19 @@ from pydantic import ValidationError
 from rich.progress import BarColumn, Progress, SpinnerColumn, TaskProgressColumn, TextColumn, TimeElapsedColumn
 
 from .catalog import CatalogBundle
-from .models import ActivationTarget, EntrypointRecord, McpRecord, McpSyncState, PlannedAction, RepoConfig, RepositorySource, SourceState
+from .models import (
+    ActivationTarget,
+    EntrypointRecord,
+    McpRecord,
+    McpSyncState,
+    PlannedAction,
+    ProfileRecord,
+    ProjectCatalogOverlay,
+    RepoConfig,
+    RepositorySource,
+    SourceState,
+    ThemeRecord,
+)
 from .paths import ManagerPaths, find_project_root, find_repo_profile
 from .runner import CommandError, ShellRunner, parse_installed_plugins
 from .state import StateStore
@@ -89,6 +101,9 @@ class PluginManager:
     def repo_config_path(self, cwd: Path) -> Path:
         return self.paths.repo_config_file(cwd)
 
+    def project_catalog_path(self, cwd: Path) -> Path:
+        return self.paths.project_catalog_file(cwd)
+
     def _load_repo_config(self, cwd: Path) -> tuple[RepoConfig, str | None]:
         """Return the parsed repo config and an optional warning for broken files."""
         config_path = self.repo_config_path(cwd)
@@ -101,6 +116,181 @@ class PluginManager:
 
     def read_repo_config(self, cwd: Path) -> RepoConfig:
         return self._load_repo_config(cwd)[0]
+
+    def _load_project_catalog(self, cwd: Path) -> tuple[ProjectCatalogOverlay, str | None]:
+        catalog_path = self.project_catalog_path(cwd)
+        if not catalog_path.exists():
+            return ProjectCatalogOverlay(), None
+        try:
+            raw = tomllib.loads(catalog_path.read_text())
+            return (
+                ProjectCatalogOverlay.model_validate(
+                    {
+                        "version": raw.get("version", 1),
+                        "themes": raw.get("themes", {}),
+                        "profiles": raw.get("profiles", {}),
+                    }
+                ),
+                None,
+            )
+        except (OSError, tomllib.TOMLDecodeError, ValidationError):
+            return ProjectCatalogOverlay(), f"Project catalog {catalog_path} could not be parsed or validated. Bundled catalog defaults are in use."
+
+    def read_project_catalog(self, cwd: Path) -> ProjectCatalogOverlay:
+        return self._load_project_catalog(cwd)[0]
+
+    def catalog_for(self, cwd: Path | None = None) -> CatalogBundle:
+        if cwd is None:
+            return self.catalog
+        overlay = self.read_project_catalog(cwd)
+        if not overlay.themes and not overlay.profiles:
+            return self.catalog
+        return self.catalog.model_copy(
+            update={
+                "themes": {**self.catalog.themes, **overlay.themes},
+                "profiles": {**self.catalog.profiles, **overlay.profiles},
+            }
+        )
+
+    def _project_catalog_toml(self, overlay: ProjectCatalogOverlay) -> str:
+        def _list_line(name: str, values: list[str]) -> str:
+            rendered = ", ".join(f'"{value}"' for value in sorted(values))
+            return f"{name} = [{rendered}]"
+
+        lines = [f"version = {overlay.version}", ""]
+        for name in sorted(overlay.themes):
+            theme = overlay.themes[name]
+            lines.append(f'[themes."{name}"]')
+            lines.append(_list_line("plugins", theme.plugins))
+            lines.append(_list_line("skills", theme.skills))
+            lines.append(_list_line("agents", theme.agents))
+            lines.append(_list_line("mcps", theme.mcps))
+            lines.append("")
+        for name in sorted(overlay.profiles):
+            profile = overlay.profiles[name]
+            lines.append(f'[profiles."{name}"]')
+            lines.append(_list_line("themes", profile.themes))
+            lines.append("")
+        return "\n".join(lines).rstrip() + "\n"
+
+    def write_project_catalog(self, cwd: Path, overlay: ProjectCatalogOverlay) -> Path:
+        catalog_path = self.project_catalog_path(cwd)
+        catalog_path.parent.mkdir(parents=True, exist_ok=True)
+        catalog_path.write_text(self._project_catalog_toml(overlay))
+        return catalog_path
+
+    def _ref_candidates(self, reference: str) -> list[str]:
+        normalized = reference.strip().rstrip("/")
+        candidates = [normalized]
+        slug = normalized.rsplit("/", 1)[-1]
+        if slug and slug not in candidates:
+            candidates.append(slug)
+        if slug and not slug.startswith("kdense-"):
+            kdense_name = f"kdense-{slug}"
+            if kdense_name not in candidates:
+                candidates.append(kdense_name)
+        return candidates
+
+    def resolve_project_reference(
+        self,
+        kind: Literal["theme", "plugin", "skill", "agent", "mcp"],
+        reference: str,
+        cwd: Path,
+    ) -> str:
+        catalog = self.catalog_for(cwd)
+        normalized_reference = reference.strip().rstrip("/")
+        candidates = self._ref_candidates(reference)
+        if kind == "theme":
+            for candidate in candidates:
+                if candidate in catalog.themes:
+                    return candidate
+            raise KeyError(f"Unknown theme '{reference}'. Run `copilot-plugin-manager catalog themes` to see available entries.")
+        if kind == "plugin":
+            for candidate in candidates:
+                if candidate in catalog.plugins:
+                    return candidate
+            for name in catalog.plugins:
+                if normalized_reference == catalog.plugin_details(name)["source_url"].rstrip("/"):
+                    return name
+            raise KeyError(f"Unknown plugin '{reference}'. Run `copilot-plugin-manager catalog plugins` to see available entries.")
+        if kind == "mcp":
+            for candidate in candidates:
+                if candidate in catalog.mcps:
+                    return candidate
+            for name in catalog.mcps:
+                if normalized_reference == catalog.mcp_details(name)["source_url"].rstrip("/"):
+                    return name
+            raise KeyError(f"Unknown MCP '{reference}'. Run `copilot-plugin-manager catalog mcps` to see available entries.")
+
+        registry = catalog.skill_providers if kind == "skill" else catalog.agent_providers
+        label = "skills" if kind == "skill" else "agents"
+        for candidate in candidates:
+            if candidate in registry:
+                return candidate
+        for name in registry:
+            if normalized_reference == catalog.provider_details(kind, name)["source_url"].rstrip("/"):
+                return name
+        raise KeyError(f"Unknown {kind} '{reference}'. Run `copilot-plugin-manager catalog {label}` to see available entries.")
+
+    def _overlay_theme_record(self, overlay: ProjectCatalogOverlay, catalog: CatalogBundle, theme_name: str) -> ThemeRecord:
+        if theme_name in overlay.themes:
+            return overlay.themes[theme_name].model_copy(deep=True)
+        if theme_name in catalog.themes:
+            return catalog.themes[theme_name].model_copy(deep=True)
+        return ThemeRecord()
+
+    def _overlay_profile_record(self, overlay: ProjectCatalogOverlay, catalog: CatalogBundle, profile_name: str) -> ProfileRecord:
+        if profile_name in overlay.profiles:
+            return overlay.profiles[profile_name].model_copy(deep=True)
+        if profile_name in catalog.profiles:
+            return catalog.profiles[profile_name].model_copy(deep=True)
+        return ProfileRecord()
+
+    def add_project_item(
+        self,
+        cwd: Path,
+        *,
+        kind: Literal["plugin", "skill", "agent", "mcp"],
+        reference: str,
+        theme_name: str,
+        profile_name: str | None = None,
+    ) -> tuple[str, Path]:
+        overlay = self.read_project_catalog(cwd)
+        catalog = self.catalog_for(cwd)
+        resolved_name = self.resolve_project_reference(kind, reference, cwd)
+        theme = self._overlay_theme_record(overlay, catalog, theme_name)
+        attr = {"plugin": "plugins", "skill": "skills", "agent": "agents", "mcp": "mcps"}[kind]
+        items = list(getattr(theme, attr))
+        if resolved_name not in items:
+            items.append(resolved_name)
+        setattr(theme, attr, sorted(items))
+        overlay.themes[theme_name] = theme
+        if profile_name:
+            profile = self._overlay_profile_record(overlay, catalog, profile_name)
+            profile_themes = list(profile.themes)
+            if theme_name not in profile_themes:
+                profile_themes.append(theme_name)
+            profile.themes = sorted(profile_themes)
+            overlay.profiles[profile_name] = profile
+        return resolved_name, self.write_project_catalog(cwd, overlay)
+
+    def add_project_theme_to_profile(
+        self,
+        cwd: Path,
+        *,
+        theme_reference: str,
+        profile_name: str,
+    ) -> tuple[str, Path]:
+        overlay = self.read_project_catalog(cwd)
+        catalog = self.catalog_for(cwd)
+        resolved_theme = self.resolve_project_reference("theme", theme_reference, cwd)
+        profile = self._overlay_profile_record(overlay, catalog, profile_name)
+        profile_themes = list(profile.themes)
+        if resolved_theme not in profile_themes:
+            profile_themes.append(resolved_theme)
+        profile.themes = sorted(profile_themes)
+        overlay.profiles[profile_name] = profile
+        return resolved_theme, self.write_project_catalog(cwd, overlay)
 
     def write_repo_config(
         self,
@@ -148,13 +338,14 @@ class PluginManager:
         return ""
 
     def _resolve_repo_workflow_target(self, cwd: Path, target_name: str | None = None) -> ActivationTarget:
+        catalog = self.catalog_for(cwd)
         if target_name is not None:
-            return self.catalog.resolve_target(target_name)
+            return catalog.resolve_target(target_name)
         for candidate_name in (self.repo_profile_hint(cwd), self.read_active_target(cwd)):
             if not candidate_name:
                 continue
             try:
-                return self.catalog.resolve_target(candidate_name)
+                return catalog.resolve_target(candidate_name)
             except KeyError:
                 continue
         raise RuntimeError("No repo target is configured. Run `copilot-plugin-manager repo-init <profile-or-theme>` or `copilot-plugin-manager switch <profile-or-theme>` first.")
@@ -234,9 +425,12 @@ class PluginManager:
         target_name: str,
         installed: list[str],
         exclusive: bool = False,
+        *,
+        catalog: CatalogBundle | None = None,
     ) -> list[PlannedAction]:
-        target = self.catalog.resolve_target(target_name)
-        desired = self.catalog.target_items(target.themes, "plugins")
+        catalog_bundle = catalog or self.catalog
+        target = catalog_bundle.resolve_target(target_name)
+        desired = catalog_bundle.target_items(target.themes, "plugins")
         installed_set = set(installed)
         desired_set = set(desired)
         managed_set = set(self.catalog.plugins)
@@ -1129,9 +1323,10 @@ class PluginManager:
         exclusive_plugins: bool,
         agent_scope: Literal["global", "local"] | None = None,
     ) -> list[str]:
-        desired_plugins = set(self.catalog.target_items(target.themes, "plugins"))
-        desired_skills = set(self.catalog.target_items(target.themes, "skills"))
-        desired_agents = set(self.catalog.target_items(target.themes, "agents"))
+        catalog_bundle = self.catalog_for(cwd)
+        desired_plugins = set(catalog_bundle.target_items(target.themes, "plugins"))
+        desired_skills = set(catalog_bundle.target_items(target.themes, "skills"))
+        desired_agents = set(catalog_bundle.target_items(target.themes, "agents"))
         managed_plugins = set(self.catalog.plugins)
         warnings: list[str] = []
         resolved_agent_scope = self.agent_scope(cwd, agent_scope)
@@ -1242,15 +1437,16 @@ class PluginManager:
         agent_scope: Literal["global", "local"] | None = None,
     ) -> ActivationTarget:
         self._reset_sync_warnings()
-        target = self.catalog.resolve_target(target_name)
-        desired_skills = self.catalog.target_items(target.themes, "skills")
-        desired_agents = self.catalog.target_items(target.themes, "agents")
+        catalog = self.catalog_for(cwd)
+        target = catalog.resolve_target(target_name)
+        desired_skills = catalog.target_items(target.themes, "skills")
+        desired_agents = catalog.target_items(target.themes, "agents")
         resolved_agent_scope = self.agent_scope(cwd, agent_scope)
         agent_root = self.agent_output_dir(cwd, resolved_agent_scope)
         self._remove_named_items(self.paths.skills_dir, LEGACY_SKILLS)
         self._remove_named_items(agent_root, LEGACY_AGENTS)
         installed = self.list_installed_plugins()
-        actions = self.plugin_actions_for_switch(target.name, installed, exclusive=exclusive_plugins)
+        actions = self.plugin_actions_for_switch(target.name, installed, exclusive=exclusive_plugins, catalog=catalog)
         self._remove_unselected_skill_providers(desired_skills)
         self._remove_unselected_agent_providers(desired_agents, cwd, scope=resolved_agent_scope)
         self._execute_actions(
@@ -1423,22 +1619,27 @@ class PluginManager:
         return [{"name": plugin.name, "source": plugin.source, "version": plugin.version} for plugin in parse_installed_plugins(result.stdout)]
 
     def status_snapshot(self, cwd: Path) -> dict[str, object]:
+        catalog = self.catalog_for(cwd)
         repo_hint = self.repo_profile_hint(cwd)
-        repo_hint_target = self.catalog.resolve_target(repo_hint) if repo_hint in {*self.catalog.profiles, *self.catalog.themes} else None
+        repo_hint_target = catalog.resolve_target(repo_hint) if repo_hint in {*catalog.profiles, *catalog.themes} else None
         repo_state = self.state_store.read_repo_state(cwd)
         repo_profile_file = next((str(candidate) for candidate in (self.repo_profile_path(cwd, "root"), self.repo_profile_path(cwd, "github")) if candidate.exists()), "")
         repo_config_path = self.repo_config_path(cwd)
         repo_config, config_warning = self._load_repo_config(cwd)
+        project_catalog_path = self.project_catalog_path(cwd)
+        _project_catalog, project_catalog_warning = self._load_project_catalog(cwd)
         resolved_agent_scope = self.agent_scope(cwd)
         resolved_mcp_scope = self.mcp_scope(cwd)
         agent_root = self.agent_output_dir(cwd, resolved_agent_scope)
         active_target_name = self.read_active_target(cwd)
-        active_target = self.catalog.resolve_target(active_target_name) if active_target_name in {*self.catalog.profiles, *self.catalog.themes} else None
+        active_target = catalog.resolve_target(active_target_name) if active_target_name in {*catalog.profiles, *catalog.themes} else None
         skill_count = len([item for item in self.paths.skills_dir.iterdir() if item.is_dir()]) if self.paths.skills_dir.exists() else 0
         agent_count = len(list(agent_root.rglob("*.md"))) if agent_root.exists() else 0
         sync_warnings: list[str] = list(repo_state.verification_warnings) if repo_state is not None else []
         if config_warning:
             sync_warnings.append(config_warning)
+        if project_catalog_warning:
+            sync_warnings.append(project_catalog_warning)
         source_revisions: list[dict[str, str | int | None]] = []
         for name in self.catalog.repositories:
             stored = self.state_store.read_source_state(name)
@@ -1474,6 +1675,7 @@ class PluginManager:
             "repo_hint_themes": repo_hint_target.themes if repo_hint_target is not None else [],
             "repo_profile_file": repo_profile_file,
             "repo_config_file": str(repo_config_path) if repo_config_path.exists() else "",
+            "project_catalog_file": str(project_catalog_path) if project_catalog_path.exists() else "",
             "repo_config": repo_config.model_dump(mode="json"),
             "agent_scope": resolved_agent_scope,
             "agent_root": str(agent_root),

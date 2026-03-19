@@ -44,23 +44,35 @@ Open the guided menu for the current repository context:
 copilot-plugin-manager
 ```
 
+The top-level interactive menu now keeps switching and sync operations separate from discovery. Use the dedicated catalog browser submenu when you want profiles, themes, plugins, skills, agents, or MCPs without crowding the main menu.
+
+For repo-local customization on top of the bundled catalog, use the `project` subgroup:
+
+```bash
+copilot-plugin-manager project init minimal --agent-scope local
+copilot-plugin-manager project add skill kdense-bindingdb-database --theme core-dev --profile research-dev
+copilot-plugin-manager project add theme paper-writing-review --profile research-dev
+```
+
 Browse what is available:
 
 ```bash
-copilot-plugin-manager list
-copilot-plugin-manager list profiles
-copilot-plugin-manager list themes
-copilot-plugin-manager list sources
-copilot-plugin-manager list mcps
+copilot-plugin-manager catalog
+copilot-plugin-manager catalog profiles
+copilot-plugin-manager catalog themes
+copilot-plugin-manager catalog sources
+copilot-plugin-manager catalog mcps
 ```
 
-In an interactive terminal, bare `list` opens a compact catalog browser instead of dumping every section at once. Use an explicit section such as `list overview` when you want a stable non-interactive view for scripts or copy/paste output.
+In an interactive terminal, bare `catalog` opens a compact catalog browser instead of dumping every section at once. Use an explicit section such as `catalog overview` when you want a stable non-interactive view for scripts or copy/paste output. The legacy `list` command remains available as a compatibility alias.
 
 Activate a setup for the current repository:
 
 ```bash
 copilot-plugin-manager switch python-core
+copilot-plugin-manager switch paper-writing-review
 copilot-plugin-manager switch python-core --agent-scope local
+copilot-plugin-manager switch quantum-chemistry
 copilot-plugin-manager switch python-core --save-repo-profile
 copilot-plugin-manager switch-exclusive python-mcp
 ```
@@ -99,6 +111,9 @@ For repository-local setup, treat the files as complementary:
 - `copilot-plugin-manager status` lets you confirm both files and the effective resolved composition after catalog changes.
 
 When bundled profile/theme composition changes, check `copilot-plugin-manager list profiles`, `copilot-plugin-manager list themes`, or `docs/THEMES.md` before writing a new repo-local target hint.
+When bundled profile/theme composition changes, check `copilot-plugin-manager catalog profiles`, `copilot-plugin-manager catalog themes`, or `docs/THEMES.md` before writing a new repo-local target hint.
+
+When you want project-specific themes or profiles layered on top of the bundled catalog, `project add` writes `.github/copilot-project-catalog.toml` in the repository. It can extend existing bundled themes, create new repo-local themes on demand, and optionally attach them to new or existing profiles.
 
 When agent scope is `local`, synced agents are rewritten into `.github/agents/*.agent.md` using basename-friendly filenames such as `regular.agent.md`. Global scope keeps provider-prefixed outputs under `~/.copilot/agents`.
 
@@ -119,8 +134,8 @@ uvx copilot-plugin-manager status
 <!-- generated:catalog-overview:start -->
 _This section is generated from the bundled catalog data with `uv run poe generate-docs`._
 
-- `39` profiles
-- `30` themes
+- `44` profiles
+- `34` themes
 - `53` plugins
 - `210` skill providers
 - `58` agent providers
@@ -133,45 +148,50 @@ See also:
 
 | Profile | Themes |
 | --- | --- |
-| `drug-discovery` | `bioinformatics`, `chemistry`, `core`, `data`, `python`, `research`, `science` |
-| `everything` | `agents`, `bioinformatics`, `chemistry`, `clinical`, `core`, `data`, `devops`, `docs`, `docs-design`, `dotnet`, `enterprise`, `frontend`, `github`, `infra`, `mcp`, `mcp-agents`, `ml-ai`, `openapi`, `planning`, `python`, `python-agents`, `python-cloud`, `quantum`, `research`, `science`, `security`, `specialized`, `testing`, `typescript` |
-| `bioinformatics` | `bioinformatics`, `core`, `data`, `python`, `research`, `science` |
-| `healthcare` | `clinical`, `core`, `data`, `planning`, `python`, `research`, `science` |
-| `minimal` | `core` |
-| `enterprise` | `core`, `data`, `devops`, `enterprise`, `testing` |
-| `fullstack` | `core`, `data`, `frontend`, `python`, `testing`, `typescript` |
 | `agentic-fullstack` | `core`, `data`, `frontend`, `mcp-agents`, `python`, `python-agents`, `security`, `testing`, `typescript` |
-| `data-ai` | `core`, `data`, `ml-ai`, `research`, `science` |
-| `ml-engineering` | `core`, `data`, `ml-ai`, `python`, `science`, `testing` |
-| `data-science` | `core`, `data`, `ml-ai`, `python`, `research`, `science`, `testing` |
 | `backend` | `core`, `data`, `openapi`, `python`, `security`, `testing` |
 | `backend-api` | `core`, `data`, `openapi`, `python`, `security`, `testing` |
-| `science` | `core`, `data`, `python`, `science` |
-| `python-plus-rust` | `core`, `data`, `python`, `rust`, `testing` |
-| `scientific-programming` | `core`, `data`, `python`, `research`, `science` |
-| `dotnet-dev` | `core`, `devops`, `dotnet`, `testing` |
-| `ts-fullstack` | `core`, `devops`, `frontend`, `mcp`, `mcp-agents`, `testing`, `typescript` |
+| `bioinformatics` | `bioinformatics`, `core`, `data`, `python`, `research`, `science` |
+| `chemistry-research` | `chemistry`, `core`, `data`, `paper-writing-review`, `python`, `research`, `science` |
+| `data-ai` | `core`, `data`, `ml-ai`, `research`, `science` |
+| `data-science` | `core`, `data`, `ml-ai`, `python`, `research`, `science`, `testing` |
 | `devops-sec` | `core`, `devops`, `github`, `security` |
-| `infra-platform` | `core`, `devops`, `github`, `infra`, `security` |
-| `python-dev` | `core`, `devops`, `python`, `testing` |
-| `python-cloud` | `core`, `devops`, `python`, `python-cloud`, `testing` |
+| `docs` | `core`, `docs`, `python`, `testing` |
 | `docs-lite` | `core`, `docs` |
 | `docs-pro` | `core`, `docs`, `docs-design`, `planning`, `testing` |
-| `research` | `core`, `docs`, `planning`, `research`, `science` |
-| `docs` | `core`, `docs`, `python`, `testing` |
-| `frontend-design` | `core`, `docs-design`, `frontend`, `testing`, `typescript` |
-| `polyglot` | `core`, `dotnet`, `python`, `security`, `testing`, `typescript` |
+| `dotnet-dev` | `core`, `devops`, `dotnet`, `testing` |
+| `drug-discovery` | `bioinformatics`, `chemistry`, `core`, `data`, `python`, `research`, `science` |
+| `enterprise` | `core`, `data`, `devops`, `enterprise`, `testing` |
 | `enterprise-architect` | `core`, `enterprise`, `github`, `planning`, `security`, `testing` |
-| `ts` | `core`, `frontend`, `testing`, `typescript` |
-| `ts-mcp` | `core`, `frontend`, `mcp`, `mcp-agents`, `testing`, `typescript` |
-| `planner` | `core`, `github`, `planning` |
+| `everything` | `agents`, `bioinformatics`, `chemistry`, `clinical`, `core`, `data`, `devops`, `docs`, `docs-design`, `dotnet`, `enterprise`, `frontend`, `github`, `infra`, `mcp`, `mcp-agents`, `ml-ai`, `openapi`, `paper-writing-review`, `planning`, `python`, `python-agents`, `python-cloud`, `quantum`, `quantum-chemistry`, `research`, `science`, `scientific-methods`, `security`, `specialized`, `spectroscopy`, `testing`, `typescript` |
 | `fastapi-typer` | `core`, `openapi`, `python`, `testing` |
-| `pydantic` | `core`, `openapi`, `python`, `testing` |
-| `python-core` | `core`, `python`, `testing` |
+| `frontend-design` | `core`, `docs-design`, `frontend`, `testing`, `typescript` |
+| `fullstack` | `core`, `data`, `frontend`, `python`, `testing`, `typescript` |
+| `healthcare` | `clinical`, `core`, `data`, `planning`, `python`, `research`, `science` |
+| `infra-platform` | `core`, `devops`, `github`, `infra`, `security` |
 | `mcp-dev` | `core`, `mcp`, `python`, `testing` |
+| `minimal` | `core` |
+| `ml-engineering` | `core`, `data`, `ml-ai`, `python`, `science`, `testing` |
+| `paper-writing-review` | `core`, `docs`, `paper-writing-review`, `planning`, `research` |
+| `planner` | `core`, `github`, `planning` |
+| `polyglot` | `core`, `dotnet`, `python`, `security`, `testing`, `typescript` |
+| `pydantic` | `core`, `openapi`, `python`, `testing` |
 | `python-agents` | `core`, `python`, `python-agents`, `testing` |
+| `python-cloud` | `core`, `devops`, `python`, `python-cloud`, `testing` |
+| `python-core` | `core`, `python`, `testing` |
+| `python-dev` | `core`, `devops`, `python`, `testing` |
 | `python-mcp` | `core`, `mcp`, `mcp-agents`, `python`, `python-agents`, `testing` |
+| `python-plus-rust` | `core`, `data`, `python`, `rust`, `testing` |
+| `quantum-chemistry` | `core`, `paper-writing-review`, `python`, `quantum`, `quantum-chemistry`, `research`, `science` |
 | `quantum-computing` | `core`, `python`, `quantum`, `research`, `science` |
+| `research` | `core`, `docs`, `paper-writing-review`, `planning`, `research`, `science` |
+| `science` | `core`, `data`, `python`, `science` |
+| `scientific-methods` | `core`, `paper-writing-review`, `research`, `science`, `scientific-methods` |
+| `scientific-programming` | `core`, `data`, `python`, `research`, `science` |
+| `spectroscopy` | `chemistry`, `core`, `data`, `paper-writing-review`, `python`, `research`, `science`, `spectroscopy` |
+| `ts` | `core`, `frontend`, `testing`, `typescript` |
+| `ts-fullstack` | `core`, `devops`, `frontend`, `mcp`, `mcp-agents`, `testing`, `typescript` |
+| `ts-mcp` | `core`, `frontend`, `mcp`, `mcp-agents`, `testing`, `typescript` |
 <!-- generated:catalog-overview:end -->
 
 ## Shell completion

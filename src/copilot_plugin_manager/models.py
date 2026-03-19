@@ -195,6 +195,12 @@ class RepoConfig(BaseModel):
     mcps: RepoMcpConfig = Field(default_factory=RepoMcpConfig)
 
 
+class ProjectCatalogOverlay(BaseModel):
+    version: int = 1
+    themes: dict[str, ThemeRecord] = Field(default_factory=dict)
+    profiles: dict[str, ProfileRecord] = Field(default_factory=dict)
+
+
 @dataclass(frozen=True)
 class InstalledPlugin:
     name: str

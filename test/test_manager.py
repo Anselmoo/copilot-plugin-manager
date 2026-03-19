@@ -793,6 +793,57 @@ def test_initialize_repo_defaults_to_active_target_when_target_omitted(tmp_path:
     assert config_path is None
 
 
+def test_project_overlay_adds_skill_theme_and_profile(tmp_path: Path, monkeypatch) -> None:
+    monkeypatch.setenv("COPILOT_HOME", str(tmp_path / ".copilot"))
+    paths = ManagerPaths.from_environment()
+    project = tmp_path / "repo"
+    project.mkdir()
+    (project / ".git").mkdir()
+    manager = PluginManager(load_catalog_bundle(), paths, runner=FakeRunner())
+
+    resolved, catalog_path = manager.add_project_item(
+        project,
+        kind="skill",
+        reference="https://github.com/K-Dense-AI/claude-scientific-skills/tree/main/scientific-skills/bindingdb-database",
+        theme_name="core-dev",
+        profile_name="research-dev",
+    )
+
+    overlay = manager.read_project_catalog(project)
+    merged = manager.catalog_for(project)
+
+    assert resolved == "kdense-bindingdb-database"
+    assert catalog_path == project / ".github" / "copilot-project-catalog.toml"
+    assert overlay.themes["core-dev"].skills == ["kdense-bindingdb-database"]
+    assert overlay.profiles["research-dev"].themes == ["core-dev"]
+    assert merged.resolve_target("research-dev").themes == ["core-dev"]
+
+
+def test_project_overlay_can_extend_existing_theme_and_profile(tmp_path: Path, monkeypatch) -> None:
+    monkeypatch.setenv("COPILOT_HOME", str(tmp_path / ".copilot"))
+    paths = ManagerPaths.from_environment()
+    project = tmp_path / "repo"
+    project.mkdir()
+    (project / ".git").mkdir()
+    manager = PluginManager(load_catalog_bundle(), paths, runner=FakeRunner())
+
+    resolved_skill, _ = manager.add_project_item(
+        project,
+        kind="skill",
+        reference="bindingdb-database",
+        theme_name="science",
+        profile_name="research",
+    )
+    resolved_theme, _ = manager.add_project_theme_to_profile(project, theme_reference="paper-writing-review", profile_name="research")
+
+    overlay = manager.read_project_catalog(project)
+
+    assert resolved_skill == "kdense-bindingdb-database"
+    assert resolved_theme == "paper-writing-review"
+    assert "kdense-bindingdb-database" in overlay.themes["science"].skills
+    assert "paper-writing-review" in overlay.profiles["research"].themes
+
+
 def test_cleanup_repo_uses_repo_hint_when_target_omitted(tmp_path: Path, monkeypatch) -> None:
     monkeypatch.setenv("COPILOT_HOME", str(tmp_path / ".copilot"))
     bundle = load_catalog_bundle()

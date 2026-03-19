@@ -6,6 +6,7 @@ from pathlib import Path
 
 PROFILE_HINT_PATHS = (Path(".copilot-profile"), Path(".github/copilot-profile"))
 REPO_CONFIG_PATH = Path(".github/copilot-plugin-manager.json")
+PROJECT_CATALOG_PATH = Path(".github/copilot-project-catalog.toml")
 LOCAL_AGENTS_PATH = Path(".github/agents")
 
 
@@ -44,6 +45,9 @@ class ManagerPaths:
 
     def repo_config_file(self, cwd: Path) -> Path:
         return self.repo_root(cwd) / REPO_CONFIG_PATH
+
+    def project_catalog_file(self, cwd: Path) -> Path:
+        return self.repo_root(cwd) / PROJECT_CATALOG_PATH
 
     def local_agents_dir(self, cwd: Path) -> Path:
         return self.repo_root(cwd) / LOCAL_AGENTS_PATH

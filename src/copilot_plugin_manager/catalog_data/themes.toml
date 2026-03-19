@@ -84,6 +84,8 @@ skills = [
   "kdense-pubchem-database",
   "kdense-pyopenms",
   "kdense-rdkit",
+  "kdense-scikit-learn",
+  "kdense-sympy",
   "kdense-torchdrug",
   "kdense-zinc-database",
 ]
@@ -341,6 +343,30 @@ plugins = [
 skills = []
 agents = ["agency-engineering-backend-architect"]
 
+[themes."paper-writing-review"]
+plugins = ["technical-spike"]
+skills = [
+  "kdense-bgpt-paper-search",
+  "kdense-citation-management",
+  "kdense-latex-posters",
+  "kdense-literature-review",
+  "kdense-markdown-mermaid-writing",
+  "kdense-markitdown",
+  "kdense-open-notebook",
+  "kdense-paper-2-web",
+  "kdense-peer-review",
+  "kdense-pyzotero",
+  "kdense-scientific-critical-thinking",
+  "kdense-scientific-writing",
+]
+agents = [
+  "agency-engineering-technical-writer",
+  "voltagent-documentation-engineer",
+  "voltagent-research",
+  "voltagent-research-analyst",
+  "voltagent-scientific-literature-researcher",
+]
+
 [themes."planning"]
 plugins = ["project-planning", "technical-spike"]
 skills = []
@@ -394,10 +420,32 @@ skills = [
   "kdense-pennylane",
   "kdense-qiskit",
   "kdense-qutip",
+  "kdense-scikit-learn",
   "kdense-sympy",
   "mskills-python-data",
 ]
 agents = ["voltagent-data-scientist", "voltagent-llm-architect", "voltagent-research-analyst"]
+
+[themes."quantum-chemistry"]
+plugins = []
+skills = [
+  "kdense-cirq",
+  "kdense-deepchem",
+  "kdense-molecular-dynamics",
+  "kdense-molfeat",
+  "kdense-pennylane",
+  "kdense-qiskit",
+  "kdense-qutip",
+  "kdense-rdkit",
+  "kdense-scikit-learn",
+  "kdense-sympy",
+]
+agents = [
+  "voltagent-data-scientist",
+  "voltagent-llm-architect",
+  "voltagent-research-analyst",
+  "voltagent-scientific-literature-researcher",
+]
 
 [themes."research"]
 plugins = ["technical-spike"]
@@ -409,7 +457,9 @@ skills = [
   "kdense-citation-management",
   "kdense-hypothesis-generation",
   "kdense-literature-review",
+  "kdense-open-notebook",
   "kdense-openalex-database",
+  "kdense-paper-2-web",
   "kdense-peer-review",
   "kdense-perplexity-search",
   "kdense-pubmed-database",
@@ -466,6 +516,21 @@ agents = [
   "voltagent-scientific-literature-researcher",
 ]
 
+[themes."scientific-methods"]
+plugins = ["technical-spike"]
+skills = [
+  "kdense-hypothesis-generation",
+  "kdense-open-notebook",
+  "kdense-research-lookup",
+  "kdense-scientific-brainstorming",
+  "kdense-scientific-critical-thinking",
+]
+agents = [
+  "voltagent-research",
+  "voltagent-research-analyst",
+  "voltagent-scientific-literature-researcher",
+]
+
 [themes."security"]
 plugins = ["security-best-practices"]
 skills = []
@@ -481,6 +546,28 @@ agents = [
 plugins = ["cast-imaging", "clojure-interactive-programming", "java-development", "ospo-sponsorship"]
 skills = []
 agents = ["voltagent-domains"]
+
+[themes."spectroscopy"]
+plugins = []
+skills = [
+  "kdense-hmdb-database",
+  "kdense-matchms",
+  "kdense-matplotlib",
+  "kdense-plotly",
+  "kdense-pubchem-database",
+  "kdense-pyopenms",
+  "kdense-scientific-visualization",
+  "kdense-scikit-learn",
+  "kdense-seaborn",
+  "kdense-statistical-analysis",
+  "kdense-statsmodels",
+  "kdense-sympy",
+]
+agents = [
+  "voltagent-data-scientist",
+  "voltagent-research-analyst",
+  "voltagent-scientific-literature-researcher",
+]
 
 [themes."testing"]
 plugins = ["polyglot-test-agent", "technical-spike", "testing-automation"]

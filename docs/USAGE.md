@@ -90,7 +90,14 @@ Generated entrypoint data also records:
 ```text
 copilot-plugin-manager
 copilot-plugin-manager menu
+copilot-plugin-manager catalog [overview|all|sources|profiles|themes|plugins|skills|agents|mcps]
 copilot-plugin-manager list [overview|all|sources|profiles|themes|plugins|skills|agents|mcps]
+copilot-plugin-manager project init [profile-or-theme] [--repo-profile-location root|github] [--agent-scope global|local] [--mcp-scope global|local] [--mcp-profile NAME] [--force]
+copilot-plugin-manager project add skill <name-or-url> --theme NAME [--profile NAME]
+copilot-plugin-manager project add plugin <name-or-url> --theme NAME [--profile NAME]
+copilot-plugin-manager project add agent <name-or-url> --theme NAME [--profile NAME]
+copilot-plugin-manager project add mcp <name-or-url> --theme NAME [--profile NAME]
+copilot-plugin-manager project add theme <theme-name> --profile NAME
 copilot-plugin-manager repo-init [profile-or-theme] [--repo-profile-location root|github] [--agent-scope global|local] [--mcp-scope global|local] [--mcp-profile NAME] [--force]
 copilot-plugin-manager repo-cleanup [profile-or-theme] [--agent-scope global|local]
 copilot-plugin-manager repo-config [--agent-scope global|local] [--mcp-scope global|local] [--mcp-profile NAME]
@@ -107,9 +114,11 @@ copilot-plugin-manager completion script <bash|zsh|fish|powershell|nushell>
 copilot-plugin-manager completion install <bash|zsh|fish|powershell|nushell> [--path PATH]
 ```
 
-`copilot-plugin-manager` with no subcommand now opens a guided interactive menu when running in an interactive terminal. In non-interactive contexts, it falls back to a compact status view.
+`copilot-plugin-manager` with no subcommand now opens a guided interactive menu when running in an interactive terminal. The top level stays focused on status, switching, and sync tasks, while catalog exploration moves into a dedicated browser submenu. In non-interactive contexts, it falls back to a compact status view.
 
-`copilot-plugin-manager list` follows the same pattern: in an interactive terminal it opens a catalog browser with focused views for overview, profiles, themes, sources, plugins, skills, agents, and MCPs. In non-interactive contexts, or when you pass a section explicitly, it renders that specific section directly.
+`copilot-plugin-manager catalog` follows the same pattern: in an interactive terminal it opens a catalog browser with focused views for overview, profiles, themes, sources, plugins, skills, agents, and MCPs. In non-interactive contexts, or when you pass a section explicitly, it renders that specific section directly. The legacy `list` command remains available as a compatibility alias.
+
+`copilot-plugin-manager project` is the repo-local customization surface. Use `project init` as the noun-based alias for `repo-init`, and use `project add ... --theme ... [--profile ...]` to create or extend `.github/copilot-project-catalog.toml` with bundled themes plus repo-specific overlays.
 
 ## Repo config and scoped sync
 
@@ -117,12 +126,14 @@ Repository-local settings are split intentionally:
 
 - `.copilot-profile` or `.github/copilot-profile` stores the selected profile or theme name for the repo.
 - `.github/copilot-plugin-manager.json` stores repo-local defaults for agent scope, MCP scope, and preferred MCP profile.
+- `.github/copilot-project-catalog.toml` stores repo-local theme/profile overlays built with `project add`.
 
 Before writing either file, inspect the current bundled composition with:
 
 ```bash
-copilot-plugin-manager list profiles
-copilot-plugin-manager list themes
+copilot-plugin-manager catalog profiles
+copilot-plugin-manager catalog themes
+copilot-plugin-manager project add skill kdense-bindingdb-database --theme core-dev --profile research-dev
 ```
 
 You can also review `docs/THEMES.md` for the generated profile/theme composition reference.

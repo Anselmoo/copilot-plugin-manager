@@ -20,6 +20,9 @@ themes = ["core", "data", "openapi", "python", "security", "testing"]
 [profiles."bioinformatics"]
 themes = ["bioinformatics", "core", "data", "python", "research", "science"]
 
+[profiles."chemistry-research"]
+themes = ["chemistry", "core", "data", "paper-writing-review", "python", "research", "science"]
+
 [profiles."data-ai"]
 themes = ["core", "data", "ml-ai", "research", "science"]
 
@@ -70,15 +73,19 @@ themes = [
   "mcp-agents",
   "ml-ai",
   "openapi",
+  "paper-writing-review",
   "planning",
   "python",
   "python-agents",
   "python-cloud",
   "quantum",
+  "quantum-chemistry",
   "research",
   "science",
+  "scientific-methods",
   "security",
   "specialized",
+  "spectroscopy",
   "testing",
   "typescript",
 ]
@@ -107,6 +114,9 @@ themes = ["core"]
 [profiles."ml-engineering"]
 themes = ["core", "data", "ml-ai", "python", "science", "testing"]
 
+[profiles."paper-writing-review"]
+themes = ["core", "docs", "paper-writing-review", "planning", "research"]
+
 [profiles."planner"]
 themes = ["core", "github", "planning"]
 
@@ -134,17 +144,26 @@ themes = ["core", "mcp", "mcp-agents", "python", "python-agents", "testing"]
 [profiles."python-plus-rust"]
 themes = ["core", "data", "python", "rust", "testing"]
 
+[profiles."quantum-chemistry"]
+themes = ["core", "paper-writing-review", "python", "quantum", "quantum-chemistry", "research", "science"]
+
 [profiles."quantum-computing"]
 themes = ["core", "python", "quantum", "research", "science"]
 
 [profiles."research"]
-themes = ["core", "docs", "planning", "research", "science"]
+themes = ["core", "docs", "paper-writing-review", "planning", "research", "science"]
 
 [profiles."science"]
 themes = ["core", "data", "python", "science"]
 
+[profiles."scientific-methods"]
+themes = ["core", "paper-writing-review", "research", "science", "scientific-methods"]
+
 [profiles."scientific-programming"]
 themes = ["core", "data", "python", "research", "science"]
+
+[profiles."spectroscopy"]
+themes = ["chemistry", "core", "data", "paper-writing-review", "python", "research", "science", "spectroscopy"]
 
 [profiles."ts"]
 themes = ["core", "frontend", "testing", "typescript"]

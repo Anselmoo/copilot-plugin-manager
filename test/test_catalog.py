@@ -17,8 +17,8 @@ def test_catalog_bundle_counts() -> None:
     assert len(bundle.skill_providers) == 210
     assert len(bundle.agent_providers) == 58
     assert len(bundle.entrypoints) > len(bundle.plugins)
-    assert len(bundle.themes) == 30
-    assert len(bundle.profiles) == 39
+    assert len(bundle.themes) == 34
+    assert len(bundle.profiles) == 44
 
 
 def test_resolve_known_profile() -> None:
@@ -33,12 +33,27 @@ def test_resolve_added_curated_profiles() -> None:
 
     assert bundle.resolve_target("ts").themes == ["core", "frontend", "testing", "typescript"]
     assert bundle.resolve_target("ts-mcp").themes == ["core", "frontend", "mcp", "mcp-agents", "testing", "typescript"]
+    assert bundle.resolve_target("chemistry-research").themes == ["chemistry", "core", "data", "paper-writing-review", "python", "research", "science"]
+    assert bundle.resolve_target("paper-writing-review").themes == ["core", "docs", "paper-writing-review", "planning", "research"]
     assert bundle.resolve_target("python-cloud").themes == ["core", "devops", "python", "python-cloud", "testing"]
     assert bundle.resolve_target("python-plus-rust").themes == ["core", "data", "python", "rust", "testing"]
     assert bundle.resolve_target("pydantic").themes == ["core", "openapi", "python", "testing"]
     assert bundle.resolve_target("fastapi-typer").themes == ["core", "openapi", "python", "testing"]
     assert bundle.resolve_target("backend").themes == bundle.resolve_target("backend-api").themes
+    assert bundle.resolve_target("quantum-chemistry").themes == ["core", "paper-writing-review", "python", "quantum", "quantum-chemistry", "research", "science"]
+    assert bundle.resolve_target("scientific-methods").themes == ["core", "paper-writing-review", "research", "science", "scientific-methods"]
     assert bundle.resolve_target("scientific-programming").themes == ["core", "data", "python", "research", "science"]
+    assert bundle.resolve_target("spectroscopy").themes == ["chemistry", "core", "data", "paper-writing-review", "python", "research", "science", "spectroscopy"]
+
+
+def test_science_themes_cover_specialized_workflows() -> None:
+    bundle = load_catalog_bundle()
+
+    assert "kdense-sympy" in bundle.themes["chemistry"].skills
+    assert "kdense-scikit-learn" in bundle.themes["quantum"].skills
+    assert "kdense-peer-review" in bundle.themes["paper-writing-review"].skills
+    assert "kdense-pyopenms" in bundle.themes["spectroscopy"].skills
+    assert "kdense-scientific-critical-thinking" in bundle.themes["scientific-methods"].skills
 
 
 def test_rust_theme_exposes_rust_specific_content() -> None:
@@ -240,13 +255,12 @@ def test_profile_focus_prefers_non_base_themes() -> None:
     assert _profile_focus(["core", "frontend", "typescript", "mcp", "testing"]) == "frontend, typescript"
 
 
-def test_profiles_are_ordered_by_focus_then_name() -> None:
+def test_profiles_are_ordered_alphabetically() -> None:
     bundle = load_catalog_bundle()
 
     ordered_names = [name for name, _focus, _themes in _ordered_profiles(bundle)]
 
-    assert ordered_names.index("data-ai") < ordered_names.index("python-core")
-    assert ordered_names.index("ts") < ordered_names.index("python-core")
+    assert ordered_names == sorted(bundle.profiles)
 
 
 def test_render_themes_lists_theme_rows_alphabetically() -> None:

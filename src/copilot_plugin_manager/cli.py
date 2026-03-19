@@ -21,7 +21,6 @@ from .rendering import (
     render_mcps,
     render_overview,
     render_plugins,
-    render_profiles,
     render_providers,
     render_repo_config,
     render_repositories,
@@ -37,10 +36,13 @@ from one production-focused Python CLI.
 
 [bold]What happens by default?[/bold]
 Running [cyan]copilot-plugin-manager[/cyan] with no subcommand opens a guided interactive menu
-when the terminal is interactive. Non-interactive sessions fall back to a compact status view.
+when the terminal is interactive. The top level stays focused on status, switching, and sync
+actions, while catalog exploration lives in a dedicated browser submenu. Non-interactive
+sessions fall back to a compact status view.
 
 [bold]Main workflows[/bold]
-• [cyan]list[/cyan] to explore bundled catalogs and active state
+• [cyan]catalog[/cyan] to explore bundled catalogs and active state
+• [cyan]project[/cyan] to initialize repo-local targets and layer custom themes or profiles on top
 • [cyan]install[/cyan], [cyan]update[/cyan], or [cyan]delete[/cyan] to manage plugins / skills / agents
 • [cyan]switch[/cyan] or [cyan]switch-exclusive[/cyan] to activate a profile or theme
 • [cyan]repo-init[/cyan] to write repo-local target state explicitly
@@ -51,8 +53,9 @@ when the terminal is interactive. Non-interactive sessions fall back to a compac
 APP_EPILOG = """\b
 Quick start:
   copilot-plugin-manager repo-update --remote
-  copilot-plugin-manager list overview
-  copilot-plugin-manager repo-init minimal --agent-scope local
+  copilot-plugin-manager catalog overview
+  copilot-plugin-manager project init minimal --agent-scope local
+  copilot-plugin-manager project add skill kdense-bindingdb-database --theme core-dev --profile research-dev
   copilot-plugin-manager repo-config --agent-scope local
   copilot-plugin-manager repo-cleanup
   copilot-plugin-manager completion init bash
@@ -98,12 +101,11 @@ class RepoProfileLocation(StrEnum):
 
 class MenuAction(StrEnum):
     status = "1"
-    profiles = "2"
-    themes = "3"
-    switch = "4"
-    switch_exclusive = "5"
-    update = "6"
-    repo_update = "7"
+    browse = "2"
+    switch = "3"
+    switch_exclusive = "4"
+    update = "5"
+    repo_update = "6"
     quit = "q"
 
 
@@ -130,11 +132,29 @@ app = typer.Typer(
     epilog=APP_EPILOG,
     context_settings={"help_option_names": ["-h", "--help"]},
 )
+catalog_app = typer.Typer(
+    no_args_is_help=False,
+    rich_markup_mode="rich",
+    help="Browse bundled catalogs and active views.",
+)
+project_app = typer.Typer(
+    no_args_is_help=True,
+    rich_markup_mode="rich",
+    help="Manage project-local targets and overlay catalog customizations.",
+)
+project_add_app = typer.Typer(
+    no_args_is_help=True,
+    rich_markup_mode="rich",
+    help="Add known catalog items to project-local themes and profiles.",
+)
 completion_app = typer.Typer(
     no_args_is_help=True,
     rich_markup_mode="rich",
     help="Manage shell completion snippets, scripts, and installed completion files.",
 )
+app.add_typer(catalog_app, name="catalog", short_help="Browse bundled catalogs.")
+project_app.add_typer(project_add_app, name="add", short_help="Add catalog items to project overlays.")
+app.add_typer(project_app, name="project", short_help="Manage project-local overlays.")
 app.add_typer(completion_app, name="completion", short_help="Manage shell completion.")
 
 
@@ -146,9 +166,17 @@ def _cwd(path: Path | None) -> Path:
     return (path or Path.cwd()).resolve()
 
 
+def _catalog_bundle(manager: PluginManager, current: Path):
+    catalog_getter = getattr(manager, "catalog_for", None)
+    if callable(catalog_getter):
+        return catalog_getter(current)
+    return manager.catalog
+
+
 def _active_target(manager: PluginManager, current: Path):
     active_name = manager.read_active_target(current)
-    active_target = manager.catalog.resolve_target(active_name) if active_name in {*manager.catalog.profiles, *manager.catalog.themes} else None
+    catalog = _catalog_bundle(manager, current)
+    active_target = catalog.resolve_target(active_name) if active_name in {*catalog.profiles, *catalog.themes} else None
     return active_name, active_target
 
 
@@ -205,12 +233,11 @@ def _menu_table(manager: PluginManager, current: Path) -> Table:
     table.add_column("Action", style="bold white", no_wrap=True, width=20)
     table.add_column("What it does", style="white", overflow="fold")
     table.add_row("1", "status", "Show the current repo-aware Copilot state.")
-    table.add_row("2", "profiles", "Browse bundled profiles.")
-    table.add_row("3", "themes", "Browse bundled themes.")
-    table.add_row("4", "switch", "Activate a profile or theme.")
-    table.add_row("5", "switch-exclusive", "Activate a target and prune managed plugins not in it.")
-    table.add_row("6", "update", "Update managed content for this repository context.")
-    table.add_row("7", "repo-update", "Refresh tracked upstream source checkouts.")
+    table.add_row("2", "catalog", "Open the catalog browser subgroup for profiles, themes, plugins, skills, agents, and MCPs.")
+    table.add_row("3", "switch", "Activate a profile or theme.")
+    table.add_row("4", "switch-exclusive", "Activate a target and prune managed plugins not in it.")
+    table.add_row("5", "update", "Update managed content for this repository context.")
+    table.add_row("6", "repo-update", "Refresh tracked upstream source checkouts.")
     table.add_row("q", "quit", "Exit the menu.")
     subtitle = [
         f"cwd: {current}",
@@ -228,7 +255,7 @@ def _prompt_menu_action() -> MenuAction:
         raw = _prompt_text("Choose an action", default=MenuAction.status.value).lower()
         if raw in {action.value for action in MenuAction}:
             return MenuAction(raw)
-        console().print("[red]Unknown choice. Pick 1-7 or q.[/red]")
+        console().print("[red]Unknown choice. Pick 1-6 or q.[/red]")
 
 
 def _prompt_managed_target(default: ManagedTarget = ManagedTarget.all) -> ManagedTarget:
@@ -279,11 +306,8 @@ def _run_interactive_menu(manager: PluginManager, current: Path) -> None:
         match action:
             case MenuAction.status:
                 _render_status_snapshot(manager, current)
-            case MenuAction.profiles:
-                console().print(render_profiles(manager.catalog))
-            case MenuAction.themes:
-                active_name, _ = _active_target(manager, current)
-                console().print(render_themes(manager.catalog, active_name or None))
+            case MenuAction.browse:
+                _run_list_menu(manager, current)
             case MenuAction.switch | MenuAction.switch_exclusive:
                 active_name, _ = _active_target(manager, current)
                 default_target = manager.repo_profile_hint(current) or active_name or "minimal"
@@ -293,7 +317,7 @@ def _run_interactive_menu(manager: PluginManager, current: Path) -> None:
                     current,
                     exclusive_plugins=action is MenuAction.switch_exclusive,
                 )
-                console().print(build_target_tree(manager.catalog, activation))
+                console().print(build_target_tree(_catalog_bundle(manager, current), activation))
                 _print_sync_warnings(manager)
                 _maybe_save_repo_profile(manager, current, activation.name)
             case MenuAction.update:
@@ -307,35 +331,47 @@ def _run_interactive_menu(manager: PluginManager, current: Path) -> None:
 
 
 def _render_list_section(manager: PluginManager, current: Path, section: ListSection) -> None:
+    catalog = _catalog_bundle(manager, current)
     active_name, active_target = _active_target(manager, current)
     repo_hint = manager.repo_profile_hint(current)
     term = console()
     match section:
         case ListSection.overview:
-            for renderable in render_overview(manager.catalog, active_target, repo_hint):
+            for renderable in render_overview(catalog, active_target, repo_hint):
                 term.print(renderable)
         case ListSection.profiles:
-            term.print(render_overview(manager.catalog, active_target, repo_hint)[1])
+            term.print(render_overview(catalog, active_target, repo_hint)[1])
         case ListSection.themes:
-            term.print(render_themes(manager.catalog, active_name or None))
+            term.print(render_themes(catalog, active_name or None))
         case ListSection.sources:
-            term.print(render_repositories(manager.catalog))
+            term.print(render_repositories(catalog))
         case ListSection.plugins:
-            term.print(render_plugins(manager.catalog))
+            term.print(render_plugins(catalog))
         case ListSection.skills:
-            term.print(render_providers(manager.catalog, "skill"))
+            term.print(render_providers(catalog, "skill"))
         case ListSection.agents:
-            term.print(render_providers(manager.catalog, "agent"))
+            term.print(render_providers(catalog, "agent"))
         case ListSection.mcps:
-            term.print(render_mcps(manager.catalog))
+            term.print(render_mcps(catalog))
         case ListSection.all:
-            for renderable in render_overview(manager.catalog, active_target, repo_hint):
+            for renderable in render_overview(catalog, active_target, repo_hint):
                 term.print(renderable)
-            term.print(render_repositories(manager.catalog))
-            term.print(render_plugins(manager.catalog))
-            term.print(render_providers(manager.catalog, "skill"))
-            term.print(render_providers(manager.catalog, "agent"))
-            term.print(render_mcps(manager.catalog))
+            term.print(render_repositories(catalog))
+            term.print(render_plugins(catalog))
+            term.print(render_providers(catalog, "skill"))
+            term.print(render_providers(catalog, "agent"))
+            term.print(render_mcps(catalog))
+
+
+def _print_project_overlay_result(manager: PluginManager, current: Path, target_name: str, path: Path) -> None:
+    catalog = _catalog_bundle(manager, current)
+    console().print(build_target_tree(catalog, catalog.resolve_target(target_name)))
+    console().print(f"[green]Updated project catalog at {path}[/green]")
+
+
+def _render_catalog_command(section: ListSection, cwd: Path | None) -> None:
+    manager = get_manager()
+    _render_list_section(manager, _cwd(cwd), section)
 
 
 def _list_menu_table(manager: PluginManager, current: Path) -> Table:
@@ -421,10 +457,12 @@ def callback(
 
 @app.command(
     "list",
+    hidden=True,
     short_help="Browse bundled catalogs and active views.",
     help=(
-        "Render overview data or drill into bundled repository sources, themes, profiles, plugins, skills, "
-        "and agent catalogs. Use [cyan]overview[/cyan] for the default summary or [cyan]all[/cyan] for a full dump."
+        "Legacy alias for the catalog browser. Render overview data or drill into bundled repository sources, "
+        "themes, profiles, plugins, skills, and agent catalogs. Use [cyan]overview[/cyan] for the default "
+        "summary or [cyan]all[/cyan] for a full dump."
     ),
     epilog=(
         "\b\nExamples:\n"
@@ -459,6 +497,443 @@ def list_command(
             return
         section = ListSection.overview
     _render_list_section(manager, current, section)
+
+
+@catalog_app.callback(invoke_without_command=True)
+def catalog_callback(
+    ctx: typer.Context,
+    cwd: Annotated[
+        Path | None,
+        typer.Option(
+            "--cwd",
+            help="Working directory used for repository detection and profile hint resolution.",
+            rich_help_panel="Repository context",
+        ),
+    ] = None,
+) -> None:
+    """Open the catalog browser or render the overview section."""
+    if ctx.invoked_subcommand is not None:
+        return
+    manager = get_manager()
+    current = _cwd(cwd)
+    if _supports_interactive_menu():
+        _run_list_menu(manager, current)
+        raise typer.Exit()
+    _render_list_section(manager, current, ListSection.overview)
+    raise typer.Exit()
+
+
+@catalog_app.command("overview", help="Render the active-state overview with bundled profiles and themes.")
+def catalog_overview_command(
+    cwd: Annotated[
+        Path | None,
+        typer.Option(
+            "--cwd",
+            help="Working directory used for repository detection and profile hint resolution.",
+            rich_help_panel="Repository context",
+        ),
+    ] = None,
+) -> None:
+    """Render the overview catalog section."""
+    _render_catalog_command(ListSection.overview, cwd)
+
+
+@catalog_app.command("profiles", help="Render the bundled profile catalog.")
+def catalog_profiles_command(
+    cwd: Annotated[
+        Path | None,
+        typer.Option(
+            "--cwd",
+            help="Working directory used for repository detection and profile hint resolution.",
+            rich_help_panel="Repository context",
+        ),
+    ] = None,
+) -> None:
+    """Render the profiles catalog section."""
+    _render_catalog_command(ListSection.profiles, cwd)
+
+
+@catalog_app.command("themes", help="Render theme bundles across plugins, skills, agents, and MCP-ready workflows.")
+def catalog_themes_command(
+    cwd: Annotated[
+        Path | None,
+        typer.Option(
+            "--cwd",
+            help="Working directory used for repository detection and profile hint resolution.",
+            rich_help_panel="Repository context",
+        ),
+    ] = None,
+) -> None:
+    """Render the themes catalog section."""
+    _render_catalog_command(ListSection.themes, cwd)
+
+
+@catalog_app.command("sources", help="Render tracked upstream repositories and revision metadata.")
+def catalog_sources_command(
+    cwd: Annotated[
+        Path | None,
+        typer.Option(
+            "--cwd",
+            help="Working directory used for repository detection and profile hint resolution.",
+            rich_help_panel="Repository context",
+        ),
+    ] = None,
+) -> None:
+    """Render the sources catalog section."""
+    _render_catalog_command(ListSection.sources, cwd)
+
+
+@catalog_app.command("plugins", help="Render the managed plugin catalog.")
+def catalog_plugins_command(
+    cwd: Annotated[
+        Path | None,
+        typer.Option(
+            "--cwd",
+            help="Working directory used for repository detection and profile hint resolution.",
+            rich_help_panel="Repository context",
+        ),
+    ] = None,
+) -> None:
+    """Render the plugins catalog section."""
+    _render_catalog_command(ListSection.plugins, cwd)
+
+
+@catalog_app.command("skills", help="Render the skill provider catalog.")
+def catalog_skills_command(
+    cwd: Annotated[
+        Path | None,
+        typer.Option(
+            "--cwd",
+            help="Working directory used for repository detection and profile hint resolution.",
+            rich_help_panel="Repository context",
+        ),
+    ] = None,
+) -> None:
+    """Render the skills catalog section."""
+    _render_catalog_command(ListSection.skills, cwd)
+
+
+@catalog_app.command("agents", help="Render the agent provider catalog.")
+def catalog_agents_command(
+    cwd: Annotated[
+        Path | None,
+        typer.Option(
+            "--cwd",
+            help="Working directory used for repository detection and profile hint resolution.",
+            rich_help_panel="Repository context",
+        ),
+    ] = None,
+) -> None:
+    """Render the agents catalog section."""
+    _render_catalog_command(ListSection.agents, cwd)
+
+
+@catalog_app.command("mcps", help="Render the managed MCP catalog.")
+def catalog_mcps_command(
+    cwd: Annotated[
+        Path | None,
+        typer.Option(
+            "--cwd",
+            help="Working directory used for repository detection and profile hint resolution.",
+            rich_help_panel="Repository context",
+        ),
+    ] = None,
+) -> None:
+    """Render the MCP catalog section."""
+    _render_catalog_command(ListSection.mcps, cwd)
+
+
+@catalog_app.command("all", help="Render the full bundled catalog dump.")
+def catalog_all_command(
+    cwd: Annotated[
+        Path | None,
+        typer.Option(
+            "--cwd",
+            help="Working directory used for repository detection and profile hint resolution.",
+            rich_help_panel="Repository context",
+        ),
+    ] = None,
+) -> None:
+    """Render the full catalog dump."""
+    _render_catalog_command(ListSection.all, cwd)
+
+
+@project_app.command(
+    "init",
+    short_help="Initialize project-local target state.",
+    help="Alias for repo-init using a noun-based project workflow surface.",
+)
+def project_init_command(
+    target: Annotated[
+        str | None,
+        typer.Argument(help="Optional profile or theme name to persist. Defaults to the current active target when omitted."),
+    ] = None,
+    cwd: Annotated[
+        Path | None,
+        typer.Option(
+            "--cwd",
+            help="Working directory used to locate the repository root and repo-local config files.",
+            rich_help_panel="Repository context",
+        ),
+    ] = None,
+    repo_profile_location: Annotated[
+        RepoProfileLocation,
+        typer.Option(
+            "--repo-profile-location",
+            help="Where to write the repo-local target hint file.",
+            rich_help_panel="Repository context",
+        ),
+    ] = RepoProfileLocation.root,
+    agent_scope: Annotated[
+        str | None,
+        typer.Option(
+            "--agent-scope",
+            help="Persist the default repo agent scope: 'global' or 'local'.",
+            rich_help_panel="Preferences",
+        ),
+    ] = None,
+    mcp_scope: Annotated[
+        str | None,
+        typer.Option(
+            "--mcp-scope",
+            help="Persist the default repo MCP scope: 'global' or 'local'.",
+            rich_help_panel="Preferences",
+        ),
+    ] = None,
+    mcp_profile: Annotated[
+        str | None,
+        typer.Option(
+            "--mcp-profile",
+            help="Persist the preferred repo MCP profile name.",
+            rich_help_panel="Preferences",
+        ),
+    ] = None,
+    force: Annotated[
+        bool,
+        typer.Option(
+            "--force",
+            help="Replace an existing repo target hint when it points at a different target.",
+            rich_help_panel="Safety",
+        ),
+    ] = False,
+) -> None:
+    """Initialize project-local target state without applying plugins, skills, or agents."""
+    repo_init_command(
+        target=target,
+        cwd=cwd,
+        repo_profile_location=repo_profile_location,
+        agent_scope=agent_scope,
+        mcp_scope=mcp_scope,
+        mcp_profile=mcp_profile,
+        force=force,
+    )
+
+
+@project_add_app.command("theme", help="Attach an existing bundled or project-local theme to a profile. Creates the profile when missing.")
+def project_add_theme_command(
+    theme: Annotated[
+        str,
+        typer.Argument(help="Existing theme name to attach to the profile."),
+    ],
+    profile: Annotated[
+        str,
+        typer.Option(
+            "--profile",
+            help="Profile to create or update.",
+            rich_help_panel="Project overlay",
+        ),
+    ],
+    cwd: Annotated[
+        Path | None,
+        typer.Option(
+            "--cwd",
+            help="Working directory used to locate the repository root and project catalog file.",
+            rich_help_panel="Repository context",
+        ),
+    ] = None,
+) -> None:
+    """Attach a theme to a project-local profile."""
+    manager = get_manager()
+    current = _cwd(cwd)
+    try:
+        resolved_theme, path = manager.add_project_theme_to_profile(current, theme_reference=theme, profile_name=profile)
+    except KeyError as exc:
+        console().print(f"[red]{exc}[/red]")
+        raise typer.Exit(1) from exc
+    console().print(f"[green]Attached theme '{resolved_theme}' to profile '{profile}'.[/green]")
+    _print_project_overlay_result(manager, current, profile, path)
+
+
+@project_add_app.command("skill", help="Add a known skill name or skill URL to a project-local theme. Creates the theme when missing.")
+def project_add_skill_command(
+    skill: Annotated[
+        str,
+        typer.Argument(help="Known skill provider name or known catalog skill URL."),
+    ],
+    theme: Annotated[
+        str,
+        typer.Option(
+            "--theme",
+            help="Theme to create or update.",
+            rich_help_panel="Project overlay",
+        ),
+    ],
+    profile: Annotated[
+        str | None,
+        typer.Option(
+            "--profile",
+            help="Optional profile to create or update and attach the theme to.",
+            rich_help_panel="Project overlay",
+        ),
+    ] = None,
+    cwd: Annotated[
+        Path | None,
+        typer.Option(
+            "--cwd",
+            help="Working directory used to locate the repository root and project catalog file.",
+            rich_help_panel="Repository context",
+        ),
+    ] = None,
+) -> None:
+    """Add a skill provider to a project-local theme."""
+    manager = get_manager()
+    current = _cwd(cwd)
+    try:
+        resolved_skill, path = manager.add_project_item(current, kind="skill", reference=skill, theme_name=theme, profile_name=profile)
+    except KeyError as exc:
+        console().print(f"[red]{exc}[/red]")
+        raise typer.Exit(1) from exc
+    console().print(f"[green]Added skill '{resolved_skill}' to theme '{theme}'.[/green]")
+    _print_project_overlay_result(manager, current, profile or theme, path)
+
+
+@project_add_app.command("plugin", help="Add a known plugin name or plugin source URL to a project-local theme. Creates the theme when missing.")
+def project_add_plugin_command(
+    plugin: Annotated[
+        str,
+        typer.Argument(help="Known plugin name or known catalog plugin URL."),
+    ],
+    theme: Annotated[
+        str,
+        typer.Option(
+            "--theme",
+            help="Theme to create or update.",
+            rich_help_panel="Project overlay",
+        ),
+    ],
+    profile: Annotated[
+        str | None,
+        typer.Option(
+            "--profile",
+            help="Optional profile to create or update and attach the theme to.",
+            rich_help_panel="Project overlay",
+        ),
+    ] = None,
+    cwd: Annotated[
+        Path | None,
+        typer.Option(
+            "--cwd",
+            help="Working directory used to locate the repository root and project catalog file.",
+            rich_help_panel="Repository context",
+        ),
+    ] = None,
+) -> None:
+    """Add a plugin to a project-local theme."""
+    manager = get_manager()
+    current = _cwd(cwd)
+    try:
+        resolved_plugin, path = manager.add_project_item(current, kind="plugin", reference=plugin, theme_name=theme, profile_name=profile)
+    except KeyError as exc:
+        console().print(f"[red]{exc}[/red]")
+        raise typer.Exit(1) from exc
+    console().print(f"[green]Added plugin '{resolved_plugin}' to theme '{theme}'.[/green]")
+    _print_project_overlay_result(manager, current, profile or theme, path)
+
+
+@project_add_app.command("agent", help="Add a known agent name or agent URL to a project-local theme. Creates the theme when missing.")
+def project_add_agent_command(
+    agent: Annotated[
+        str,
+        typer.Argument(help="Known agent provider name or known catalog agent URL."),
+    ],
+    theme: Annotated[
+        str,
+        typer.Option(
+            "--theme",
+            help="Theme to create or update.",
+            rich_help_panel="Project overlay",
+        ),
+    ],
+    profile: Annotated[
+        str | None,
+        typer.Option(
+            "--profile",
+            help="Optional profile to create or update and attach the theme to.",
+            rich_help_panel="Project overlay",
+        ),
+    ] = None,
+    cwd: Annotated[
+        Path | None,
+        typer.Option(
+            "--cwd",
+            help="Working directory used to locate the repository root and project catalog file.",
+            rich_help_panel="Repository context",
+        ),
+    ] = None,
+) -> None:
+    """Add an agent provider to a project-local theme."""
+    manager = get_manager()
+    current = _cwd(cwd)
+    try:
+        resolved_agent, path = manager.add_project_item(current, kind="agent", reference=agent, theme_name=theme, profile_name=profile)
+    except KeyError as exc:
+        console().print(f"[red]{exc}[/red]")
+        raise typer.Exit(1) from exc
+    console().print(f"[green]Added agent '{resolved_agent}' to theme '{theme}'.[/green]")
+    _print_project_overlay_result(manager, current, profile or theme, path)
+
+
+@project_add_app.command("mcp", help="Add a known MCP name or MCP source URL to a project-local theme. Creates the theme when missing.")
+def project_add_mcp_command(
+    mcp: Annotated[
+        str,
+        typer.Argument(help="Known MCP name or known catalog MCP URL."),
+    ],
+    theme: Annotated[
+        str,
+        typer.Option(
+            "--theme",
+            help="Theme to create or update.",
+            rich_help_panel="Project overlay",
+        ),
+    ],
+    profile: Annotated[
+        str | None,
+        typer.Option(
+            "--profile",
+            help="Optional profile to create or update and attach the theme to.",
+            rich_help_panel="Project overlay",
+        ),
+    ] = None,
+    cwd: Annotated[
+        Path | None,
+        typer.Option(
+            "--cwd",
+            help="Working directory used to locate the repository root and project catalog file.",
+            rich_help_panel="Repository context",
+        ),
+    ] = None,
+) -> None:
+    """Add an MCP server to a project-local theme."""
+    manager = get_manager()
+    current = _cwd(cwd)
+    try:
+        resolved_mcp, path = manager.add_project_item(current, kind="mcp", reference=mcp, theme_name=theme, profile_name=profile)
+    except KeyError as exc:
+        console().print(f"[red]{exc}[/red]")
+        raise typer.Exit(1) from exc
+    console().print(f"[green]Added MCP '{resolved_mcp}' to theme '{theme}'.[/green]")
+    _print_project_overlay_result(manager, current, profile or theme, path)
 
 
 @app.command(
@@ -659,12 +1134,12 @@ def delete_command(
     short_help="Activate a profile or theme.",
     help=(
         "Switch to a profile or theme while preserving unrelated installed plugins when possible. "
-        "Use [cyan]list profiles[/cyan], [cyan]list themes[/cyan], or [cyan]docs/THEMES.md[/cyan] "
+        "Use [cyan]catalog profiles[/cyan], [cyan]catalog themes[/cyan], or [cyan]docs/THEMES.md[/cyan] "
         "to inspect the current composition before saving a repo-local target hint."
     ),
     epilog=(
         "\b\nExamples:\n"
-        "  copilot-plugin-manager list profiles\n"
+        "  copilot-plugin-manager catalog profiles\n"
         "  copilot-plugin-manager switch minimal\n"
         "  copilot-plugin-manager switch minimal --cwd /path/to/repo --save-repo-profile"
     ),
@@ -716,7 +1191,7 @@ def switch_command(
         exclusive_plugins=False,
         agent_scope=_parse_scope(agent_scope) if agent_scope is not None else None,
     )
-    console().print(build_target_tree(manager.catalog, activation))
+    console().print(build_target_tree(_catalog_bundle(manager, current), activation))
     if save_repo_profile:
         profile_path = manager.write_repo_profile(current, activation.name, repo_profile_location.value)
         console().print(f"Saved repo target hint to {profile_path}")
@@ -728,12 +1203,12 @@ def switch_command(
     short_help="Activate a profile or theme exclusively.",
     help=(
         "Switch to a profile or theme and prune managed plugins that are not part of the target. "
-        "Use [cyan]list profiles[/cyan], [cyan]list themes[/cyan], or [cyan]docs/THEMES.md[/cyan] "
+        "Use [cyan]catalog profiles[/cyan], [cyan]catalog themes[/cyan], or [cyan]docs/THEMES.md[/cyan] "
         "to inspect the current composition before saving a repo-local target hint."
     ),
     epilog=(
         "\b\nExamples:\n"
-        "  copilot-plugin-manager list themes\n"
+        "  copilot-plugin-manager catalog themes\n"
         "  copilot-plugin-manager switch-exclusive minimal\n"
         "  copilot-plugin-manager switch-exclusive minimal --cwd /path/to/repo --save-repo-profile"
     ),
@@ -785,7 +1260,7 @@ def switch_exclusive_command(
         exclusive_plugins=True,
         agent_scope=_parse_scope(agent_scope) if agent_scope is not None else None,
     )
-    console().print(build_target_tree(manager.catalog, activation))
+    console().print(build_target_tree(_catalog_bundle(manager, current), activation))
     if save_repo_profile:
         profile_path = manager.write_repo_profile(current, activation.name, repo_profile_location.value)
         console().print(f"Saved repo target hint to {profile_path}")
@@ -925,7 +1400,7 @@ def mcp_sync_command(
 def mcp_add_command(
     name: Annotated[
         str,
-        typer.Argument(help="Catalog MCP name to add (see 'list mcps')."),
+        typer.Argument(help="Catalog MCP name to add (see 'catalog mcps')."),
     ],
     probe_version: Annotated[
         bool,
@@ -957,7 +1432,7 @@ def mcp_add_command(
     current = _cwd(cwd)
     manager = get_manager()
     if name not in manager.catalog.mcps:
-        console().print(f"[red]Unknown MCP '{name}'. Run 'list mcps' to see available entries.[/red]")
+        console().print(f"[red]Unknown MCP '{name}'. Run 'catalog mcps' to see available entries.[/red]")
         raise typer.Exit(1)
     record = manager.catalog.mcps[name]
     state = manager.sync_mcp(name, record, probe_version=probe_version, scope=resolved_scope, cwd=current)
@@ -1134,7 +1609,7 @@ def repo_init_command(
     except (KeyError, RuntimeError) as exc:
         console().print(f"[red]{exc}[/red]")
         raise typer.Exit(1) from exc
-    console().print(build_target_tree(manager.catalog, activation))
+    console().print(build_target_tree(_catalog_bundle(manager, current), activation))
     console().print(f"[green]Initialized repo profile at {profile_path}[/green]")
     if config_path is not None:
         console().print(f"[green]Updated repo settings at {config_path}[/green]")
