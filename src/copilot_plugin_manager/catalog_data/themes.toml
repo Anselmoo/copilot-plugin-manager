@@ -1,214 +1,599 @@
+[themes."agents"]
+plugins = []
+skills = ["anthropic-skill-creator", "kdense-broad"]
+agents = [
+  "agency",
+  "agency-design",
+  "agency-engineering",
+  "agency-product",
+  "agency-project",
+  "agency-strategy",
+  "agency-testing",
+  "voltagent",
+  "voltagent-core",
+  "voltagent-data-ai",
+  "voltagent-devex",
+  "voltagent-docker-expert",
+  "voltagent-dotnet-core-expert",
+  "voltagent-infra",
+  "voltagent-language",
+  "voltagent-orchestration",
+  "voltagent-product",
+  "voltagent-python-pro",
+  "voltagent-quality",
+  "voltagent-research",
+  "voltagent-research-analyst",
+  "voltagent-security-auditor",
+  "voltagent-typescript-pro",
+]
+
+[themes."bioinformatics"]
+plugins = []
+skills = [
+  "kdense-alphafold-database",
+  "kdense-biopython",
+  "kdense-biorxiv-database",
+  "kdense-cellxgene-census",
+  "kdense-deeptools",
+  "kdense-ensembl-database",
+  "kdense-esm",
+  "kdense-etetoolkit",
+  "kdense-gene-database",
+  "kdense-geo-database",
+  "kdense-gget",
+  "kdense-gnomad-database",
+  "kdense-histolab",
+  "kdense-interpro-database",
+  "kdense-lamindb",
+  "kdense-pdb-database",
+  "kdense-phylogenetics",
+  "kdense-pubmed-database",
+  "kdense-pydeseq2",
+  "kdense-pysam",
+  "kdense-reactome-database",
+  "kdense-scanpy",
+  "kdense-scvelo",
+  "kdense-scvi-tools",
+  "kdense-string-database",
+  "kdense-uniprot-database",
+]
+agents = [
+  "voltagent-data-engineer",
+  "voltagent-data-scientist",
+  "voltagent-research-analyst",
+  "voltagent-scientific-literature-researcher",
+]
+
+[themes."chemistry"]
+plugins = []
+skills = [
+  "kdense-bindingdb-database",
+  "kdense-brenda-database",
+  "kdense-chembl-database",
+  "kdense-cobrapy",
+  "kdense-datamol",
+  "kdense-deepchem",
+  "kdense-diffdock",
+  "kdense-drugbank-database",
+  "kdense-hmdb-database",
+  "kdense-kegg-database",
+  "kdense-matchms",
+  "kdense-medchem",
+  "kdense-molecular-dynamics",
+  "kdense-molfeat",
+  "kdense-pubchem-database",
+  "kdense-pyopenms",
+  "kdense-rdkit",
+  "kdense-scikit-learn",
+  "kdense-sympy",
+  "kdense-torchdrug",
+  "kdense-zinc-database",
+]
+agents = [
+  "voltagent-data-scientist",
+  "voltagent-research-analyst",
+  "voltagent-scientific-literature-researcher",
+]
+
+[themes."clinical"]
+plugins = []
+skills = [
+  "kdense-cbioportal-database",
+  "kdense-clinical-decision-support",
+  "kdense-clinical-reports",
+  "kdense-clinicaltrials-database",
+  "kdense-clinpgx-database",
+  "kdense-clinvar-database",
+  "kdense-pubmed-database",
+  "kdense-pyhealth",
+  "kdense-statistical-analysis",
+  "kdense-treatment-plans",
+]
+agents = [
+  "agency-product-trend-researcher",
+  "voltagent-data-scientist",
+  "voltagent-research-analyst",
+  "voltagent-scientific-literature-researcher",
+]
+
 [themes."core"]
-plugins = ["awesome-copilot", "context-engineering", "copilot-sdk", "gem-team", "noob-mode", "project-planning", "rug-agentic-workflow", "software-engineering-team", "structured-autonomy"]
+plugins = [
+  "awesome-copilot",
+  "context-engineering",
+  "copilot-sdk",
+  "gem-team",
+  "noob-mode",
+  "project-planning",
+  "rug-agentic-workflow",
+  "software-engineering-team",
+  "structured-autonomy",
+]
 skills = ["anthropic-claude-api", "anthropic-mcp-builder", "anthropic-skill-creator"]
 agents = ["agency-engineering-technical-writer"]
 
+[themes."data"]
+plugins = ["database-data-management", "oracle-to-postgres-migration-expert"]
+skills = [
+  "anthropic-xlsx",
+  "kdense-anndata",
+  "kdense-broad",
+  "kdense-dask",
+  "kdense-exploratory-data-analysis",
+  "kdense-matplotlib",
+  "kdense-networkx",
+  "kdense-plotly",
+  "kdense-polars",
+  "kdense-scikit-learn",
+  "kdense-seaborn",
+  "kdense-statistical-analysis",
+  "kdense-statsmodels",
+  "kdense-vaex",
+  "mskills-dotnet-data",
+  "mskills-python-data",
+  "mskills-rust-data",
+  "mskills-typescript-data",
+]
+agents = [
+  "agency-product-trend-researcher",
+  "voltagent-data-engineer",
+  "voltagent-data-scientist",
+  "voltagent-devops-engineer",
+]
+
+[themes."devops"]
+plugins = ["automate-this", "devops-oncall", "edge-ai-tasks", "security-best-practices"]
+skills = []
+agents = [
+  "agency-engineering-devops-automator",
+  "voltagent-devops-engineer",
+  "voltagent-docker-expert",
+  "voltagent-git-workflow-manager",
+  "voltagent-infra",
+  "voltagent-kubernetes-specialist",
+  "voltagent-platform-engineer",
+]
+
 [themes."docs"]
 plugins = ["napkin", "python-mcp-development", "technical-spike"]
-skills = ["anthropic-doc-coauthoring", "anthropic-docx", "anthropic-pdf", "anthropic-pptx", "anthropic-xlsx", "mskills-typescript-frontend"]
-agents = ["voltagent-documentation-engineer", "agency-engineering-technical-writer"]
+skills = ["anthropic-doc-coauthoring", "anthropic-docx", "anthropic-pdf", "anthropic-pptx", "anthropic-xlsx"]
+agents = ["agency-engineering-technical-writer", "voltagent-documentation-engineer"]
 
 [themes."docs-design"]
 plugins = ["frontend-web-dev"]
-skills = ["anthropic-brand-guidelines", "anthropic-canvas-design", "anthropic-frontend-design", "anthropic-internal-comms", "anthropic-theme-factory", "anthropic-algorithmic-art"]
-agents = ["agency-design-brand-guardian", "agency-design-ui-designer", "agency-design-ux-architect", "voltagent-documentation-engineer"]
+skills = [
+  "anthropic-algorithmic-art",
+  "anthropic-brand-guidelines",
+  "anthropic-canvas-design",
+  "anthropic-frontend-design",
+  "anthropic-internal-comms",
+  "anthropic-slack-gif-creator",
+  "anthropic-theme-factory",
+]
+agents = [
+  "agency-design-brand-guardian",
+  "agency-design-ui-designer",
+  "agency-design-ux-architect",
+  "voltagent-documentation-engineer",
+]
+
+[themes."dotnet"]
+plugins = ["csharp-mcp-development", "polyglot-test-agent"]
+skills = ["mskills-dotnet", "mskills-dotnet-data", "mskills-dotnet-general"]
+agents = [
+  "voltagent-code-reviewer",
+  "voltagent-debugger",
+  "voltagent-dotnet-core-expert",
+  "voltagent-refactoring-specialist",
+]
+
+[themes."enterprise"]
+plugins = [
+  "azure-cloud-development",
+  "csharp-dotnet-development",
+  "dataverse",
+  "dataverse-sdk-for-python",
+  "flowstudio-power-automate",
+  "mcp-m365-copilot",
+  "pcf-development",
+  "power-apps-code-apps",
+  "power-bi-development",
+  "power-platform-mcp-connector-development",
+  "typespec-m365-copilot",
+  "winui3-development",
+]
+skills = []
+agents = [
+  "agency-engineering-security-engineer",
+  "agency-product-sprint-prioritizer",
+  "agency-product-trend-researcher",
+  "agency-project-manager-senior",
+  "agency-project-project-shepherd",
+]
+
+[themes."frontend"]
+plugins = ["frontend-web-dev", "partners", "polyglot-test-agent", "testing-automation"]
+skills = [
+  "anthropic-canvas-design",
+  "anthropic-frontend-design",
+  "anthropic-web-artifacts-builder",
+  "mskills-typescript-frontend",
+  "mskills-typescript-integration",
+]
+agents = [
+  "agency-design-ui-designer",
+  "agency-design-ux-architect",
+  "voltagent-nextjs-developer",
+  "voltagent-react-specialist",
+  "voltagent-typescript-pro",
+]
+
+[themes."github"]
+plugins = ["automate-this", "context-engineering"]
+skills = []
+agents = [
+  "agency-project-project-shepherd",
+  "voltagent-git-workflow-manager",
+  "voltagent-workflow-orchestrator",
+]
+
+[themes."infra"]
+plugins = ["automate-this", "devops-oncall"]
+skills = []
+agents = [
+  "agency-engineering-devops-automator",
+  "voltagent-devops-engineer",
+  "voltagent-docker-expert",
+  "voltagent-infra",
+  "voltagent-kubernetes-specialist",
+  "voltagent-platform-engineer",
+]
+
+[themes."mcp"]
+plugins = [
+  "csharp-mcp-development",
+  "go-mcp-development",
+  "java-mcp-development",
+  "kotlin-mcp-development",
+  "php-mcp-development",
+  "python-mcp-development",
+  "ruby-mcp-development",
+  "rust-mcp-development",
+  "swift-mcp-development",
+  "typescript-mcp-development",
+]
+skills = [
+  "anthropic-mcp-builder",
+  "mskills-dotnet-general",
+  "mskills-java-integration",
+  "mskills-python-integration",
+  "mskills-rust-data",
+  "mskills-typescript-integration",
+]
+agents = ["voltagent-documentation-engineer", "voltagent-mcp-developer"]
+
+[themes."mcp-agents"]
+plugins = []
+skills = []
+agents = [
+  "agency-engineering-backend-architect",
+  "agency-engineering-technical-writer",
+  "voltagent-mcp-developer",
+  "voltagent-multi-agent-coordinator",
+  "voltagent-task-distributor",
+  "voltagent-workflow-orchestrator",
+]
+
+[themes."ml-ai"]
+plugins = []
+skills = [
+  "kdense-anndata",
+  "kdense-dask",
+  "kdense-deepchem",
+  "kdense-matplotlib",
+  "kdense-plotly",
+  "kdense-pymc",
+  "kdense-pytorch-lightning",
+  "kdense-scikit-learn",
+  "kdense-seaborn",
+  "kdense-shap",
+  "kdense-stable-baselines3",
+  "kdense-statsmodels",
+  "kdense-timesfm-forecasting",
+  "kdense-torch-geometric",
+  "kdense-torchdrug",
+  "kdense-transformers",
+  "kdense-umap-learn",
+  "mskills-python-data",
+]
+agents = [
+  "voltagent-data-engineer",
+  "voltagent-data-scientist",
+  "voltagent-llm-architect",
+  "voltagent-research-analyst",
+]
+
+[themes."openapi"]
+plugins = [
+  "openapi-to-application-csharp-dotnet",
+  "openapi-to-application-go",
+  "openapi-to-application-java-spring-boot",
+  "openapi-to-application-nodejs-nestjs",
+  "openapi-to-application-python-fastapi",
+]
+skills = []
+agents = ["agency-engineering-backend-architect"]
+
+[themes."paper-writing-review"]
+plugins = ["technical-spike"]
+skills = [
+  "kdense-bgpt-paper-search",
+  "kdense-citation-management",
+  "kdense-latex-posters",
+  "kdense-literature-review",
+  "kdense-markdown-mermaid-writing",
+  "kdense-markitdown",
+  "kdense-open-notebook",
+  "kdense-paper-2-web",
+  "kdense-peer-review",
+  "kdense-pyzotero",
+  "kdense-scientific-critical-thinking",
+  "kdense-scientific-writing",
+]
+agents = [
+  "agency-engineering-technical-writer",
+  "voltagent-documentation-engineer",
+  "voltagent-research",
+  "voltagent-research-analyst",
+  "voltagent-scientific-literature-researcher",
+]
+
+[themes."planning"]
+plugins = ["project-planning", "technical-spike"]
+skills = []
+agents = [
+  "agency-product-sprint-prioritizer",
+  "agency-project-manager-senior",
+  "agency-project-project-shepherd",
+  "voltagent-product",
+  "voltagent-task-distributor",
+  "voltagent-workflow-orchestrator",
+]
 
 [themes."python"]
 plugins = ["polyglot-test-agent", "python-mcp-development", "technical-spike", "testing-automation"]
-skills = ["mskills-python", "mskills-python-data", "mskills-python-foundry", "mskills-python-integration", "mskills-python-monitoring", "anthropic-claude-api", "kdense-scikit-learn", "kdense-statsmodels", "kdense-dask", "kdense-matplotlib", "kdense-plotly"]
-agents = ["voltagent-python-pro", "voltagent-debugger", "voltagent-refactoring-specialist", "voltagent-code-reviewer", "agency-engineering-backend-architect"]
+skills = ["anthropic-claude-api", "mskills-python"]
+agents = [
+  "agency-engineering-backend-architect",
+  "voltagent-code-reviewer",
+  "voltagent-debugger",
+  "voltagent-python-pro",
+  "voltagent-refactoring-specialist",
+]
 
 [themes."python-agents"]
 plugins = []
 skills = ["kdense-broad"]
-agents = ["voltagent-python-pro", "voltagent-code-reviewer", "voltagent-debugger", "voltagent-refactoring-specialist", "voltagent-test-automator", "agency-engineering-backend-architect", "voltagent-security-auditor"]
+agents = [
+  "agency-engineering-backend-architect",
+  "voltagent-code-reviewer",
+  "voltagent-debugger",
+  "voltagent-python-pro",
+  "voltagent-refactoring-specialist",
+  "voltagent-security-auditor",
+  "voltagent-test-automator",
+]
+
+[themes."python-cloud"]
+plugins = ["azure-cloud-development"]
+skills = [
+  "mskills-python-data",
+  "mskills-python-foundry",
+  "mskills-python-integration",
+  "mskills-python-monitoring",
+]
+agents = []
+
+[themes."quantum"]
+plugins = []
+skills = [
+  "kdense-cirq",
+  "kdense-pennylane",
+  "kdense-qiskit",
+  "kdense-qutip",
+  "kdense-scikit-learn",
+  "kdense-sympy",
+  "mskills-python-data",
+]
+agents = ["voltagent-data-scientist", "voltagent-llm-architect", "voltagent-research-analyst"]
+
+[themes."quantum-chemistry"]
+plugins = []
+skills = [
+  "kdense-cirq",
+  "kdense-deepchem",
+  "kdense-molecular-dynamics",
+  "kdense-molfeat",
+  "kdense-pennylane",
+  "kdense-qiskit",
+  "kdense-qutip",
+  "kdense-rdkit",
+  "kdense-scikit-learn",
+  "kdense-sympy",
+]
+agents = [
+  "voltagent-data-scientist",
+  "voltagent-llm-architect",
+  "voltagent-research-analyst",
+  "voltagent-scientific-literature-researcher",
+]
+
+[themes."research"]
+plugins = ["technical-spike"]
+skills = [
+  "kdense-arxiv-database",
+  "kdense-bgpt-paper-search",
+  "kdense-biorxiv-database",
+  "kdense-broad",
+  "kdense-citation-management",
+  "kdense-hypothesis-generation",
+  "kdense-literature-review",
+  "kdense-open-notebook",
+  "kdense-openalex-database",
+  "kdense-paper-2-web",
+  "kdense-peer-review",
+  "kdense-perplexity-search",
+  "kdense-pubmed-database",
+  "kdense-pyzotero",
+  "kdense-research-grants",
+  "kdense-research-lookup",
+  "kdense-scholar-evaluation",
+  "kdense-scientific-brainstorming",
+  "kdense-scientific-critical-thinking",
+  "kdense-scientific-writing",
+  "mskills-python-data",
+]
+agents = [
+  "agency-product-trend-researcher",
+  "voltagent-data-scientist",
+  "voltagent-llm-architect",
+  "voltagent-research",
+  "voltagent-research-analyst",
+  "voltagent-scientific-literature-researcher",
+]
 
 [themes."rust"]
 plugins = ["rust-mcp-development"]
 skills = ["mskills-rust"]
 agents = []
 
-[themes."frontend"]
-plugins = ["frontend-web-dev", "partners", "polyglot-test-agent", "testing-automation"]
-skills = ["anthropic-frontend-design", "anthropic-canvas-design", "anthropic-web-artifacts-builder", "mskills-typescript-frontend", "mskills-typescript-integration"]
-agents = ["agency-design-ui-designer", "agency-design-ux-architect", "voltagent-typescript-pro", "voltagent-react-specialist", "voltagent-nextjs-developer"]
-
-[themes."typescript"]
-plugins = ["polyglot-test-agent", "testing-automation"]
-skills = ["mskills-typescript", "mskills-typescript-data", "mskills-typescript-frontend", "mskills-typescript-integration"]
-agents = ["voltagent-typescript-pro", "voltagent-react-specialist", "voltagent-nextjs-developer", "voltagent-code-reviewer", "voltagent-debugger"]
-
-[themes."dotnet"]
-plugins = ["csharp-mcp-development", "polyglot-test-agent"]
-skills = ["mskills-dotnet", "mskills-dotnet-data", "mskills-dotnet-general"]
-agents = ["voltagent-dotnet-core-expert", "voltagent-code-reviewer", "voltagent-debugger", "voltagent-refactoring-specialist"]
-
-[themes."mcp"]
-plugins = ["csharp-mcp-development", "go-mcp-development", "java-mcp-development", "kotlin-mcp-development", "php-mcp-development", "python-mcp-development", "ruby-mcp-development", "rust-mcp-development", "swift-mcp-development", "typescript-mcp-development"]
-skills = ["anthropic-mcp-builder", "mskills-dotnet-general", "mskills-java-integration", "mskills-python-integration", "mskills-rust-data", "mskills-typescript-integration"]
-agents = ["voltagent-mcp-developer", "voltagent-documentation-engineer"]
-
-[themes."mcp-agents"]
-plugins = []
-skills = []
-agents = ["agency-engineering-backend-architect", "agency-engineering-technical-writer", "voltagent-mcp-developer", "voltagent-multi-agent-coordinator", "voltagent-task-distributor", "voltagent-workflow-orchestrator"]
-
-[themes."testing"]
-plugins = ["polyglot-test-agent", "technical-spike", "testing-automation"]
-skills = ["anthropic-skill-creator", "anthropic-webapp-testing"]
-agents = ["agency-testing-api-tester", "agency-testing-performance-benchmarker", "agency-testing-reality-checker", "voltagent-quality", "voltagent-code-reviewer", "voltagent-security-auditor", "voltagent-test-automator"]
-
 [themes."science"]
 plugins = []
 skills = [
+  "kdense-anndata",
+  "kdense-biopython",
   "kdense-broad",
-  "kdense-biopython", "kdense-exploratory-data-analysis", "kdense-hypothesis-generation",
-  "kdense-pubmed-database", "kdense-scientific-visualization", "kdense-scientific-writing",
-  "kdense-anndata", "kdense-scikit-learn",
-  "kdense-matplotlib", "kdense-seaborn", "kdense-plotly",
-  "kdense-statistical-analysis", "kdense-statsmodels", "kdense-networkx",
-  "kdense-gget", "kdense-sympy",
+  "kdense-exploratory-data-analysis",
+  "kdense-gget",
+  "kdense-hypothesis-generation",
+  "kdense-matplotlib",
+  "kdense-networkx",
+  "kdense-plotly",
+  "kdense-pubmed-database",
+  "kdense-scientific-visualization",
+  "kdense-scientific-writing",
+  "kdense-scikit-learn",
+  "kdense-seaborn",
+  "kdense-statistical-analysis",
+  "kdense-statsmodels",
+  "kdense-sympy",
   "mskills-python-data",
 ]
-agents = ["voltagent-data-engineer", "voltagent-data-scientist", "voltagent-llm-architect", "voltagent-research-analyst", "voltagent-scientific-literature-researcher"]
-
-[themes."bioinformatics"]
-plugins = []
-skills = [
-  "kdense-biopython", "kdense-scanpy", "kdense-scvi-tools", "kdense-pydeseq2", "kdense-scvelo",
-  "kdense-gget", "kdense-pysam", "kdense-cellxgene-census", "kdense-lamindb",
-  "kdense-ensembl-database", "kdense-gene-database", "kdense-geo-database",
-  "kdense-gnomad-database", "kdense-pdb-database", "kdense-uniprot-database",
-  "kdense-string-database", "kdense-reactome-database", "kdense-interpro-database",
-  "kdense-biorxiv-database", "kdense-pubmed-database",
-  "kdense-phylogenetics", "kdense-etetoolkit",
-  "kdense-alphafold-database", "kdense-esm", "kdense-deeptools",
-  "kdense-histolab",
+agents = [
+  "voltagent-data-engineer",
+  "voltagent-data-scientist",
+  "voltagent-llm-architect",
+  "voltagent-research-analyst",
+  "voltagent-scientific-literature-researcher",
 ]
-agents = ["voltagent-scientific-literature-researcher", "voltagent-research-analyst", "voltagent-data-scientist", "voltagent-data-engineer"]
 
-[themes."ml-ai"]
-plugins = []
+[themes."scientific-methods"]
+plugins = ["technical-spike"]
 skills = [
-  "kdense-scikit-learn", "kdense-pytorch-lightning", "kdense-transformers",
-  "kdense-shap", "kdense-umap-learn", "kdense-torch-geometric",
-  "kdense-stable-baselines3", "kdense-timesfm-forecasting",
-  "kdense-pymc", "kdense-statsmodels",
-  "kdense-anndata", "kdense-dask",
-  "kdense-seaborn", "kdense-matplotlib", "kdense-plotly",
-  "kdense-deepchem", "kdense-torchdrug",
-  "mskills-python-data",
+  "kdense-hypothesis-generation",
+  "kdense-open-notebook",
+  "kdense-research-lookup",
+  "kdense-scientific-brainstorming",
+  "kdense-scientific-critical-thinking",
 ]
-agents = ["voltagent-llm-architect", "voltagent-data-scientist", "voltagent-data-engineer", "voltagent-research-analyst"]
-
-[themes."chemistry"]
-plugins = []
-skills = [
-  "kdense-rdkit", "kdense-datamol", "kdense-molfeat", "kdense-matchms", "kdense-medchem",
-  "kdense-deepchem", "kdense-diffdock", "kdense-torchdrug", "kdense-molecular-dynamics",
-  "kdense-chembl-database", "kdense-drugbank-database", "kdense-pubchem-database",
-  "kdense-zinc-database", "kdense-bindingdb-database", "kdense-hmdb-database",
-  "kdense-kegg-database", "kdense-brenda-database",
-  "kdense-pyopenms", "kdense-cobrapy",
+agents = [
+  "voltagent-research",
+  "voltagent-research-analyst",
+  "voltagent-scientific-literature-researcher",
 ]
-agents = ["voltagent-research-analyst", "voltagent-scientific-literature-researcher", "voltagent-data-scientist"]
-
-[themes."quantum"]
-plugins = []
-skills = [
-  "kdense-cirq", "kdense-qiskit", "kdense-pennylane", "kdense-qutip",
-  "kdense-sympy", "mskills-python-data",
-]
-agents = ["voltagent-research-analyst", "voltagent-data-scientist", "voltagent-llm-architect"]
-
-[themes."clinical"]
-plugins = []
-skills = [
-  "kdense-clinical-decision-support", "kdense-clinical-reports", "kdense-clinicaltrials-database",
-  "kdense-pyhealth", "kdense-treatment-plans",
-  "kdense-clinpgx-database", "kdense-clinvar-database", "kdense-cbioportal-database",
-  "kdense-pubmed-database", "kdense-statistical-analysis",
-]
-agents = ["voltagent-research-analyst", "voltagent-data-scientist", "agency-product-trend-researcher", "voltagent-scientific-literature-researcher"]
-
-[themes."openapi"]
-plugins = ["openapi-to-application-csharp-dotnet", "openapi-to-application-go", "openapi-to-application-java-spring-boot", "openapi-to-application-nodejs-nestjs", "openapi-to-application-python-fastapi"]
-skills = []
-agents = ["agency-engineering-backend-architect"]
-
-[themes."enterprise"]
-plugins = ["azure-cloud-development", "csharp-dotnet-development", "dataverse", "dataverse-sdk-for-python", "flowstudio-power-automate", "mcp-m365-copilot", "pcf-development", "power-apps-code-apps", "power-bi-development", "power-platform-mcp-connector-development", "typespec-m365-copilot", "winui3-development"]
-skills = []
-agents = ["agency-product-sprint-prioritizer", "agency-product-trend-researcher", "agency-project-project-shepherd", "agency-project-manager-senior", "agency-engineering-security-engineer"]
-
-[themes."data"]
-plugins = ["database-data-management", "oracle-to-postgres-migration-expert"]
-skills = [
-  "kdense-broad",
-  "kdense-exploratory-data-analysis", "kdense-statistical-analysis",
-  "mskills-dotnet-data", "mskills-python-data", "mskills-rust-data", "mskills-typescript-data",
-  "anthropic-xlsx",
-  "kdense-anndata", "kdense-dask", "kdense-scikit-learn", "kdense-polars", "kdense-vaex",
-  "kdense-matplotlib", "kdense-seaborn", "kdense-plotly",
-  "kdense-statsmodels", "kdense-networkx",
-]
-agents = ["voltagent-data-engineer", "voltagent-data-scientist", "agency-product-trend-researcher", "voltagent-devops-engineer"]
-
-[themes."devops"]
-plugins = ["automate-this", "devops-oncall", "edge-ai-tasks", "security-best-practices"]
-skills = []
-agents = ["agency-engineering-devops-automator", "voltagent-devops-engineer", "voltagent-docker-expert", "voltagent-git-workflow-manager", "voltagent-kubernetes-specialist", "voltagent-platform-engineer", "voltagent-infra"]
-
-[themes."infra"]
-plugins = ["automate-this", "devops-oncall"]
-skills = []
-agents = ["voltagent-infra", "voltagent-kubernetes-specialist", "voltagent-docker-expert", "voltagent-platform-engineer", "voltagent-devops-engineer", "agency-engineering-devops-automator"]
 
 [themes."security"]
 plugins = ["security-best-practices"]
 skills = []
-agents = ["agency-engineering-security-engineer", "agency-testing-reality-checker", "voltagent-code-reviewer", "voltagent-security-auditor", "voltagent-quality"]
-
-[themes."planning"]
-plugins = ["project-planning", "technical-spike"]
-skills = []
-agents = ["agency-product-sprint-prioritizer", "agency-project-project-shepherd", "agency-project-manager-senior", "voltagent-task-distributor", "voltagent-workflow-orchestrator", "voltagent-product"]
-
-[themes."github"]
-plugins = ["automate-this", "context-engineering"]
-skills = []
-agents = ["voltagent-git-workflow-manager", "voltagent-workflow-orchestrator", "agency-project-project-shepherd"]
-
-[themes."research"]
-plugins = ["technical-spike"]
-skills = [
-  "kdense-broad",
-  "kdense-hypothesis-generation", "kdense-literature-review",
-  "kdense-pubmed-database", "kdense-arxiv-database", "kdense-biorxiv-database",
-  "kdense-openalex-database", "kdense-scientific-writing",
-  "kdense-citation-management", "kdense-pyzotero",
-  "kdense-bgpt-paper-search", "kdense-perplexity-search",
-  "kdense-peer-review", "kdense-scholar-evaluation",
-  "kdense-research-grants", "kdense-research-lookup",
-  "kdense-scientific-brainstorming", "kdense-scientific-critical-thinking",
-  "mskills-python-data",
+agents = [
+  "agency-engineering-security-engineer",
+  "agency-testing-reality-checker",
+  "voltagent-code-reviewer",
+  "voltagent-quality",
+  "voltagent-security-auditor",
 ]
-agents = ["agency-product-trend-researcher", "voltagent-research-analyst", "voltagent-scientific-literature-researcher", "voltagent-llm-architect", "voltagent-data-scientist", "voltagent-research"]
 
 [themes."specialized"]
 plugins = ["cast-imaging", "clojure-interactive-programming", "java-development", "ospo-sponsorship"]
 skills = []
 agents = ["voltagent-domains"]
 
-[themes."agents"]
+[themes."spectroscopy"]
 plugins = []
-skills = ["anthropic-skill-creator", "kdense-broad"]
+skills = [
+  "kdense-hmdb-database",
+  "kdense-matchms",
+  "kdense-matplotlib",
+  "kdense-plotly",
+  "kdense-pubchem-database",
+  "kdense-pyopenms",
+  "kdense-scientific-visualization",
+  "kdense-scikit-learn",
+  "kdense-seaborn",
+  "kdense-statistical-analysis",
+  "kdense-statsmodels",
+  "kdense-sympy",
+]
 agents = [
-  "agency", "agency-design", "agency-engineering", "agency-product", "agency-project",
-  "agency-strategy", "agency-testing",
-  "voltagent", "voltagent-core", "voltagent-language", "voltagent-infra",
-  "voltagent-data-ai", "voltagent-devex", "voltagent-orchestration",
-  "voltagent-product", "voltagent-quality", "voltagent-research",
-  "voltagent-python-pro", "voltagent-typescript-pro", "voltagent-dotnet-core-expert",
-  "voltagent-research-analyst", "voltagent-security-auditor", "voltagent-docker-expert",
+  "voltagent-data-scientist",
+  "voltagent-research-analyst",
+  "voltagent-scientific-literature-researcher",
+]
+
+[themes."testing"]
+plugins = ["polyglot-test-agent", "technical-spike", "testing-automation"]
+skills = ["anthropic-skill-creator", "anthropic-webapp-testing"]
+agents = [
+  "agency-testing-api-tester",
+  "agency-testing-performance-benchmarker",
+  "agency-testing-reality-checker",
+  "voltagent-code-reviewer",
+  "voltagent-quality",
+  "voltagent-security-auditor",
+  "voltagent-test-automator",
+]
+
+[themes."typescript"]
+plugins = ["polyglot-test-agent", "testing-automation"]
+skills = [
+  "mskills-typescript",
+  "mskills-typescript-data",
+  "mskills-typescript-frontend",
+  "mskills-typescript-integration",
+]
+agents = [
+  "voltagent-code-reviewer",
+  "voltagent-debugger",
+  "voltagent-nextjs-developer",
+  "voltagent-react-specialist",
+  "voltagent-typescript-pro",
 ]

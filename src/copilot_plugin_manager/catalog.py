@@ -37,7 +37,7 @@ class CatalogBundle(BaseModel):
                 if entry not in seen:
                     seen.add(entry)
                     ordered.append(entry)
-        return ordered
+        return sorted(ordered)
 
     def plugin_install_source(self, name: str) -> str:
         return self.plugins[name].install_source if name in self.plugins else f"{name}@awesome-copilot"

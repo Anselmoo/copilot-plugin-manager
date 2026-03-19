@@ -1,15 +1,15 @@
-[repositories."awesome-copilot"]
-url = "https://github.com/github/awesome-copilot"
-description = "Marketplace plugin source used by the main awesome-copilot ecosystem."
-use_when = "Use when you want marketplace plugins from the GitHub awesome-copilot ecosystem."
+[repositories."agency-agents"]
+url = "https://github.com/msitarzewski/agency-agents"
+description = "Role/division-based agent bundles."
+use_when = "Use when you want organization-style agent teams grouped by function."
 license = "MIT"
 version = "main"
-owner = "github"
-repo = "awesome-copilot"
-submodule_path = "external/awesome-copilot"
-source_url = "https://github.com/github/awesome-copilot"
+owner = "msitarzewski"
+repo = "agency-agents"
+submodule_path = "external/agency-agents"
+source_url = "https://github.com/msitarzewski/agency-agents"
 version_channel = "main"
-tags = ["plugins"]
+tags = ["agents"]
 
 [repositories."anthropics-skills"]
 url = "https://github.com/anthropics/skills"
@@ -23,6 +23,19 @@ submodule_path = "external/anthropics-skills"
 source_url = "https://github.com/anthropics/skills"
 version_channel = "main"
 tags = ["skills"]
+
+[repositories."awesome-copilot"]
+url = "https://github.com/github/awesome-copilot"
+description = "Marketplace plugin source used by the main awesome-copilot ecosystem."
+use_when = "Use when you want marketplace plugins from the GitHub awesome-copilot ecosystem."
+license = "MIT"
+version = "main"
+owner = "github"
+repo = "awesome-copilot"
+submodule_path = "external/awesome-copilot"
+source_url = "https://github.com/github/awesome-copilot"
+version_channel = "main"
+tags = ["plugins"]
 
 [repositories."kdense-science"]
 url = "https://github.com/K-Dense-AI/claude-scientific-skills"
@@ -62,19 +75,6 @@ submodule_path = "external/microsoft-skills"
 source_url = "https://github.com/microsoft/skills"
 version_channel = "main"
 tags = ["skills"]
-
-[repositories."agency-agents"]
-url = "https://github.com/msitarzewski/agency-agents"
-description = "Role/division-based agent bundles."
-use_when = "Use when you want organization-style agent teams grouped by function."
-license = "MIT"
-version = "main"
-owner = "msitarzewski"
-repo = "agency-agents"
-submodule_path = "external/agency-agents"
-source_url = "https://github.com/msitarzewski/agency-agents"
-version_channel = "main"
-tags = ["agents"]
 
 [repositories."voltagent-subagents"]
 url = "https://github.com/VoltAgent/awesome-claude-code-subagents"

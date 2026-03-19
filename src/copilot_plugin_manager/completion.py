@@ -6,6 +6,13 @@ from pathlib import Path
 import click
 from click.shell_completion import CompletionItem, ShellComplete, add_completion_class, get_completion_class, split_arg_string
 
+try:
+    from typer._completion_classes import completion_init as _typer_completion_init
+
+    _typer_completion_init()
+except Exception:  # noqa: BLE001
+    pass
+
 COMPLETE_ENV_VAR = "_COPILOT_PLUGIN_MANAGER_COMPLETE"
 DEFAULT_COMMAND_NAME = "copilot-plugin-manager"
 
@@ -70,11 +77,11 @@ def completion_source(
 
 def shell_init_snippet(shell: str, command_name: str = DEFAULT_COMMAND_NAME) -> str:
     snippets = {
-        "bash": f'eval "$({command_name} completion-script bash)"',
-        "zsh": f'eval "$({command_name} completion-script zsh)"',
-        "fish": f"{command_name} completion-script fish | source",
-        "powershell": f"& {{ {command_name} completion-script powershell }} | Invoke-Expression",
-        "nushell": f"# Run `{command_name} completion-install nushell` once, then add this to config.nu\nsource {default_completion_path('nushell', command_name)}",
+        "bash": f'eval "$({command_name} completion script bash)"',
+        "zsh": f'eval "$({command_name} completion script zsh)"',
+        "fish": f"{command_name} completion script fish | source",
+        "powershell": f"& {{ {command_name} completion script powershell }} | Invoke-Expression",
+        "nushell": f"# Run `{command_name} completion install nushell` once, then add this to config.nu\nsource {default_completion_path('nushell', command_name)}",
     }
     return snippets[shell]
 

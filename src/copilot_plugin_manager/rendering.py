@@ -76,14 +76,14 @@ def build_target_tree(bundle: CatalogBundle, target: ActivationTarget) -> Panel:
     glyphs = get_glyphs()
     root_glyph = glyphs.theme if target.kind == "theme" else glyphs.profile
     tree = Tree(f"{root_glyph} {target.name}", guide_style="dim")
-    for theme_name in target.themes:
+    for theme_name in sorted(target.themes):
         theme_node = tree.add(f"{glyphs.theme} {theme_name}")
         theme = bundle.themes[theme_name]
-        for plugin in theme.plugins:
+        for plugin in sorted(theme.plugins):
             theme_node.add(f"{glyphs.plugin} plugin  {plugin}")
-        for skill in theme.skills:
+        for skill in sorted(theme.skills):
             theme_node.add(f"{glyphs.skill} skill   {skill}")
-        for agent in theme.agents:
+        for agent in sorted(theme.agents):
             theme_node.add(f"{glyphs.agent} agent   {agent}")
     return Panel(tree, title="Active target", box=box.ROUNDED, expand=True)
 
@@ -130,15 +130,7 @@ def _ordered_profiles(bundle: CatalogBundle) -> list[tuple[str, str, list[str]]]
     for name, profile in bundle.profiles.items():
         focus = _profile_focus(profile.themes)
         ordered.append((name, focus, profile.themes))
-    return sorted(
-        ordered,
-        key=lambda item: (
-            item[1] == "all themes",
-            item[1],
-            len(item[2]),
-            item[0],
-        ),
-    )
+    return sorted(ordered, key=lambda item: item[0])
 
 
 def render_profiles(bundle: CatalogBundle) -> Table:
@@ -161,13 +153,14 @@ def render_themes(bundle: CatalogBundle, active_name: str | None = None) -> Tabl
     table.add_column("Plugins", overflow="fold")
     table.add_column("Skills", overflow="fold")
     table.add_column("Agents", overflow="fold")
-    for name, theme in bundle.themes.items():
+    for name in sorted(bundle.themes):
+        theme = bundle.themes[name]
         active_suffix = " [active]" if active_name == name else ""
         table.add_row(
             f"{name}{active_suffix}",
-            ", ".join(theme.plugins),
-            ", ".join(theme.skills),
-            ", ".join(theme.agents),
+            ", ".join(sorted(theme.plugins)),
+            ", ".join(sorted(theme.skills)),
+            ", ".join(sorted(theme.agents)),
         )
     return table
 
@@ -182,7 +175,7 @@ def render_repositories(bundle: CatalogBundle) -> Table:
     table.add_column("Providers", justify="right", no_wrap=True, width=9)
     table.add_column("Submodule path", overflow="fold", width=22)
     table.add_column("Description", overflow="fold")
-    for name in bundle.repositories:
+    for name in sorted(bundle.repositories):
         details = bundle.repository_metadata(name)
         summary = bundle.source_entrypoint_summary(name)
         table.add_row(
@@ -206,7 +199,7 @@ def render_plugins(bundle: CatalogBundle) -> Table:
     table.add_column("Tags", overflow="fold", width=16)
     table.add_column("Source URL", overflow="fold", width=28)
     table.add_column("Description", overflow="fold")
-    for name in bundle.plugins:
+    for name in sorted(bundle.plugins):
         details = bundle.plugin_details(name)
         table.add_row(
             name,
@@ -231,13 +224,7 @@ def render_providers(bundle: CatalogBundle, kind: str) -> Table:
     table.add_column("Commit date", no_wrap=True, width=19)
     table.add_column("Roots", overflow="fold", width=30)
     table.add_column("Description", overflow="fold")
-    ordered_names = sorted(
-        registry,
-        key=lambda name: (
-            bundle.provider_entrypoint_summary(kind, name)["layout"] != "single-file",
-            name,
-        ),
-    )
+    ordered_names = sorted(registry)
     for name in ordered_names:
         details = bundle.provider_details(kind, name)
         summary = bundle.provider_entrypoint_summary(kind, name)
@@ -262,7 +249,7 @@ def render_mcps(bundle: CatalogBundle) -> Table:
     table.add_column("Version", no_wrap=True, width=14)
     table.add_column("Tags", overflow="fold", width=18)
     table.add_column("Description", overflow="fold")
-    for name in bundle.mcps:
+    for name in sorted(bundle.mcps):
         details = bundle.mcp_details(name)
         table.add_row(
             name,
@@ -295,6 +282,26 @@ def render_overview(
     ]
 
 
+def render_repo_config(status: dict[str, object], copilot_home: str) -> Panel:
+    repo_hint = str(status.get("repo_hint", "")) or "not set"
+    repo_hint_kind = str(status.get("repo_hint_kind", "")) or "not resolved"
+    repo_hint_themes = ", ".join(cast(list[str], status.get("repo_hint_themes", []))) or "not resolved"
+    rows = [
+        ("Repo target hint", repo_hint),
+        ("Hint target type", repo_hint_kind),
+        ("Hint themes", repo_hint_themes),
+        ("Repo hint file", str(status.get("repo_profile_file", "")) or "not written"),
+        ("Repo settings file", str(status.get("repo_config_file", "")) or "not written"),
+        ("Project catalog file", str(status.get("project_catalog_file", "")) or "not written"),
+        ("Agent scope", str(status.get("agent_scope", "global"))),
+        ("Agent root", str(status.get("agent_root", ""))),
+        ("MCP scope", str(status.get("mcp_scope", "global"))),
+        ("MCP profile", str(status.get("mcp_profile", "")) or "none"),
+        ("Copilot home", copilot_home),
+    ]
+    return _overview_panel("Repository config", rows)
+
+
 def render_status(status: dict[str, object], copilot_home: str) -> list[object]:
     active_target = cast(ActivationTarget | None, status["active_target"])
     installed_plugins = cast(list[dict[str, str | None]], status["installed_plugins"])
@@ -307,9 +314,6 @@ def render_status(status: dict[str, object], copilot_home: str) -> list[object]:
         ("Active themes", ", ".join(active_target.themes) if active_target else ""),
         ("Target verification", verification_state),
         ("Last verified", _short_timestamp(cast(str | None, status.get("last_verified_at")))),
-        ("Repo profile", str(status["repo_hint"])),
-        ("Repo profile file", str(status.get("repo_profile_file", ""))),
-        ("Copilot home", copilot_home),
         ("Skill dirs", str(status["skill_count"])),
         ("Agent files", str(status["agent_count"])),
         ("Warnings", str(len(sync_warnings))),
@@ -334,7 +338,7 @@ def render_status(status: dict[str, object], copilot_home: str) -> list[object]:
             str(source["file_count"]),
             str(source["provider_count"]),
         )
-    renderables: list[object] = [_overview_panel("Copilot Plugin Manager", rows)]
+    renderables: list[object] = [_overview_panel("Copilot Plugin Manager", rows), render_repo_config(status, copilot_home)]
     if sync_warnings:
         renderables.append(render_sync_warnings(sync_warnings))
     renderables.extend([source_table, plugin_table])

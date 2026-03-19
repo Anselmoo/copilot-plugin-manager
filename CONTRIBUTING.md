@@ -30,6 +30,7 @@ uv run copilot-plugin-manager --help
 uv run copilot-plugin-manager
 uv run copilot-plugin-manager list
 uv run copilot-plugin-manager list overview
+uv run copilot-plugin-manager repo-config --agent-scope local
 ```
 
 In an interactive terminal, bare `list` opens the catalog browser. Use an explicit section such as `list overview` when you need deterministic output for tests, docs, or pasted examples.
@@ -70,9 +71,10 @@ Refresh generated catalog metadata from the current submodules:
 
 ```bash
 uv run poe refresh-catalog
+uv run python scripts/refresh_catalog.py --validate-only
 ```
 
-That task also refreshes the generated markdown docs derived from the bundled catalog.
+`refresh-catalog` now runs the catalog validation/compiler pass before regenerating bundled metadata and docs. Use `--validate-only` when you want to check source classification, `SKILL.md` enforcement, and generated record consistency without writing files.
 
 Hard-reset entrypoint provenance history and rebuild provider metadata from upstream target files:
 
@@ -96,7 +98,7 @@ Before opening a pull request:
 - update docs or examples if command behavior changed
 - add or update tests for behavior changes
 
-If you change repository-aware activation behavior, keep `README.md`, `docs/USAGE.md`, and the relevant CLI help examples aligned. In particular, repo-local hint handling (`.copilot-profile` / `.github/copilot-profile`), the guided no-arg menu flow, and `status` / verification output are treated as maintained user-facing workflows.
+If you change repository-aware activation behavior, keep `README.md`, `docs/USAGE.md`, and the relevant CLI help examples aligned. In particular, repo-local hint handling (`.copilot-profile` / `.github/copilot-profile`), repo config (`.github/copilot-plugin-manager.json`), scoped agent outputs (`.github/agents/*.agent.md`), the guided no-arg menu flow, and `status` / verification output are treated as maintained user-facing workflows.
 
 ## Project layout
 

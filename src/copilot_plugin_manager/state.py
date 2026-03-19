@@ -10,8 +10,19 @@ from .models import ActivationTarget, ManagerState, McpSyncState, ProviderSyncSt
 from .paths import ManagerPaths, find_project_root, repo_key
 
 
-def provider_key(kind: Literal["skill", "agent"], provider_name: str) -> str:
-    return f"{kind}:{provider_name}"
+def provider_key(
+    kind: Literal["skill", "agent"],
+    provider_name: str,
+    *,
+    scope: Literal["global", "local"] = "global",
+    cwd: Path | None = None,
+) -> str:
+    key = f"{kind}:{provider_name}"
+    if kind == "agent" and scope == "local":
+        if cwd is None:
+            raise ValueError("cwd must be provided when kind='agent' and scope='local'")
+        return f"{key}:local:{repo_key(find_project_root(cwd) or cwd.resolve())}"
+    return key
 
 
 @dataclass
@@ -39,9 +50,16 @@ class StateStore:
         state = self.load()
         return state.sources.get(source_name)
 
-    def read_provider_state(self, kind: Literal["skill", "agent"], provider_name: str) -> ProviderSyncState | None:
+    def read_provider_state(
+        self,
+        kind: Literal["skill", "agent"],
+        provider_name: str,
+        *,
+        scope: Literal["global", "local"] = "global",
+        cwd: Path | None = None,
+    ) -> ProviderSyncState | None:
         state = self.load()
-        return state.providers.get(provider_key(kind, provider_name))
+        return state.providers.get(provider_key(kind, provider_name, scope=scope, cwd=cwd))
 
     def source_has_changed(self, source_name: str, observed: SourceState) -> bool:
         return observed.has_comparable_change(self.read_source_state(source_name))
@@ -91,11 +109,18 @@ class StateStore:
         outputs: list[str],
         warnings: list[str],
         definition_signature: str,
+        *,
+        scope: Literal["global", "local"] = "global",
+        cwd: Path | None = None,
     ) -> None:
         state = self.load()
-        state.providers[provider_key(kind, provider_name)] = ProviderSyncState(
+        key = provider_key(kind, provider_name, scope=scope, cwd=cwd)
+        repo_state_path = self._repo_state_path(cwd) if cwd is not None else None
+        state.providers[key] = ProviderSyncState(
             kind=kind,
             source=source_name,
+            scope=scope,
+            repo_path=repo_key(repo_state_path) if repo_state_path is not None and kind == "agent" and scope == "local" else None,
             revision=observed.revision,
             manifest_version=observed.manifest_version,
             source_path=observed.source_path,
@@ -106,11 +131,19 @@ class StateStore:
         )
         self.save(state)
 
-    def clear_provider_state(self, kind: Literal["skill", "agent"], provider_name: str) -> None:
+    def clear_provider_state(
+        self,
+        kind: Literal["skill", "agent"],
+        provider_name: str,
+        *,
+        scope: Literal["global", "local"] = "global",
+        cwd: Path | None = None,
+    ) -> None:
         state = self.load()
-        if provider_key(kind, provider_name) not in state.providers:
+        key = provider_key(kind, provider_name, scope=scope, cwd=cwd)
+        if key not in state.providers:
             return
-        del state.providers[provider_key(kind, provider_name)]
+        del state.providers[key]
         self.save(state)
 
     def read_mcp_state(self, name: str) -> McpSyncState | None:

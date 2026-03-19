@@ -5,6 +5,9 @@ from dataclasses import dataclass
 from pathlib import Path
 
 PROFILE_HINT_PATHS = (Path(".copilot-profile"), Path(".github/copilot-profile"))
+REPO_CONFIG_PATH = Path(".github/copilot-plugin-manager.json")
+PROJECT_CATALOG_PATH = Path(".github/copilot-project-catalog.toml")
+LOCAL_AGENTS_PATH = Path(".github/agents")
 
 
 @dataclass(frozen=True)
@@ -36,6 +39,18 @@ class ManagerPaths:
     def ensure_directories(self) -> None:
         self.manager_home.mkdir(parents=True, exist_ok=True)
         self.sources_dir.mkdir(parents=True, exist_ok=True)
+
+    def repo_root(self, cwd: Path) -> Path:
+        return find_project_root(cwd) or cwd.resolve()
+
+    def repo_config_file(self, cwd: Path) -> Path:
+        return self.repo_root(cwd) / REPO_CONFIG_PATH
+
+    def project_catalog_file(self, cwd: Path) -> Path:
+        return self.repo_root(cwd) / PROJECT_CATALOG_PATH
+
+    def local_agents_dir(self, cwd: Path) -> Path:
+        return self.repo_root(cwd) / LOCAL_AGENTS_PATH
 
 
 def repo_key(path: Path) -> str:

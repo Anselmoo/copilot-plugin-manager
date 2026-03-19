@@ -35,6 +35,21 @@ def test_render_generated_docs_include_expected_sections() -> None:
     assert "| `awesome-copilot` |" in credits_doc
 
 
+def test_render_generated_docs_sort_catalog_lists_predictably() -> None:
+    bundle = load_catalog_bundle()
+
+    themes_doc = render_themes_markdown(bundle)
+    credits_doc = render_credits_markdown(bundle)
+    theme_headings = [line for line in themes_doc.splitlines() if line.startswith("### `")]
+    credit_headings = [line for line in credits_doc.splitlines() if line.startswith("### `")]
+
+    assert theme_headings.index("### `agents`") < theme_headings.index("### `bioinformatics`")
+    assert theme_headings.index("### `bioinformatics`") < theme_headings.index("### `chemistry`")
+    assert themes_doc.index("anthropic-algorithmic-art") < themes_doc.index("anthropic-brand-guidelines")
+    assert credit_headings.index("### `agency-agents`") < credit_headings.index("### `anthropics-skills`")
+    assert credit_headings.index("### `anthropics-skills`") < credit_headings.index("### `awesome-copilot`")
+
+
 def test_update_readme_generated_section_replaces_marker_block() -> None:
     bundle = load_catalog_bundle()
     readme = "\n".join(

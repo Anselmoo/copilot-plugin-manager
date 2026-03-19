@@ -575,6 +575,101 @@ def directory_entry_candidates(path: Path) -> list[Path]:
     return subdirs or [path]
 
 
+def skill_marker_path(path: Path) -> Path | None:
+    if path.is_file():
+        return path if path.name == "SKILL.md" else None
+    marker = path / "SKILL.md"
+    return marker if marker.exists() else None
+
+
+def nearest_skill_directory(source_root: Path, candidate: Path) -> Path | None:
+    current = candidate if candidate.is_dir() else candidate.parent
+    while True:
+        marker = skill_marker_path(current)
+        if marker is not None and current.is_dir():
+            return current
+        if current == source_root or not current.is_relative_to(source_root):
+            return None
+        parent = current.parent
+        if parent == current:
+            return None
+        current = parent
+
+
+def classify_skill_source(
+    source_name: str,
+    source_root: Path,
+    candidate: Path,
+    *,
+    owner: str,
+    repo: str,
+) -> dict[str, object] | None:
+    if candidate.is_symlink():
+        source_path = candidate.relative_to(source_root).as_posix()
+        resolved_dir = resolve_microsoft_skill_directory(source_root, candidate) if source_name == "microsoft-skills" else None
+        if resolved_dir is None:
+            return {
+                "source_path": source_path,
+                "commit_path": source_path,
+                "metadata_path": candidate,
+                "source_url": github_source_url(owner, repo, source_path, is_tree=False),
+                "local_name": candidate.name,
+            }
+        metadata_root, relative_root = resolved_dir
+        marker = skill_marker_path(metadata_root)
+        if marker is None:
+            return None
+        return {
+            "source_path": source_path,
+            "commit_path": marker.relative_to(source_root).as_posix(),
+            "metadata_path": marker,
+            "source_url": github_source_url(owner, repo, relative_root, is_tree=True),
+            "local_name": candidate.name,
+        }
+
+    skill_dir = nearest_skill_directory(source_root, candidate)
+    if skill_dir is None:
+        return None
+    marker = skill_marker_path(skill_dir)
+    if marker is None:
+        return None
+    relative_root = skill_dir.relative_to(source_root).as_posix()
+    return {
+        "source_path": relative_root,
+        "commit_path": marker.relative_to(source_root).as_posix(),
+        "metadata_path": marker,
+        "source_url": github_source_url(owner, repo, relative_root, is_tree=True),
+        "local_name": skill_dir.name,
+    }
+
+
+def classify_agent_source(candidate: Path, source_root: Path, *, owner: str, repo: str) -> dict[str, object] | None:
+    if not candidate.exists() or candidate.suffix.lower() != ".md" or candidate.name == "README.md":
+        return None
+    relative = candidate.relative_to(source_root).as_posix()
+    return {
+        "source_path": relative,
+        "commit_path": relative,
+        "metadata_path": candidate,
+        "source_url": github_source_url(owner, repo, relative, is_tree=False),
+        "local_name": candidate.stem,
+    }
+
+
+def classify_catalog_source(
+    kind: str,
+    source_name: str,
+    source_root: Path,
+    candidate: Path,
+    *,
+    owner: str,
+    repo: str,
+) -> dict[str, object] | None:
+    if kind == "skill":
+        return classify_skill_source(source_name, source_root, candidate, owner=owner, repo=repo)
+    return classify_agent_source(candidate, source_root, owner=owner, repo=repo)
+
+
 def build_provider_entrypoints_for_source(
     kind: str,
     source_name: str,
@@ -639,51 +734,51 @@ def build_skill_entrypoints(skills: dict[str, object], repositories: dict[str, o
             base = source_root / str(root)
             if not base.exists():
                 continue
-            if base.is_file():
-                relative = base.relative_to(source_root).as_posix()
+            classified = classify_catalog_source(
+                "skill",
+                source_name,
+                source_root,
+                base,
+                owner=str(repo["owner"]),
+                repo=str(repo["repo"]),
+            )
+            if classified is not None:
                 candidates.append(
                     {
                         "provider_name": provider_name,
                         "source_name": source_name,
-                        "source_path": relative,
-                        "commit_path": relative,
-                        "metadata_path": base,
-                        "local_name": base.stem,
-                        "local_output": f"{provider['prefix']}__{base.stem}",
-                        "source_url": github_source_url(str(repo["owner"]), str(repo["repo"]), relative, is_tree=False),
+                        "source_path": str(classified["source_path"]),
+                        "commit_path": str(classified["commit_path"]),
+                        "metadata_path": Path(classified["metadata_path"]),
+                        "local_name": str(classified["local_name"]),
+                        "local_output": f"{provider['prefix']}__{classified['local_name']}",
+                        "source_url": str(classified["source_url"]),
                     }
                 )
                 continue
+            if not base.is_dir():
+                continue
             for candidate in directory_entry_candidates(base):
-                relative_root = candidate.relative_to(source_root).as_posix()
-                if candidate.is_symlink():
-                    source_path = relative_root
-                    resolved_dir = resolve_microsoft_skill_directory(source_root, candidate) if source_name == "microsoft-skills" else None
-                    if resolved_dir is not None:
-                        metadata_path, commit_path = resolved_dir
-                        source_url = github_source_url(str(repo["owner"]), str(repo["repo"]), commit_path, is_tree=True)
-                    else:
-                        metadata_path = candidate
-                        commit_path = source_path
-                        source_url = github_source_url(str(repo["owner"]), str(repo["repo"]), relative_root, is_tree=False)
-                else:
-                    entry_file = candidate / "SKILL.md"
-                    if not entry_file.exists():
-                        entry_file = candidate / "README.md"
-                    source_path = entry_file.relative_to(source_root).as_posix() if entry_file.exists() else relative_root
-                    metadata_path = entry_file if entry_file.exists() else candidate
-                    commit_path = source_path
-                    source_url = github_source_url(str(repo["owner"]), str(repo["repo"]), relative_root, is_tree=True)
+                classified = classify_catalog_source(
+                    "skill",
+                    source_name,
+                    source_root,
+                    candidate,
+                    owner=str(repo["owner"]),
+                    repo=str(repo["repo"]),
+                )
+                if classified is None:
+                    continue
                 candidates.append(
                     {
                         "provider_name": provider_name,
                         "source_name": source_name,
-                        "source_path": source_path,
-                        "commit_path": commit_path,
-                        "metadata_path": metadata_path,
-                        "local_name": candidate.name,
-                        "local_output": f"{provider['prefix']}__{candidate.name}",
-                        "source_url": source_url,
+                        "source_path": str(classified["source_path"]),
+                        "commit_path": str(classified["commit_path"]),
+                        "metadata_path": Path(classified["metadata_path"]),
+                        "local_name": str(classified["local_name"]),
+                        "local_output": f"{provider['prefix']}__{classified['local_name']}",
+                        "source_url": str(classified["source_url"]),
                     }
                 )
 
@@ -730,19 +825,29 @@ def build_agent_entrypoints(agents: dict[str, object], repositories: dict[str, o
                 continue
             files = [base] if base.is_file() else sorted(path for path in base.rglob("*.md") if path.name != "README.md")
             for file_path in files:
-                relative = file_path.relative_to(source_root).as_posix()
-                flat = relative.replace("/", "__").replace("\\", "__")
+                classified = classify_catalog_source(
+                    "agent",
+                    source_name,
+                    source_root,
+                    file_path,
+                    owner=str(repo["owner"]),
+                    repo=str(repo["repo"]),
+                )
+                if classified is None:
+                    continue
+                flat = str(classified["source_path"]).replace("/", "__").replace("\\", "__")
                 if flat.endswith(".md"):
                     flat = flat[:-3]
                 candidates.append(
                     {
                         "provider_name": provider_name,
                         "source_name": source_name,
-                        "source_path": relative,
-                        "metadata_path": file_path,
-                        "local_name": file_path.stem,
+                        "source_path": str(classified["source_path"]),
+                        "commit_path": str(classified["commit_path"]),
+                        "metadata_path": Path(classified["metadata_path"]),
+                        "local_name": str(classified["local_name"]),
                         "local_output": f"{provider['prefix']}__{flat}.agent.md",
-                        "source_url": f"https://github.com/{repo['owner']}/{repo['repo']}/blob/main/{relative}",
+                        "source_url": str(classified["source_url"]),
                     }
                 )
 
@@ -920,6 +1025,64 @@ def write_entrypoints(records: list[dict[str, object]]) -> None:
     ENTRYPOINTS_PATH.write_text("\n".join(lines) + "\n")
 
 
+def compiled_agent_preview(record: dict[str, object]) -> str:
+    return "\n".join(
+        [
+            "<!--",
+            f"source: {record['source']}",
+            f"source_path: {record['source_path']}",
+            f"source_url: {record['source_url']}",
+            "-->",
+            "",
+            f"# {record['title']}",
+            "",
+            f"> {record['description']}",
+            "",
+        ]
+    )
+
+
+def validate_catalog_records(
+    plugin_records: dict[str, dict[str, object]],
+    skill_entrypoints: list[dict[str, object]],
+    agent_entrypoints: list[dict[str, object]],
+) -> list[str]:
+    errors: list[str] = []
+
+    for name, record in plugin_records.items():
+        if not str(record.get("install_source") or "").strip():
+            errors.append(f"plugin:{name}: missing install_source")
+        if not str(record.get("source_url") or "").startswith("https://github.com/"):
+            errors.append(f"plugin:{name}: invalid source_url")
+
+    seen_skill_paths: set[tuple[str, str, str | None]] = set()
+    for record in skill_entrypoints:
+        key = (str(record["source"]), str(record["source_path"]), str(record.get("provider")))
+        if key in seen_skill_paths:
+            errors.append(f"skill:{record.get('provider') or record['source']}: duplicate source_path {record['source_path']}")
+        seen_skill_paths.add(key)
+        if str(record["source_path"]).endswith("/SKILL.md") or str(record["source_path"]) == "SKILL.md":
+            errors.append(f"skill:{record.get('provider') or record['source']}: source_path should point at the skill directory, not SKILL.md")
+        if not str(record["source_url"]).startswith("https://github.com/"):
+            errors.append(f"skill:{record.get('provider') or record['source']}: invalid source_url")
+
+    seen_agent_outputs: set[str] = set()
+    for record in agent_entrypoints:
+        local_output = str(record["local_output"])
+        if not local_output.endswith(".agent.md"):
+            errors.append(f"agent:{record.get('provider') or record['source']}: invalid local_output {local_output}")
+        if local_output in seen_agent_outputs:
+            errors.append(f"agent:{record.get('provider') or record['source']}: duplicate local_output {local_output}")
+        seen_agent_outputs.add(local_output)
+        if not str(record["source_path"]).endswith(".md"):
+            errors.append(f"agent:{record.get('provider') or record['source']}: source_path must be markdown")
+        compiled = compiled_agent_preview(record)
+        if "source_url:" not in compiled or f"# {record['title']}" not in compiled:
+            errors.append(f"agent:{record.get('provider') or record['source']}: compiler preview missing required metadata")
+
+    return errors
+
+
 def new_progress() -> Progress:
     return Progress(
         SpinnerColumn(),
@@ -939,8 +1102,13 @@ def main(
         "--hard-reset",
         help="Rebuild entrypoint history from scratch instead of preserving first-seen metadata.",
     ),
+    validate_only: bool = typer.Option(
+        False,
+        "--validate-only",
+        help="Build catalog metadata and fail if verification detects invalid sources or outputs without writing files.",
+    ),
 ) -> None:
-    total_steps = 5
+    total_steps = 6
     total_start = time.perf_counter()
     term = console()
     repositories = load_toml(REPOSITORIES_PATH).get("repositories", {})
@@ -950,7 +1118,7 @@ def main(
     existing_plugins = load_toml(PLUGINS_PATH).get("plugins", {})
     previous = {} if hard_reset else bootstrap_entrypoints
 
-    term.print("[bold]Refreshing bundled catalog metadata[/bold]")
+    term.print("[bold]Refreshing bundled catalog metadata[/bold]" if not validate_only else "[bold]Validating bundled catalog metadata[/bold]")
     with new_progress() as progress:
         task_id = progress.add_task("Refreshing plugin catalog...", total=total_steps)
 
@@ -981,17 +1149,31 @@ def main(
             f"[green]agent_providers[/green]={len(agent_provider_records)} duration={time.perf_counter() - phase_start:.2f}s"
         )
 
-        progress.update(task_id, description="Writing refreshed catalog files...")
+        progress.update(task_id, description="Validating generated catalog records...")
         phase_start = time.perf_counter()
-        write_plugins(plugin_records)
-        write_providers(SKILLS_PATH, skill_provider_records)
-        write_providers(AGENTS_PATH, agent_provider_records)
-        write_entrypoints([*plugin_entrypoints, *skill_entrypoints, *agent_entrypoints])
+        validation_errors = validate_catalog_records(plugin_records, skill_entrypoints, agent_entrypoints)
         progress.advance(task_id)
-        term.print(f"[green]wrote[/green]=4 files duration={time.perf_counter() - phase_start:.2f}s")
+        if validation_errors:
+            for error in validation_errors:
+                term.print(f"[red]validation-error[/red] {error}")
+            raise typer.Exit(code=1)
+        term.print(f"[green]validated[/green]={len(plugin_entrypoints) + len(skill_entrypoints) + len(agent_entrypoints)} duration={time.perf_counter() - phase_start:.2f}s")
+
+        progress.update(task_id, description="Writing refreshed catalog files..." if not validate_only else "Skipping catalog file writes...")
+        phase_start = time.perf_counter()
+        if not validate_only:
+            write_plugins(plugin_records)
+            write_providers(SKILLS_PATH, skill_provider_records)
+            write_providers(AGENTS_PATH, agent_provider_records)
+            write_entrypoints([*plugin_entrypoints, *skill_entrypoints, *agent_entrypoints])
+        progress.advance(task_id)
+        if validate_only:
+            term.print(f"[green]writes[/green]=0 duration={time.perf_counter() - phase_start:.2f}s")
+        else:
+            term.print(f"[green]wrote[/green]=4 files duration={time.perf_counter() - phase_start:.2f}s")
 
     term.print(
-        "[bold green]Refreshed catalogs[/bold green]: "
+        f"[bold green]{'Validated' if validate_only else 'Refreshed'} catalogs[/bold green]: "
         f"plugins={len(plugin_records)} "
         f"skills={len(skill_entrypoints)} "
         f"agents={len(agent_entrypoints)} "

@@ -162,6 +162,8 @@ class SourceState(BaseModel):
 class ProviderSyncState(BaseModel):
     kind: Literal["skill", "agent"]
     source: str
+    scope: Literal["global", "local"] = "global"
+    repo_path: str | None = None
     revision: str | None = None
     manifest_version: str | None = None
     source_path: str | None = None
@@ -176,6 +178,27 @@ class ManagerState(BaseModel):
     sources: dict[str, SourceState] = Field(default_factory=dict)
     providers: dict[str, ProviderSyncState] = Field(default_factory=dict)
     mcps: dict[str, McpSyncState] = Field(default_factory=dict)
+
+
+class RepoAgentConfig(BaseModel):
+    scope: Literal["global", "local"] | None = None
+
+
+class RepoMcpConfig(BaseModel):
+    scope: Literal["global", "local"] | None = None
+    profile: str | None = None
+
+
+class RepoConfig(BaseModel):
+    version: int = 1
+    agents: RepoAgentConfig = Field(default_factory=RepoAgentConfig)
+    mcps: RepoMcpConfig = Field(default_factory=RepoMcpConfig)
+
+
+class ProjectCatalogOverlay(BaseModel):
+    version: int = 1
+    themes: dict[str, ThemeRecord] = Field(default_factory=dict)
+    profiles: dict[str, ProfileRecord] = Field(default_factory=dict)
 
 
 @dataclass(frozen=True)
