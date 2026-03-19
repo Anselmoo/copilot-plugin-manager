@@ -5,12 +5,16 @@ from pathlib import Path
 
 import click
 from click.shell_completion import CompletionItem, ShellComplete, add_completion_class, get_completion_class, split_arg_string
-from typer._completion_classes import completion_init
+
+try:
+    from typer._completion_classes import completion_init as _typer_completion_init
+
+    _typer_completion_init()
+except Exception:  # noqa: BLE001
+    pass
 
 COMPLETE_ENV_VAR = "_COPILOT_PLUGIN_MANAGER_COMPLETE"
 DEFAULT_COMMAND_NAME = "copilot-plugin-manager"
-
-completion_init()
 
 _SOURCE_NUSHELL = """def %(complete_func)s [...spans: string] {
     let incomplete = if ($spans | is-empty) { "" } else { $spans | last }

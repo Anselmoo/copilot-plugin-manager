@@ -727,6 +727,25 @@ def test_status_snapshot_includes_repo_config_and_local_agent_root(tmp_path: Pat
     assert snapshot["agent_count"] == 1
 
 
+def test_status_snapshot_warns_on_broken_repo_config(tmp_path: Path, monkeypatch) -> None:
+    monkeypatch.setenv("COPILOT_HOME", str(tmp_path / ".copilot"))
+    bundle = load_catalog_bundle()
+    paths = ManagerPaths.from_environment()
+    manager = PluginManager(bundle, paths, runner=FakeRunner())
+    project = tmp_path / "repo"
+    (project / ".git").mkdir(parents=True)
+    config_path = project / ".github" / "copilot-plugin-manager.json"
+    config_path.parent.mkdir(parents=True)
+    config_path.write_text("{invalid json")
+
+    snapshot = manager.status_snapshot(project)
+
+    assert any("could not be parsed" in w for w in list(snapshot["sync_warnings"]))  # type: ignore[arg-type]
+    # Defaults are still used: scopes fall back to global
+    assert snapshot["agent_scope"] == "global"
+    assert snapshot["mcp_scope"] == "global"
+
+
 def test_initialize_repo_writes_profile_hint_and_repo_config(tmp_path: Path, monkeypatch) -> None:
     monkeypatch.setenv("COPILOT_HOME", str(tmp_path / ".copilot"))
     bundle = load_catalog_bundle()

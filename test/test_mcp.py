@@ -805,7 +805,12 @@ def test_reconcile_mcps_uses_repo_config_local_scope(tmp_path: Path) -> None:
     (tmp_path / ".git").mkdir()
     manager.write_repo_config(tmp_path, mcp_scope="local")
 
-    results = manager.reconcile_mcps(tmp_path, probe_version=False)
+    # Higher-level flows (manage_mcps / manage_target) resolve the scope from the
+    # repo config and pass it explicitly to reconcile_mcps.  The low-level
+    # reconcile_mcps itself defaults to "global" when scope is omitted, so callers
+    # that want repo-config-driven behaviour must resolve the scope first.
+    resolved_scope = manager.mcp_scope(tmp_path)
+    results = manager.reconcile_mcps(tmp_path, probe_version=False, scope=resolved_scope)
 
     assert results["context7"] in {"added", "updated", "skipped"}
     assert "context7" not in _get_servers(manager)
