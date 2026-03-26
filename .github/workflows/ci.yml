@@ -1,0 +1,91 @@
+name: CI
+
+on:
+  pull_request:
+  push:
+    branches:
+      - main
+
+env:
+  PYTHON_VERSION: "3.12"
+
+jobs:
+  verify-linux:
+    name: "Verify (ubuntu-latest)"
+    runs-on: ubuntu-latest
+
+    steps:
+      - name: Check out repository
+        uses: actions/checkout@v4
+
+      - name: Install Rust toolchain
+        uses: dtolnay/rust-toolchain@stable
+
+      - name: Restore Rust cache
+        uses: Swatinem/rust-cache@v2
+
+      - name: Install uv
+        uses: astral-sh/setup-uv@v5
+        with:
+          enable-cache: true
+          cache-dependency-glob: |
+            pyproject.toml
+            uv.lock
+
+      - name: Install Python ${{ env.PYTHON_VERSION }}
+        run: uv python install ${{ env.PYTHON_VERSION }}
+
+      - name: Sync project dependencies
+        run: uv sync --group dev --python ${{ env.PYTHON_VERSION }}
+
+      - name: Run lint, tests, and build
+        run: uv run --group dev python -m poethepoet ci-full
+
+      - name: Verify overview command in a fresh repo
+        run: |
+          tmpdir="$(mktemp -d)"
+          cd "$tmpdir"
+          uv run --project "$GITHUB_WORKSPACE" cpm init --name ci-overview
+          uv run --project "$GITHUB_WORKSPACE" cpm overview --json
+
+      - name: Verify committed hook config exists
+        run: test -f lefthook.yml
+
+  verify-frozen:
+    name: "Smoke (frozen) — ${{ matrix.os }}"
+    runs-on: ${{ matrix.os }}
+    needs: verify-linux
+    strategy:
+      fail-fast: false
+      matrix:
+        os: [macos-latest, windows-latest]
+
+    steps:
+      - name: Check out repository
+        uses: actions/checkout@v4
+
+      - name: Install Rust toolchain
+        uses: dtolnay/rust-toolchain@stable
+
+      - name: Restore Rust cache
+        uses: Swatinem/rust-cache@v2
+
+      - name: Install uv
+        uses: astral-sh/setup-uv@v5
+        with:
+          enable-cache: true
+          cache-dependency-glob: |
+            pyproject.toml
+            uv.lock
+
+      - name: Install Python ${{ env.PYTHON_VERSION }}
+        run: uv python install ${{ env.PYTHON_VERSION }}
+
+      - name: Sync project dependencies (frozen)
+        run: uv sync --group dev --python ${{ env.PYTHON_VERSION }} --frozen
+
+      - name: Run Rust tests
+        run: cargo test --workspace
+
+      - name: Smoke — cpm --help
+        run: uv run --group dev python -m poethepoet smoke

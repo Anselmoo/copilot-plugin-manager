@@ -28,6 +28,8 @@ Optional but recommended local extras:
 lefthook install
 ```
 
+The installed `lefthook` setup keeps pre-commit checks lightweight; heavier validation runs on push and in CI/CD.
+
 ## Running the CLI locally
 
 Use whichever entrypoint is most convenient:
