@@ -1,0 +1,21 @@
+[package]
+name = "copilot-plugin-manager"
+version = "0.1.0"
+
+[settings]
+default_scope = "local"
+
+[plugins]
+
+[skills]
+
+[agents]
+
+[mcps]
+
+[hooks]
+
+[workflows]
+
+[instructions]
+

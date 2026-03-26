@@ -1,0 +1,5 @@
+- Library crates deny missing docs, unwrap, expect, and panic.
+- Use `tracing` in core libraries; CLI output currently uses human-readable `println!` summaries.
+- Prefer `camino::Utf8PathBuf` for user-facing paths and `chrono::DateTime<Utc>` for timestamps.
+- Manifest/lock handling flows through `cpm_core::project`; avoid duplicating parsing/serialization logic in the CLI.
+- Preserve architecture intent from `ARCHITECTURE.md` when extending CLI surface.

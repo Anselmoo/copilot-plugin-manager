@@ -1,46 +1,55 @@
 # Releasing and publishing
 
-## CI/CD workflow
+## Current release status
 
-The repository uses [`cicd.yml`](../.github/workflows/cicd.yml) for validation, building, and publishing.
+This migrated repository currently validates and builds through [`.github/workflows/ci.yml`](../.github/workflows/ci.yml). That workflow:
 
-That workflow currently does the following:
+- verifies Python formatting, linting, and type checks
+- runs Rust formatting and clippy
+- runs Python and Rust tests
+- builds release binaries and Python wheels as CI artifacts
 
-- runs Ruff, `ty`, and the test suite on pushes and pull requests
-- builds source and wheel distributions on non-PR pushes
-- publishes to TestPyPI for pushes to `main`
-- publishes to PyPI for tags that match `v*.*.*`
+The previous Python-only publish workflow was not carried forward into this Rust-first migration. Until dedicated publish automation is added back, treat releases as a validated source-control and packaging process rather than an automated upload pipeline.
 
-Workflow page:
+## Pre-release checks
 
-- <https://github.com/Anselmoo/copilot-plugin-manager/actions/workflows/cicd.yml>
-
-Package page:
-
-- <https://pypi.org/project/copilot-plugin-manager/>
-
-## Local pre-release checks
-
-Before creating a release tag, run:
+Before tagging a release, run:
 
 ```bash
-uv run poe check
-uv run poe build
+uv sync --group dev --python 3.12
+uv run poe ci-full
+uv build
 ```
 
-## Publishing flow
+If you changed the wrapper or packaging surface, it is also worth checking the compatibility entrypoint explicitly:
 
-1. Update version metadata as needed.
-2. Run the local validation commands.
-3. Create and push a version tag:
+```bash
+uv run pytest tests/test_cli.py -q
+uv run copilot-plugin-manager --help
+```
+
+## Version updates
+
+Before creating a release tag, update the repository version metadata in the places that define the shipped Python package and workspace release version, including:
+
+- `pyproject.toml`
+- `Cargo.toml`
+- `python/cpm/__init__.py`
+
+If future Cargo crates stop inheriting the workspace version, update this document accordingly.
+
+## Release flow
+
+1. Update version metadata and any release notes you want to publish.
+2. Run the full validation commands locally.
+3. Build local distributions with `uv build` if you want to inspect the sdist/wheel payload.
+4. Create and push a version tag:
 
 ```bash
 git tag v0.1.0
 git push origin v0.1.0
 ```
 
-Pushing a matching version tag triggers the `publish-pypi` job in `cicd.yml`.
+## Follow-up work
 
-## TestPyPI
-
-Pushes to `main` trigger the `publish-testpypi` job so packaging can be validated before a tagged release.
+If automated publishing is reintroduced, update this document and link the new workflow here. The release story is intentionally conservative right now because the codebase replacement changed the build, packaging, and runtime model substantially.

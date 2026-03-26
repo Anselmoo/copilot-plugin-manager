@@ -1,0 +1,20 @@
+[package]
+name        = "cpm-types"
+description = "Shared types for cpm — the Copilot Plugin Manager"
+version.workspace     = true
+edition.workspace     = true
+authors.workspace     = true
+license.workspace     = true
+repository.workspace  = true
+
+[dependencies]
+serde      = { workspace = true }
+serde_json = { workspace = true }
+toml       = { workspace = true }
+indexmap   = { workspace = true }
+camino     = { workspace = true }
+chrono     = { workspace = true }
+thiserror  = { workspace = true }
+
+[dev-dependencies]
+tempfile = { workspace = true }

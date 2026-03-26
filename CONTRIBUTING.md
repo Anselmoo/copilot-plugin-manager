@@ -6,104 +6,88 @@ Thanks for contributing.
 
 - Be respectful and follow the [Code of Conduct](CODE_OF_CONDUCT.md).
 - Prefer focused pull requests with clear commit messages.
-- Keep documentation in sync when behavior or workflows change.
+- Keep `README.md`, `docs/USAGE.md`, and `docs/RELEASING.md` aligned when commands or workflows change.
 - If you discover a security issue, do not open a public issue. Follow the reporting process in [SECURITY.md](SECURITY.md).
 
-## Security reporting
+## What changed in this repo
 
-For vulnerabilities or suspected security issues, use the private disclosure instructions in [SECURITY.md](SECURITY.md) instead of GitHub issues or pull requests.
+`copilot-plugin-manager` is now a Rust-first project. Product logic lives in the Cargo workspace under `crates/`, while the Python package in `python/cpm/` is a thin launcher that delegates to the Rust CLI. The old bundled catalog/submodule manager is gone.
 
 ## Development setup
 
-Clone the repository, initialize upstream catalogs, and install the development environment:
+Install the supported toolchains and create the local environment:
 
 ```bash
-git submodule update --init --recursive
-uv sync --group dev
-uv run pre-commit install
+uv python install 3.12
+uv sync --group dev --python 3.12
 ```
 
-Run the CLI locally with:
+Optional but recommended local extras:
 
 ```bash
+lefthook install
+```
+
+## Running the CLI locally
+
+Use whichever entrypoint is most convenient:
+
+```bash
+uv run cpm --help
 uv run copilot-plugin-manager --help
-uv run copilot-plugin-manager
-uv run copilot-plugin-manager list
-uv run copilot-plugin-manager list overview
-uv run copilot-plugin-manager repo-config --agent-scope local
+python -m cpm --help
+cargo run -p cpm-cli -- --help
 ```
 
-In an interactive terminal, bare `list` opens the catalog browser. Use an explicit section such as `list overview` when you need deterministic output for tests, docs, or pasted examples.
+Inside a source checkout, the Python entrypoints delegate to `cargo run -p cpm-cli -- ...`, so you are always exercising the current Rust implementation.
 
 ## Common tasks
 
 Developer tasks are wired through Poe the Poet:
 
 ```bash
-uv run poe test
-uv run poe test-cov
-uv run poe pre-commit
+uv run poe format
 uv run poe lint
-uv run poe typecheck
-uv run poe broken-links
-uv run poe check
-uv run poe build
-uv run poe generate-docs
+uv run poe test
+uv run poe ci
+uv run poe ci-full
 ```
 
-Equivalent direct commands are also available when needed:
+Focused commands:
 
 ```bash
-uv run pytest -q
-uv run pre-commit run --all-files
-uv run ruff check .
-uv run ty check
-uv run python scripts/check_broken_links.py
-uv build
-uv run twine check dist/*
+uv run pytest tests/test_cli.py -q
+cargo test --workspace
+cargo clippy --workspace -- -D warnings
+cargo fmt --all -- --check
 ```
 
-## Catalog maintenance
+`uv run poe ci-full` is the closest match to the full CI verification path.
 
-The bundled runtime catalog lives under `src/copilot_plugin_manager/catalog_data/`.
+## Project layout
 
-Refresh generated catalog metadata from the current submodules:
+- `crates/cpm-cli/`: clap-based CLI surface
+- `crates/cpm-core/`: manifest, lockfile, resolution, install, and status logic
+- `crates/cpm-types/`: shared manifest and lockfile types
+- `python/cpm/`: Python launcher package and compatibility entrypoints
+- `tests/`: Python integration tests for the wrapper and end-to-end flows
+- `cpm.toml`: self-hosted manifest example for this repo
+- `cpm-reference.toml`: heavily commented reference manifest
 
-```bash
-uv run poe refresh-catalog
-uv run python scripts/refresh_catalog.py --validate-only
-```
+## Documentation expectations
 
-`refresh-catalog` now runs the catalog validation/compiler pass before regenerating bundled metadata and docs. Use `--validate-only` when you want to check source classification, `SKILL.md` enforcement, and generated record consistency without writing files.
+When you change behavior, update the docs that describe it in the same pull request. In particular:
 
-Hard-reset entrypoint provenance history and rebuild provider metadata from upstream target files:
-
-```bash
-uv run poe refresh-catalog-reset
-```
-
-To update submodules from their remotes and persist the latest revision metadata:
-
-```bash
-uv run copilot-plugin-manager repo-update --remote
-```
+- `README.md` for user-facing overview and quickstart
+- `docs/USAGE.md` for command and workflow guidance
+- `docs/RELEASING.md` for release process changes
+- `docs/CREDITS.md` when checked-in example assets or upstream attributions change
 
 ## Pull request checklist
 
 Before opening a pull request:
 
-- run `uv run poe check`
-- run `uv run poe pre-commit` when touching Python files or workflow/config glue
-- run `uv run poe build` when packaging behavior changes
+- run `uv run poe ci-full`
 - update docs or examples if command behavior changed
 - add or update tests for behavior changes
-
-If you change repository-aware activation behavior, keep `README.md`, `docs/USAGE.md`, and the relevant CLI help examples aligned. In particular, repo-local hint handling (`.copilot-profile` / `.github/copilot-profile`), repo config (`.github/copilot-plugin-manager.json`), scoped agent outputs (`.github/agents/*.agent.md`), the guided no-arg menu flow, and `status` / verification output are treated as maintained user-facing workflows.
-
-## Project layout
-
-- `src/copilot_plugin_manager/`: application code
-- `src/copilot_plugin_manager/catalog_data/`: bundled catalog snapshot
-- `test/`: automated tests
-- `scripts/refresh_catalog.py`: catalog regeneration entrypoint
-- `external/`: upstream catalog submodules
+- mention any intentionally breaking behavior changes in the PR description

@@ -1,0 +1,25 @@
+pre-commit:
+  parallel: true
+  commands:
+    python-format:
+      glob: "{python,tests}/**/*.py"
+      run: uv run --group dev python -m poethepoet python-format-check-hook
+    python-lint:
+      glob: "{python,tests}/**/*.py"
+      run: uv run ruff check {staged_files}
+    python-types:
+      glob: "{python,tests}/**/*.py"
+      run: uv run ty check python tests
+    rust-format:
+      glob: "crates/**/*.rs"
+      run: uv run --group dev python -m poethepoet rust-fmt-check-hook
+    manifest-toml:
+      glob: "{cpm.toml,cpm-reference.toml,scripts/check_committed_toml.py}"
+      run: uv run --group dev python -m poethepoet manifests-check
+
+pre-push:
+  commands:
+    rust-lint:
+      run: cargo clippy --workspace -- -D warnings
+    tests:
+      run: uv run --group dev python -m poethepoet test
