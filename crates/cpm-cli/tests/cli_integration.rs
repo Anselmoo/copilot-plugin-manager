@@ -376,13 +376,14 @@ exit /b 0
 set "version=%~1"
 set "revision=%~2"
 set "marker=%~3"
+set "escaped_plugin_root=!plugin_root:\=\\!"
 if not exist "%plugin_root%\.github\plugin" mkdir "%plugin_root%\.github\plugin"
 type nul > "%marker_path%"
 (
     echo {"name":"!name!","marker":"!marker!"}
 ) > "%plugin_root%\.github\plugin\plugin.json"
 (
-    echo {"plugins":[{"name":"!name!","version":"!version!","revision":"!revision!","source_url":"https://example.test/!name!","registry":"!registry!","path":"!plugin_root!","enabled":true}]}
+    echo {"plugins":[{"name":"!name!","version":"!version!","revision":"!revision!","source_url":"https://example.test/!name!","registry":"!registry!","path":"!escaped_plugin_root!","enabled":true}]}
 ) > "%index_path%"
 exit /b 0
 "#;

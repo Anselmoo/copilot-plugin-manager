@@ -772,6 +772,21 @@ impl GitHubMode {
     }
 }
 
+fn trim_path_end(path: &str) -> &str {
+    path.trim_end_matches(['/', '\\'])
+}
+
+fn last_path_segment(path: &str) -> &str {
+    let trimmed = trim_path_end(path);
+    trimmed.rsplit(['/', '\\']).next().unwrap_or(trimmed)
+}
+
+fn parent_path(path: &str) -> Option<&str> {
+    trim_path_end(path)
+        .rsplit_once(['/', '\\'])
+        .map(|(parent, _)| parent)
+}
+
 fn normalize_asset_path(
     kind: AssetKind,
     source: &str,
@@ -786,8 +801,8 @@ fn normalize_asset_path(
         });
     }
 
-    let trimmed = path.trim_end_matches('/');
-    let last = trimmed.rsplit('/').next().unwrap_or(trimmed);
+    let trimmed = trim_path_end(path);
+    let last = last_path_segment(trimmed);
 
     if last == plural_dir(kind) {
         return Err(CpmError::InvalidSource {
@@ -815,12 +830,12 @@ fn normalize_directory_path(
     match kind {
         AssetKind::Skill | AssetKind::Plugin => Ok(NormalizedPath {
             name: path
-                .trim_end_matches('/')
-                .rsplit('/')
+                .trim_end_matches(['/', '\\'])
+                .rsplit(['/', '\\'])
                 .next()
                 .unwrap_or(path)
                 .to_owned(),
-            path: path.trim_end_matches('/').to_owned(),
+            path: path.trim_end_matches(['/', '\\']).to_owned(),
             mode: GitHubMode::Tree,
         }),
         AssetKind::Agent => Err(CpmError::InvalidSource {
@@ -829,22 +844,22 @@ fn normalize_directory_path(
         }),
         AssetKind::Mcp => Ok(NormalizedPath {
             name: path
-                .trim_end_matches('/')
-                .rsplit('/')
+                .trim_end_matches(['/', '\\'])
+                .rsplit(['/', '\\'])
                 .next()
                 .unwrap_or(path)
                 .to_owned(),
-            path: path.trim_end_matches('/').to_owned(),
+            path: path.trim_end_matches(['/', '\\']).to_owned(),
             mode: GitHubMode::Tree,
         }),
         AssetKind::Hook => Ok(NormalizedPath {
             name: path
-                .trim_end_matches('/')
-                .rsplit('/')
+                .trim_end_matches(['/', '\\'])
+                .rsplit(['/', '\\'])
                 .next()
                 .unwrap_or(path)
                 .to_owned(),
-            path: path.trim_end_matches('/').to_owned(),
+            path: path.trim_end_matches(['/', '\\']).to_owned(),
             mode: GitHubMode::Tree,
         }),
         AssetKind::Workflow => Err(CpmError::InvalidSource {
@@ -865,7 +880,7 @@ fn normalize_explicit_file_path(
     source: &str,
     path: &str,
 ) -> Result<NormalizedPath, CpmError> {
-    let last = path.rsplit('/').next().unwrap_or(path);
+    let last = last_path_segment(path);
     if !is_explicit_file_for_kind(kind, last) {
         return Err(CpmError::InvalidSource {
             input: source.to_owned(),
@@ -875,11 +890,9 @@ fn normalize_explicit_file_path(
 
     match kind {
         AssetKind::Skill | AssetKind::Plugin => {
-            let directory = path.rsplit_once('/').map(|(dir, _)| dir).ok_or_else(|| {
-                CpmError::InvalidSource {
-                    input: source.to_owned(),
-                    reason: "asset file must live under a named directory".to_owned(),
-                }
+            let directory = parent_path(path).ok_or_else(|| CpmError::InvalidSource {
+                input: source.to_owned(),
+                reason: "asset file must live under a named directory".to_owned(),
             })?;
             Ok(NormalizedPath {
                 name: infer_name_from_file_path(kind, path)?,
@@ -893,11 +906,9 @@ fn normalize_explicit_file_path(
             mode: GitHubMode::Blob,
         }),
         AssetKind::Hook => {
-            let directory = path.rsplit_once('/').map(|(dir, _)| dir).ok_or_else(|| {
-                CpmError::InvalidSource {
-                    input: source.to_owned(),
-                    reason: "hook files must live under a named directory".to_owned(),
-                }
+            let directory = parent_path(path).ok_or_else(|| CpmError::InvalidSource {
+                input: source.to_owned(),
+                reason: "hook files must live under a named directory".to_owned(),
             })?;
             Ok(NormalizedPath {
                 name: infer_name_from_file_path(kind, path)?,
@@ -919,9 +930,9 @@ fn normalize_explicit_file_path(
 }
 
 fn infer_name_from_file_path(kind: AssetKind, path: &str) -> Result<String, CpmError> {
-    let trimmed = path.trim_end_matches('/');
+    let trimmed = trim_path_end(path);
     let segments: Vec<_> = trimmed
-        .split('/')
+        .split(['/', '\\'])
         .filter(|segment| !segment.is_empty())
         .collect();
     let last = segments.last().copied().unwrap_or_default();
@@ -1245,6 +1256,28 @@ mod tests {
             "Windows path should resolve to local path"
         );
         assert!(normalized.url.is_none(), "Windows path should not have URL");
+    }
+
+    #[test]
+    #[cfg_attr(not(windows), ignore)]
+    fn windows_style_instruction_paths_use_filename_for_name() {
+        let normalized =
+            normalize_asset_source(AssetKind::Instruction, r"C:\temp\instructions\shell.md")
+                .expect("normalize instruction path");
+
+        assert_eq!(normalized.name, "shell");
+        assert_eq!(
+            normalized.path.as_ref().map(|path| path.as_str()),
+            Some(r"C:/temp/instructions/shell.md")
+        );
+    }
+
+    #[test]
+    fn infer_instruction_name_from_backslash_path() {
+        let name = infer_name_from_file_path(AssetKind::Instruction, r"tmp\instructions\shell.md")
+            .expect("infer instruction name");
+
+        assert_eq!(name, "shell");
     }
 
     #[test]
