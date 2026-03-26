@@ -33,7 +33,7 @@ pub async fn run(args: LockArgs) -> Result<(), CpmError> {
 
     if args.check {
         if !lockfile_path.exists() {
-            return Err(CpmError::LockOutOfDate);
+            return Err(CpmError::MissingLockfile);
         }
         let lockfile = load_lockfile(lockfile_path)?;
         check_lock_freshness(&manifest, &lockfile)?;

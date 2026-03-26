@@ -126,28 +126,41 @@ mod tests {
     use std::fs;
     use tempfile::TempDir;
 
-    /// Write a tiny shell script to `<dir>/copilot` that exits with
+    /// Write a tiny fake `copilot` executable into `dir` that exits with
     /// `exit_code` and emits `stdout_msg` / `stderr_msg`, then mark it
-    /// executable.  Returns the absolute path to the script.
+    /// executable where necessary. Returns the absolute path to the script.
     fn write_fake_copilot(
         dir: &TempDir,
         exit_code: i32,
         stdout_msg: &str,
         stderr_msg: &str,
     ) -> String {
-        let path = dir.path().join("copilot");
-        let script = format!(
-            "#!/bin/sh\nprintf '%s\\n' '{}'\nprintf '%s\\n' '{}' >&2\nexit {}\n",
-            stdout_msg, stderr_msg, exit_code,
-        );
-        fs::write(&path, script).expect("write fake copilot");
         #[cfg(unix)]
         {
-            use std::os::unix::fs::PermissionsExt;
-            fs::set_permissions(&path, fs::Permissions::from_mode(0o755))
-                .expect("chmod fake copilot");
+            let path = dir.path().join("copilot");
+            let script = format!(
+                "#!/bin/sh\nprintf '%s\\n' '{}'\nprintf '%s\\n' '{}' >&2\nexit {}\n",
+                stdout_msg, stderr_msg, exit_code,
+            );
+            fs::write(&path, script).expect("write fake copilot");
+            {
+                use std::os::unix::fs::PermissionsExt;
+                fs::set_permissions(&path, fs::Permissions::from_mode(0o755))
+                    .expect("chmod fake copilot");
+            }
+            path.to_string_lossy().into_owned()
         }
-        path.to_string_lossy().into_owned()
+
+        #[cfg(windows)]
+        {
+            let path = dir.path().join("copilot.cmd");
+            let script = format!(
+                "@echo off\r\necho {}\r\necho {} 1>&2\r\nexit /b {}\r\n",
+                stdout_msg, stderr_msg, exit_code,
+            );
+            fs::write(&path, script).expect("write fake copilot");
+            path.to_string_lossy().into_owned()
+        }
     }
 
     // ── success cases ────────────────────────────────────────────────────────

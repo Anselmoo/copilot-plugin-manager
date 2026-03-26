@@ -105,7 +105,6 @@ impl ProgressReporter {
                 bar.set_style(rich_spinner_style());
                 bar.enable_steady_tick(Duration::from_millis(80));
                 bar.set_prefix(kind.as_str().to_owned());
-                bar.set_message(subject.clone());
                 bar.set_message(render_rich_message(kind, status, &subject));
 
                 OperationHandle {

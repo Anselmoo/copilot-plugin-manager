@@ -566,8 +566,8 @@ fn lock_check_without_lockfile_reports_out_of_date() {
 
     let stderr = String::from_utf8_lossy(&output.stderr);
     assert!(
-        stderr.contains("lock out of date"),
-        "expected lock-out-of-date error\n{stderr}"
+        stderr.contains("does not exist"),
+        "expected missing-lockfile error\n{stderr}"
     );
 }
 
