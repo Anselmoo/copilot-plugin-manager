@@ -930,6 +930,8 @@ impl From<ScopeArg> for Scope {
 
 #[cfg(test)]
 mod tests {
+    use std::sync::{Mutex, MutexGuard, OnceLock};
+
     use camino::Utf8PathBuf;
     use cpm_core::project::load_lockfile;
     use tempfile::TempDir;
@@ -952,6 +954,13 @@ mod tests {
             args: vec![],
             engine: None,
         }
+    }
+
+    fn home_env_lock() -> MutexGuard<'static, ()> {
+        static LOCK: OnceLock<Mutex<()>> = OnceLock::new();
+        LOCK.get_or_init(|| Mutex::new(()))
+            .lock()
+            .expect("lock HOME/USERPROFILE")
     }
 
     fn make_resolved() -> ResolvedAsset {
@@ -1167,6 +1176,7 @@ path = "skills/tracked-skill"
 
     #[test]
     fn scan_unmanaged_assets_discovers_global_plugins_from_modern_install_layout() {
+        let _env_lock = home_env_lock();
         let dir = TempDir::new().expect("tempdir");
         let home = TempDir::new().expect("home");
         let previous_home = std::env::var_os("HOME");
@@ -1213,6 +1223,7 @@ path = "skills/tracked-skill"
 
     #[test]
     fn scan_unmanaged_assets_keeps_cross_registry_global_plugins_visible() {
+        let _env_lock = home_env_lock();
         let dir = TempDir::new().expect("tempdir");
         let home = TempDir::new().expect("home");
         let previous_home = std::env::var_os("HOME");
