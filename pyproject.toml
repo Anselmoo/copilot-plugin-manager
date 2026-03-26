@@ -9,73 +9,73 @@ description = "Rust-first GitHub Copilot asset manager with a thin Python wrappe
 readme = "README.md"
 requires-python = ">=3.12"
 license = "MIT OR Apache-2.0"
-license-files = ["LICENSE-MIT", "LICENSE-APACHE"]
+license-files = ["LICENSE-APACHE", "LICENSE-MIT"]
 keywords = [
-    "copilot",
-    "github-copilot",
-    "cli",
-    "rust",
-    "mcp",
-    "agent",
-    "plugin",
-    "skill",
-    "agentic-workflow",
-    "python",
-    "package",
+  "agent",
+  "agentic-workflow",
+  "cli",
+  "copilot",
+  "github-copilot",
+  "mcp",
+  "package",
+  "plugin",
+  "python",
+  "rust",
+  "skill",
 ]
 classifiers = [
-    "Development Status :: 3 - Alpha",
-    "Environment :: Console",
-    "Intended Audience :: Developers",
-    "Programming Language :: Python :: 3",
-    "Programming Language :: Python :: 3 :: Only",
-    "Programming Language :: Python :: 3.12",
-    "Programming Language :: Python :: 3.13",
-    "Programming Language :: Python :: 3.14",
-    "Programming Language :: Rust",
-    "Typing :: Typed",
-    "Topic :: Software Development :: Libraries :: Python Modules",
-    "Topic :: Software Development :: Version Control",
-    "Topic :: Software Development :: Build Tools",
-    "Topic :: Utilities",
+  "Development Status :: 3 - Alpha",
+  "Environment :: Console",
+  "Intended Audience :: Developers",
+  "Programming Language :: Python :: 3",
+  "Programming Language :: Python :: 3 :: Only",
+  "Programming Language :: Python :: 3.12",
+  "Programming Language :: Python :: 3.13",
+  "Programming Language :: Python :: 3.14",
+  "Programming Language :: Rust",
+  "Topic :: Software Development :: Build Tools",
+  "Topic :: Software Development :: Libraries :: Python Modules",
+  "Topic :: Software Development :: Version Control",
+  "Topic :: Utilities",
+  "Typing :: Typed",
 ]
 
 [project.urls]
-Homepage = "https://github.com/Anselmoo/copilot-plugin-manager"
 Documentation = "https://github.com/Anselmoo/copilot-plugin-manager/blob/main/README.md"
-Repository = "https://github.com/Anselmoo/copilot-plugin-manager"
+Homepage = "https://github.com/Anselmoo/copilot-plugin-manager"
 Issues = "https://github.com/Anselmoo/copilot-plugin-manager/issues"
+Repository = "https://github.com/Anselmoo/copilot-plugin-manager"
 
 [project.scripts]
-cpm = "cpm.__main__:main"
 copilot-plugin-manager = "cpm.__main__:main"
+cpm = "cpm.__main__:main"
 
 [dependency-groups]
 dev = [
-    "poethepoet>=0.37,<0.38",
-    "pytest>=8.3,<9",
-    "pytest-cov>=7.1.0",
-    "ruff>=0.15,<0.16",
-    "ty>=0.0.1a18",
+  "poethepoet>=0.37,<0.38",
+  "pytest>=8.3,<9",
+  "pytest-cov>=7.1.0",
+  "ruff>=0.15,<0.16",
+  "ty>=0.0.1a18",
 ]
 
 [tool.uv.build-backend]
 module-root = "python"
 module-name = "cpm"
 source-include = [
-    "Cargo.toml",
-    "Cargo.lock",
-    "README.md",
-    "cpm.toml",
-    "crates/**",
-    "tests/**",
+  "Cargo.toml",
+  "Cargo.lock",
+  "README.md",
+  "cpm.toml",
+  "crates/**",
+  "tests/**",
 ]
 source-exclude = [
-    "__pycache__",
-    ".pytest_cache",
-    ".ruff_cache",
-    ".venv",
-    "target",
+  "__pycache__",
+  ".pytest_cache",
+  ".ruff_cache",
+  ".venv",
+  "target",
 ]
 
 [tool.pytest.ini_options]
@@ -90,30 +90,30 @@ line-length = 100
 
 [tool.ruff.lint]
 select = [
-    "E",   # pycodestyle errors
-    "W",   # pycodestyle warnings
-    "F",   # pyflakes
-    "I",   # isort
-    "UP",  # pyupgrade
-    "B",   # flake8-bugbear
-    "C4",  # flake8-comprehensions
-    "SIM", # flake8-simplify
-    "TID", # flake8-tidy-imports
-    "ANN", # flake8-annotations
-    "S",   # flake8-bandit (security)
-    "N",   # pep8-naming
-    "PT",  # flake8-pytest-style
-    "RUF", # Ruff-specific rules
+  "E",  # pycodestyle errors
+  "W",  # pycodestyle warnings
+  "F",  # pyflakes
+  "I",  # isort
+  "UP",  # pyupgrade
+  "B",  # flake8-bugbear
+  "C4",  # flake8-comprehensions
+  "SIM",  # flake8-simplify
+  "TID",  # flake8-tidy-imports
+  "ANN",  # flake8-annotations
+  "S",  # flake8-bandit (security)
+  "N",  # pep8-naming
+  "PT",  # flake8-pytest-style
+  "RUF",  # Ruff-specific rules
 ]
 ignore = [
-    "S603", # subprocess call — accepted pattern in this project
-    "S607", # start process with partial path — accepted pattern
+  "S603",  # subprocess call — accepted pattern in this project
+  "S607",  # start process with partial path — accepted pattern
 ]
 
 [tool.ruff.lint.per-file-ignores]
 "tests/**/*.py" = [
-    "S101", # assert is expected in tests
-    "ANN",  # type annotations not required for tests
+  "S101",  # assert is expected in tests
+  "ANN",  # type annotations not required for tests
 ]
 
 [tool.ruff.lint.isort]
@@ -133,7 +133,6 @@ include = ["python/**/*.py", "tests/**/*.py"]
 exclude = [".venv/**", "target/**"]
 
 [tool.poe.tasks]
-
 # ── Formatting ─────────────────────────────────────────────────────────────
 [tool.poe.tasks.format]
 help = "Auto-format Python sources with ruff"
@@ -230,12 +229,12 @@ sequence = ["lint", "test", "rust-build"]
 [tool.poe.tasks.ci-full]
 help = "Full CI pipeline with release build and formatting checks"
 sequence = [
-    "format-check",
-    "rust-fmt-check",
-    "lint",
-    "rust-clippy",
-    "test",
-    "rust-build-release",
+  "format-check",
+  "rust-fmt-check",
+  "lint",
+  "rust-clippy",
+  "test",
+  "rust-build-release",
 ]
 
 [tool.poe.tasks.hooks-check]
