@@ -124,6 +124,7 @@ impl PluginDelegate {
 mod tests {
     use super::*;
     use std::fs;
+    use std::future::Future;
     use tempfile::TempDir;
 
     /// Write a tiny fake `copilot` executable into `dir` that exits with
@@ -165,36 +166,77 @@ mod tests {
         }
     }
 
+    fn is_executable_file_busy(err: &CpmError) -> bool {
+        match err {
+            CpmError::Io(inner) => {
+                inner.raw_os_error() == Some(26)
+                    || inner.kind() == std::io::ErrorKind::ExecutableFileBusy
+            }
+            _ => false,
+        }
+    }
+
+    async fn run_with_executable_busy_retry<F, Fut, T>(mut operation: F) -> Result<T, CpmError>
+    where
+        F: FnMut() -> Fut,
+        Fut: Future<Output = Result<T, CpmError>>,
+    {
+        const MAX_ATTEMPTS: usize = 8;
+        let mut delay = std::time::Duration::from_millis(10);
+
+        for attempt in 0..MAX_ATTEMPTS {
+            match operation().await {
+                Err(err) if is_executable_file_busy(&err) && attempt + 1 < MAX_ATTEMPTS => {
+                    tokio::time::sleep(delay).await;
+                    delay *= 2;
+                }
+                result => return result,
+            }
+        }
+
+        unreachable!("loop always returns or retries")
+    }
+
     // ── success cases ────────────────────────────────────────────────────────
 
     #[tokio::test]
     async fn install_succeeds_on_zero_exit() {
         let dir = TempDir::new().expect("tempdir");
         let bin = write_fake_copilot(&dir, 0, "installed ok", "");
-        PluginDelegate::with_binary(&bin)
-            .install("my-plugin")
-            .await
-            .expect("install should succeed");
+        run_with_executable_busy_retry(|| {
+            let bin = bin.clone();
+            async move { PluginDelegate::with_binary(bin).install("my-plugin").await }
+        })
+        .await
+        .expect("install should succeed");
     }
 
     #[tokio::test]
     async fn uninstall_succeeds_on_zero_exit() {
         let dir = TempDir::new().expect("tempdir");
         let bin = write_fake_copilot(&dir, 0, "uninstalled ok", "");
-        PluginDelegate::with_binary(&bin)
-            .uninstall("my-plugin")
-            .await
-            .expect("uninstall should succeed");
+        run_with_executable_busy_retry(|| {
+            let bin = bin.clone();
+            async move {
+                PluginDelegate::with_binary(bin)
+                    .uninstall("my-plugin")
+                    .await
+            }
+        })
+        .await
+        .expect("uninstall should succeed");
     }
 
     #[tokio::test]
     async fn update_succeeds_on_zero_exit() {
         let dir = TempDir::new().expect("tempdir");
         let bin = write_fake_copilot(&dir, 0, "updated ok", "");
-        PluginDelegate::with_binary(&bin)
-            .update("my-plugin")
-            .await
-            .expect("update should succeed");
+        run_with_executable_busy_retry(|| {
+            let bin = bin.clone();
+            async move { PluginDelegate::with_binary(bin).update("my-plugin").await }
+        })
+        .await
+        .expect("update should succeed");
     }
 
     // ── non-zero exit ────────────────────────────────────────────────────────
@@ -203,10 +245,12 @@ mod tests {
     async fn install_returns_plugin_command_failed_on_nonzero_exit() {
         let dir = TempDir::new().expect("tempdir");
         let bin = write_fake_copilot(&dir, 1, "nothing", "plugin not found");
-        let err = PluginDelegate::with_binary(&bin)
-            .install("bad-plugin")
-            .await
-            .expect_err("install should fail");
+        let err = run_with_executable_busy_retry(|| {
+            let bin = bin.clone();
+            async move { PluginDelegate::with_binary(bin).install("bad-plugin").await }
+        })
+        .await
+        .expect_err("install should fail");
         match err {
             CpmError::PluginCommandFailed {
                 operation,
@@ -231,10 +275,12 @@ mod tests {
     async fn uninstall_returns_plugin_command_failed_on_nonzero_exit() {
         let dir = TempDir::new().expect("tempdir");
         let bin = write_fake_copilot(&dir, 2, "", "no such plugin");
-        let err = PluginDelegate::with_binary(&bin)
-            .uninstall("gone")
-            .await
-            .expect_err("uninstall should fail");
+        let err = run_with_executable_busy_retry(|| {
+            let bin = bin.clone();
+            async move { PluginDelegate::with_binary(bin).uninstall("gone").await }
+        })
+        .await
+        .expect_err("uninstall should fail");
         match err {
             CpmError::PluginCommandFailed {
                 operation,
@@ -259,10 +305,12 @@ mod tests {
     async fn update_returns_plugin_command_failed_on_nonzero_exit() {
         let dir = TempDir::new().expect("tempdir");
         let bin = write_fake_copilot(&dir, 127, "", "command not found");
-        let err = PluginDelegate::with_binary(&bin)
-            .update("some-plugin")
-            .await
-            .expect_err("update should fail");
+        let err = run_with_executable_busy_retry(|| {
+            let bin = bin.clone();
+            async move { PluginDelegate::with_binary(bin).update("some-plugin").await }
+        })
+        .await
+        .expect_err("update should fail");
         match err {
             CpmError::PluginCommandFailed {
                 operation, code, ..
@@ -292,10 +340,12 @@ mod tests {
     async fn stdout_and_stderr_are_captured_in_failure() {
         let dir = TempDir::new().expect("tempdir");
         let bin = write_fake_copilot(&dir, 3, "out line", "err line");
-        let err = PluginDelegate::with_binary(&bin)
-            .install("cap-test")
-            .await
-            .expect_err("should fail");
+        let err = run_with_executable_busy_retry(|| {
+            let bin = bin.clone();
+            async move { PluginDelegate::with_binary(bin).install("cap-test").await }
+        })
+        .await
+        .expect_err("should fail");
         match err {
             CpmError::PluginCommandFailed { stdout, stderr, .. } => {
                 assert!(stdout.contains("out line"), "stdout not captured: {stdout}");
