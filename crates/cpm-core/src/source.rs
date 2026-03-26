@@ -95,6 +95,19 @@ pub fn normalize_asset_source(
     kind: AssetKind,
     source: &str,
 ) -> Result<NormalizedAssetSource, CpmError> {
+    // On Windows, absolute paths like C:\ or C:/ may parse as URLs with scheme 'C'.
+    // Check for Windows absolute paths before attempting URL parsing to ensure they
+    // go through path normalization instead of being treated as unsupported URL schemes.
+    #[cfg(windows)]
+    {
+        let is_windows_absolute = source.len() >= 3
+            && source.chars().nth(1) == Some(':')
+            && (source.chars().nth(2) == Some('\\') || source.chars().nth(2) == Some('/'));
+        if is_windows_absolute {
+            return normalize_path_source(kind, source);
+        }
+    }
+
     if let Ok(url) = Url::parse(source) {
         return normalize_url_source(kind, source, &url);
     }
@@ -1203,6 +1216,35 @@ mod tests {
                 "https://github.com/github/awesome-copilot/blob/main/instructions/shell.instructions.md",
             )
         );
+    }
+
+    #[test]
+    #[cfg_attr(not(windows), ignore)]
+    fn windows_absolute_paths_not_parsed_as_urls() {
+        // Ensure Windows absolute paths like C:\path or C:/path are handled as local paths,
+        // not incorrectly parsed as URLs with scheme "C".
+        // This test only runs on Windows; on other platforms it's ignored.
+        use tempfile::TempDir;
+
+        let dir = TempDir::new().expect("tempdir");
+        let file_path = dir.path().join("test-skill.md");
+        std::fs::write(&file_path, "# Test").expect("write file");
+
+        let path_str = file_path.to_string_lossy().to_string();
+        // path_str should be like C:\Users\... on Windows
+        assert!(
+            path_str.contains(":"),
+            "test requires Windows absolute path"
+        );
+
+        let normalized = normalize_asset_source(AssetKind::Skill, &path_str)
+            .expect("Windows absolute paths should normalize to local paths");
+
+        assert!(
+            normalized.path.is_some(),
+            "Windows path should resolve to local path"
+        );
+        assert!(normalized.url.is_none(), "Windows path should not have URL");
     }
 
     #[test]

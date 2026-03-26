@@ -87,17 +87,26 @@ impl PluginDelegate {
     async fn run_op(&self, operation: &str, name: &str) -> Result<(), CpmError> {
         debug!(bin = %self.copilot_bin, %operation, plugin = %name, "spawning copilot plugin subcommand");
 
-        let output = Command::new(&self.copilot_bin)
-            .args(["plugin", operation, name])
-            .output()
-            .await
-            .map_err(|e| {
-                if e.kind() == std::io::ErrorKind::NotFound {
-                    CpmError::CopilotNotFound
-                } else {
-                    CpmError::Io(e)
-                }
-            })?;
+        // On Windows, if copilot_bin points to a .cmd or .bat script, we need to invoke it
+        // through cmd /C to properly execute batch files. Otherwise use direct invocation.
+        let (cmd, args) = if cfg!(windows)
+            && (self.copilot_bin.ends_with(".cmd") || self.copilot_bin.ends_with(".bat"))
+        {
+            (
+                "cmd".to_string(),
+                vec!["/C", &self.copilot_bin, "plugin", operation, name],
+            )
+        } else {
+            (self.copilot_bin.clone(), vec!["plugin", operation, name])
+        };
+
+        let output = Command::new(&cmd).args(&args).output().await.map_err(|e| {
+            if e.kind() == std::io::ErrorKind::NotFound {
+                CpmError::CopilotNotFound
+            } else {
+                CpmError::Io(e)
+            }
+        })?;
 
         if output.status.success() {
             info!(%operation, plugin = %name, "copilot plugin command succeeded");

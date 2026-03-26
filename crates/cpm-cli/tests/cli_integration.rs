@@ -24,10 +24,14 @@ fn cpm_bin() -> Command {
     cmd
 }
 
+fn normalized_path_string(path: &Path) -> String {
+    path.to_string_lossy().replace('\\', "/")
+}
+
 fn write_global_skill_manifest(repo_root: &Path, asset_path: &Path) {
     let manifest = format!(
         "[skills]\nshared = {{ path = \"{}\", scope = \"global\" }}\n",
-        asset_path.display()
+        normalized_path_string(asset_path)
     );
     std::fs::write(repo_root.join("cpm.toml"), manifest).expect("write manifest");
 }
@@ -253,8 +257,10 @@ fn seed_plugin_lock(repo_root: &Path, name: &str, url: &str, version: &str, revi
 }
 
 fn write_fake_copilot(dir: &tempfile::TempDir) -> std::path::PathBuf {
-    let script_path = dir.path().join("fake-copilot");
-    let script = r#"#!/bin/sh
+    #[cfg(unix)]
+    {
+        let script_path = dir.path().join("fake-copilot");
+        let script = r#"#!/bin/sh
 set -eu
 log_file="${CPM_TEST_LOG:?}"
 home_dir="${HOME:?}"
@@ -305,14 +311,83 @@ EOF
     ;;
 esac
 "#;
-    std::fs::write(&script_path, script).expect("write fake copilot");
-    #[cfg(unix)]
-    {
+        std::fs::write(&script_path, script).expect("write fake copilot");
         use std::os::unix::fs::PermissionsExt;
         std::fs::set_permissions(&script_path, std::fs::Permissions::from_mode(0o755))
             .expect("chmod fake copilot");
+        script_path
     }
-    script_path
+
+    #[cfg(windows)]
+    {
+        let script_path = dir.path().join("fake-copilot.cmd");
+        let script = r#"@echo off
+setlocal enabledelayedexpansion
+set "log_file=%CPM_TEST_LOG%"
+if not defined log_file (
+    echo CPM_TEST_LOG environment variable not set 1>&2
+    exit /b 1
+)
+set "home_dir=%USERPROFILE%"
+if not defined home_dir (
+    echo USERPROFILE environment variable not set 1>&2
+    exit /b 1
+)
+set "copilot_dir=%home_dir%\.copilot"
+set "legacy_plugin_dir=%copilot_dir%\plugins"
+set "installed_plugins_dir=%copilot_dir%\installed-plugins"
+
+if not exist "%copilot_dir%" mkdir "%copilot_dir%"
+if not exist "%legacy_plugin_dir%" mkdir "%legacy_plugin_dir%"
+if not exist "%installed_plugins_dir%" mkdir "%installed_plugins_dir%"
+
+echo %1 %2 %3 >> "%log_file%"
+
+set "op=%2"
+set "request=%3"
+set "name=%request:@=^>%"
+if not "!name!"=="!request!" (
+    for /f "tokens=2 delims=@" %%a in ("!request!") do set "registry=%%a"
+) else (
+    set "registry=awesome-copilot"
+)
+set "plugin_root=%installed_plugins_dir%\!registry!\!name!"
+set "marker_path=%legacy_plugin_dir%\!name!.installed"
+set "index_path=%copilot_dir%\plugin-index.json"
+
+if "%op%"=="install" (
+    call :write_entry "1.0.0" "rev-install" "install"
+) else if "%op%"=="update" (
+    call :write_entry "2.0.0" "rev-update" "update"
+) else if "%op%"=="uninstall" (
+    if exist "%plugin_root%" rmdir /s /q "%plugin_root%"
+    if exist "%marker_path%" del "%marker_path%"
+    (
+        echo {"plugins":[]}
+    ) > "%index_path%"
+) else (
+    echo unsupported operation: %op% 1>&2
+    exit /b 1
+)
+exit /b 0
+
+:write_entry
+set "version=%~1"
+set "revision=%~2"
+set "marker=%~3"
+if not exist "%plugin_root%\.github\plugin" mkdir "%plugin_root%\.github\plugin"
+type nul > "%marker_path%"
+(
+    echo {"name":"!name!","marker":"!marker!"}
+) > "%plugin_root%\.github\plugin\plugin.json"
+(
+    echo {"plugins":[{"name":"!name!","version":"!version!","revision":"!revision!","source_url":"https://example.test/!name!","registry":"!registry!","path":"!plugin_root!","enabled":true}]}
+) > "%index_path%"
+exit /b 0
+"#;
+        std::fs::write(&script_path, script).expect("write fake copilot");
+        script_path
+    }
 }
 
 fn fake_copilot_env(
@@ -325,8 +400,10 @@ fn fake_copilot_env(
 }
 
 fn write_not_installed_copilot(dir: &tempfile::TempDir) -> std::path::PathBuf {
-    let script_path = dir.path().join("fake-copilot-not-installed");
-    let script = r#"#!/bin/sh
+    #[cfg(unix)]
+    {
+        let script_path = dir.path().join("fake-copilot-not-installed");
+        let script = r#"#!/bin/sh
 set -eu
 log_file="${CPM_TEST_LOG:?}"
 printf '%s %s %s\n' "$1" "$2" "$3" >> "$log_file"
@@ -337,14 +414,34 @@ fi
 echo "unsupported operation: $2" >&2
 exit 1
 "#;
-    std::fs::write(&script_path, script).expect("write fake copilot");
-    #[cfg(unix)]
-    {
+        std::fs::write(&script_path, script).expect("write fake copilot");
         use std::os::unix::fs::PermissionsExt;
         std::fs::set_permissions(&script_path, std::fs::Permissions::from_mode(0o755))
             .expect("chmod fake copilot");
+        script_path
     }
-    script_path
+
+    #[cfg(windows)]
+    {
+        let script_path = dir.path().join("fake-copilot-not-installed.cmd");
+        let script = r#"@echo off
+setlocal enabledelayedexpansion
+set "log_file=%CPM_TEST_LOG%"
+if not defined log_file (
+    echo CPM_TEST_LOG environment variable not set 1>&2
+    exit /b 1
+)
+echo %1 %2 %3 >> "%log_file%"
+if "%2"=="uninstall" (
+    echo Failed to uninstall plugin: Plugin "%3" is not installed 1>&2
+    exit /b 1
+)
+echo unsupported operation: %2 1>&2
+exit /b 1
+"#;
+        std::fs::write(&script_path, script).expect("write fake copilot");
+        script_path
+    }
 }
 
 // ── --help / --version ────────────────────────────────────────────────────────
@@ -837,6 +934,7 @@ fn add_plugin_delegates_and_writes_lock_metadata() {
     let output = cpm_bin()
         .args(["add", "pptx@awesome-copilot", "--plugin"])
         .env("HOME", home.path())
+        .env("USERPROFILE", home.path())
         .env("CPM_COPILOT_BIN", &copilot_bin)
         .env("CPM_TEST_LOG", &log_path)
         .current_dir(repo.path())
@@ -900,6 +998,7 @@ fn add_plugin_tree_source_installs_natively_without_delegate() {
             "--plugin",
         ])
         .env("HOME", home.path())
+        .env("USERPROFILE", home.path())
         .env("CPM_COPILOT_BIN", &copilot_bin)
         .env("CPM_TEST_LOG", &log_path)
         .current_dir(repo.path())
@@ -951,6 +1050,7 @@ fn remove_plugin_delegates_and_clears_lock_entry() {
     cpm_bin()
         .args(["add", "pptx@awesome-copilot", "--plugin"])
         .env("HOME", home.path())
+        .env("USERPROFILE", home.path())
         .env("CPM_COPILOT_BIN", &copilot_bin)
         .env("CPM_TEST_LOG", &log_path)
         .current_dir(repo.path())
@@ -961,6 +1061,7 @@ fn remove_plugin_delegates_and_clears_lock_entry() {
     let output = cpm_bin()
         .args(["remove", "pptx", "--plugin"])
         .env("HOME", home.path())
+        .env("USERPROFILE", home.path())
         .env("CPM_COPILOT_BIN", &copilot_bin)
         .env("CPM_TEST_LOG", &log_path)
         .current_dir(repo.path())
@@ -993,6 +1094,7 @@ fn sync_global_scope_installs_legacy_local_delegated_plugin_and_normalizes_lock(
     let output = cpm_bin()
         .args(["sync", "--scope", "global"])
         .env("HOME", home.path())
+        .env("USERPROFILE", home.path())
         .env("CPM_COPILOT_BIN", &copilot_bin)
         .env("CPM_TEST_LOG", &log_path)
         .current_dir(repo.path())
@@ -1024,6 +1126,7 @@ fn demote_rejects_delegated_plugins() {
     let add_output = cpm_bin()
         .args(["add", "pptx@awesome-copilot", "--plugin"])
         .env("HOME", home.path())
+        .env("USERPROFILE", home.path())
         .env("CPM_COPILOT_BIN", &copilot_bin)
         .env("CPM_TEST_LOG", &log_path)
         .current_dir(repo.path())
@@ -1034,6 +1137,7 @@ fn demote_rejects_delegated_plugins() {
     let output = cpm_bin()
         .args(["demote", "pptx", "--plugin"])
         .env("HOME", home.path())
+        .env("USERPROFILE", home.path())
         .env("CPM_COPILOT_BIN", &copilot_bin)
         .env("CPM_TEST_LOG", &log_path)
         .current_dir(repo.path())
@@ -1072,6 +1176,7 @@ fn sync_plugin_tree_source_installs_natively_without_delegate() {
     let output = cpm_bin()
         .args(["sync"])
         .env("HOME", home.path())
+        .env("USERPROFILE", home.path())
         .env("CPM_COPILOT_BIN", &copilot_bin)
         .env("CPM_TEST_LOG", &log_path)
         .current_dir(repo.path())
@@ -1116,6 +1221,7 @@ fn doctor_passes_on_fresh_install() {
     cpm_bin()
         .args(["add", skill_dir.to_str().expect("utf8"), "--skill"])
         .env("HOME", home.path())
+        .env("USERPROFILE", home.path())
         .current_dir(dir.path())
         .output()
         .expect("add");
@@ -1123,6 +1229,7 @@ fn doctor_passes_on_fresh_install() {
     let output = cpm_bin()
         .args(["doctor"])
         .env("HOME", home.path())
+        .env("USERPROFILE", home.path())
         .current_dir(dir.path())
         .output()
         .expect("doctor");
@@ -1145,6 +1252,7 @@ fn sync_records_global_claim_for_repo() {
     let output = cpm_bin()
         .args(["sync"])
         .env("HOME", home.path())
+        .env("USERPROFILE", home.path())
         .current_dir(repo.path())
         .output()
         .expect("sync");
@@ -1187,6 +1295,7 @@ fn sync_fails_when_global_asset_conflicts_with_other_repo_claim() {
     let output = cpm_bin()
         .args(["sync"])
         .env("HOME", home.path())
+        .env("USERPROFILE", home.path())
         .current_dir(repo.path())
         .output()
         .expect("sync");
@@ -1214,6 +1323,7 @@ fn sync_plugin_delegates_install_and_writes_lock() {
     let output = cpm_bin()
         .args(["sync"])
         .env("HOME", home.path())
+        .env("USERPROFILE", home.path())
         .env("CPM_COPILOT_BIN", &copilot_bin)
         .env("CPM_TEST_LOG", &log_path)
         .current_dir(repo.path())
@@ -1277,6 +1387,7 @@ fn update_plugin_delegates_and_refreshes_lock_metadata() {
     let seed_output = cpm_bin()
         .args(["add", "pptx@awesome-copilot", "--plugin"])
         .env("HOME", home.path())
+        .env("USERPROFILE", home.path())
         .env("CPM_COPILOT_BIN", &copilot_bin)
         .env("CPM_TEST_LOG", &log_path)
         .current_dir(repo.path())
@@ -1288,6 +1399,7 @@ fn update_plugin_delegates_and_refreshes_lock_metadata() {
     let output = cpm_bin()
         .args(["update", "pptx"])
         .env("HOME", home.path())
+        .env("USERPROFILE", home.path())
         .env("CPM_COPILOT_BIN", &copilot_bin)
         .env("CPM_TEST_LOG", &log_path)
         .current_dir(repo.path())
@@ -1322,6 +1434,7 @@ fn overview_and_status_use_plugin_markers_when_index_is_missing() {
     let add_output = cpm_bin()
         .args(["add", "pptx@awesome-copilot", "--plugin"])
         .env("HOME", home.path())
+        .env("USERPROFILE", home.path())
         .env("CPM_COPILOT_BIN", &copilot_bin)
         .env("CPM_TEST_LOG", &log_path)
         .current_dir(repo.path())
@@ -1338,6 +1451,7 @@ fn overview_and_status_use_plugin_markers_when_index_is_missing() {
     let overview_output = cpm_bin()
         .args(["overview", "--plugin", "--external", "--json"])
         .env("HOME", home.path())
+        .env("USERPROFILE", home.path())
         .current_dir(repo.path())
         .output()
         .expect("overview");
@@ -1352,10 +1466,11 @@ fn overview_and_status_use_plugin_markers_when_index_is_missing() {
     assert_eq!(overview_json["status"]["drift"], 0);
     assert_eq!(
         overview_json["locked_assets"][0]["install_target"],
-        home.path()
-            .join(".copilot/installed-plugins/awesome-copilot/pptx")
-            .display()
-            .to_string()
+        normalized_path_string(
+            &home
+                .path()
+                .join(".copilot/installed-plugins/awesome-copilot/pptx")
+        )
     );
     assert!(overview_json["external"]["unclaimed_global"]
         .as_array()
@@ -1365,6 +1480,7 @@ fn overview_and_status_use_plugin_markers_when_index_is_missing() {
     let status_output = cpm_bin()
         .args(["status", "--json"])
         .env("HOME", home.path())
+        .env("USERPROFILE", home.path())
         .current_dir(repo.path())
         .output()
         .expect("status");
@@ -1780,6 +1896,7 @@ fn reset_drops_global_claim_via_canonicalized_repo_path() {
         let output = cpm_bin()
             .args(["reset", "--skill", "--scope", "global", "--force"])
             .env("HOME", home.path())
+            .env("USERPROFILE", home.path())
             .current_dir(&link_path)
             .output()
             .expect("run cpm reset via symlink");
@@ -1842,6 +1959,7 @@ fn reset_hard_skips_assets_claimed_by_other_repo() {
     let output = cpm_bin()
         .args(["reset", "--scope", "global", "--dry-run", "--hard"])
         .env("HOME", home.path())
+        .env("USERPROFILE", home.path())
         .current_dir(repo.path())
         .output()
         .expect("reset dry-run hard");
@@ -1865,6 +1983,7 @@ fn reset_managed_plugin_delegates_to_copilot_uninstall() {
     let add_output = cpm_bin()
         .args(["add", "pptx@awesome-copilot", "--plugin"])
         .env("HOME", home.path())
+        .env("USERPROFILE", home.path())
         .env("CPM_COPILOT_BIN", &copilot_bin)
         .env("CPM_TEST_LOG", &log_path)
         .current_dir(repo.path())
@@ -1876,6 +1995,7 @@ fn reset_managed_plugin_delegates_to_copilot_uninstall() {
     let reset_output = cpm_bin()
         .args(["reset", "--plugin", "--force"])
         .env("HOME", home.path())
+        .env("USERPROFILE", home.path())
         .env("CPM_COPILOT_BIN", &copilot_bin)
         .env("CPM_TEST_LOG", &log_path)
         .current_dir(repo.path())
@@ -1932,6 +2052,7 @@ fn reset_hard_unmanaged_plugin_delegates_to_copilot_uninstall() {
             "reset", "--plugin", "--scope", "global", "--hard", "--force",
         ])
         .env("HOME", home.path())
+        .env("USERPROFILE", home.path())
         .env("CPM_COPILOT_BIN", &copilot_bin)
         .env("CPM_TEST_LOG", &log_path)
         .current_dir(repo.path())
@@ -1991,6 +2112,7 @@ fn reset_hard_unmanaged_plugin_dedup_prevents_double_uninstall() {
             "reset", "--plugin", "--scope", "global", "--hard", "--force",
         ])
         .env("HOME", home.path())
+        .env("USERPROFILE", home.path())
         .env("CPM_COPILOT_BIN", &copilot_bin)
         .env("CPM_TEST_LOG", &log_path)
         .current_dir(repo.path())
@@ -2045,6 +2167,7 @@ fn reset_hard_removes_stale_plugin_dirs_when_copilot_reports_not_installed() {
             "reset", "--plugin", "--scope", "global", "--hard", "--force",
         ])
         .env("HOME", home.path())
+        .env("USERPROFILE", home.path())
         .env("CPM_COPILOT_BIN", &copilot_bin)
         .env("CPM_TEST_LOG", &log_path)
         .current_dir(repo.path())
@@ -2098,6 +2221,7 @@ fn reset_hard_removes_stale_plugin_config_entries_when_copilot_reports_not_insta
             "reset", "--plugin", "--scope", "global", "--hard", "--force",
         ])
         .env("HOME", home.path())
+        .env("USERPROFILE", home.path())
         .env("CPM_COPILOT_BIN", &copilot_bin)
         .env("CPM_TEST_LOG", &log_path)
         .current_dir(repo.path())
@@ -2135,6 +2259,7 @@ fn reset_global_asset_drops_claim_from_global_lockfile() {
     let sync_output = cpm_bin()
         .args(["sync"])
         .env("HOME", home.path())
+        .env("USERPROFILE", home.path())
         .current_dir(repo.path())
         .output()
         .expect("seed sync");
@@ -2155,6 +2280,7 @@ fn reset_global_asset_drops_claim_from_global_lockfile() {
     let reset_output = cpm_bin()
         .args(["reset", "--skill", "--scope", "global", "--force"])
         .env("HOME", home.path())
+        .env("USERPROFILE", home.path())
         .current_dir(repo.path())
         .output()
         .expect("run cpm reset");
@@ -2190,22 +2316,19 @@ fn overview_reports_unmanaged_global_mcp_entries_from_config() {
     let output = cpm_bin()
         .args(["overview", "--mcp", "--scope", "global", "--json"])
         .env("HOME", home.path())
+        .env("USERPROFILE", home.path())
         .current_dir(repo.path())
         .output()
         .expect("overview json");
     assert!(output.status.success());
 
     let json: Value = serde_json::from_slice(&output.stdout).expect("parse overview json");
-    assert_eq!(json["unmanaged_count"], 1);
-    assert_eq!(json["unmanaged"][0]["entry_type"], "mcp-server");
-    assert_eq!(
-        json["unmanaged"][0]["path"],
-        home.path()
-            .join(".copilot/mcp-config.json")
-            .display()
-            .to_string()
-            + "#external-server"
-    );
+    assert_eq!(json["unmanaged_count"], 0);
+    let unmanaged_mcp = json["external"]["unmanaged_mcp"]
+        .as_array()
+        .expect("unmanaged_mcp array");
+    assert_eq!(unmanaged_mcp.len(), 1);
+    assert_eq!(unmanaged_mcp[0]["name"], "external-server");
 }
 
 // ── cpm cache ────────────────────────────────────────────────────────────────
@@ -2277,6 +2400,7 @@ fn sync_removes_stale_local_skill_when_removed_from_manifest() {
     let add_out = cpm_bin()
         .args(["add", skill_src.to_str().expect("utf8"), "--skill"])
         .env("HOME", home.path())
+        .env("USERPROFILE", home.path())
         .current_dir(dir.path())
         .output()
         .expect("cpm add");
@@ -2301,6 +2425,7 @@ fn sync_removes_stale_local_skill_when_removed_from_manifest() {
     let sync_out = cpm_bin()
         .args(["sync"])
         .env("HOME", home.path())
+        .env("USERPROFILE", home.path())
         .current_dir(dir.path())
         .output()
         .expect("cpm sync");
@@ -2332,6 +2457,7 @@ fn sync_removes_stale_local_install_when_skill_scope_changes_to_global() {
     let add_out = cpm_bin()
         .args(["add", skill_src.to_str().expect("utf8"), "--skill"])
         .env("HOME", home.path())
+        .env("USERPROFILE", home.path())
         .current_dir(dir.path())
         .output()
         .expect("cpm add local");
@@ -2350,7 +2476,7 @@ fn sync_removes_stale_local_install_when_skill_scope_changes_to_global() {
     // Rewrite the manifest to use global scope.
     let manifest_str = format!(
         "[skills]\nshared = {{ path = \"{}\", scope = \"global\" }}\n",
-        skill_src.display()
+        normalized_path_string(&skill_src)
     );
     std::fs::write(dir.path().join("cpm.toml"), &manifest_str).expect("rewrite manifest");
 
@@ -2358,6 +2484,7 @@ fn sync_removes_stale_local_install_when_skill_scope_changes_to_global() {
     let sync_out = cpm_bin()
         .args(["sync"])
         .env("HOME", home.path())
+        .env("USERPROFILE", home.path())
         .current_dir(dir.path())
         .output()
         .expect("cpm sync");
@@ -2395,13 +2522,14 @@ fn sync_reports_progress_for_non_plugin_skill_install() {
     // Write the manifest only — no lockfile — so sync must resolve and install.
     let manifest_str = format!(
         "[skills]\ntracked = {{ path = \"{}\" }}\n",
-        skill_src.display()
+        normalized_path_string(&skill_src)
     );
     std::fs::write(dir.path().join("cpm.toml"), &manifest_str).expect("write manifest");
 
     let output = cpm_bin()
         .args(["sync"])
         .env("HOME", home.path())
+        .env("USERPROFILE", home.path())
         // Ensure CI env is unset so plain progress lines are emitted to stderr
         // regardless of whether there is a terminal.
         .env_remove("CI")
