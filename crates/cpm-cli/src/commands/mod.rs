@@ -473,10 +473,6 @@ pub(super) fn style_heading(text: &str) -> String {
     colorize(text, "1;36")
 }
 
-pub(super) fn style_accent(text: &str) -> String {
-    colorize(text, "36")
-}
-
 pub(super) fn style_label(text: &str) -> String {
     format!("{}:", colorize(text, "1"))
 }
@@ -493,15 +489,15 @@ pub(super) fn style_error(text: &str) -> String {
     colorize(text, "31")
 }
 
-pub(super) fn style_muted(text: &str) -> String {
-    colorize(text, "2")
+fn style_scope_name(scope: &str) -> String {
+    style_scope_name_with_colors(scope, output_colors_enabled())
 }
 
-fn style_scope_name(scope: &str) -> String {
+fn style_scope_name_with_colors(scope: &str, colors_enabled: bool) -> String {
     match scope {
-        "local" => colorize("local", "1;34"),
-        "global" => colorize("global", "1;35"),
-        other => colorize(other, "1;34"),
+        "local" => colorize_with_mode("local", "1;34", colors_enabled),
+        "global" => colorize_with_mode("global", "1;35", colors_enabled),
+        other => colorize_with_mode(other, "1;34", colors_enabled),
     }
 }
 
@@ -521,20 +517,54 @@ where
     K: Display,
     S: Display,
 {
+    style_asset_heading_with_colors(kind, scope, name, output_colors_enabled())
+}
+
+fn style_asset_heading_with_colors<K, S>(
+    kind: K,
+    scope: S,
+    name: &str,
+    colors_enabled: bool,
+) -> String
+where
+    K: Display,
+    S: Display,
+{
     format!(
         "{} [{}] {}",
-        style_heading(&kind.to_string()),
-        style_scope_name(&scope.to_string()),
-        colorize(name, "1")
+        colorize_with_mode(&kind.to_string(), "1;36", colors_enabled),
+        style_scope_name_with_colors(&scope.to_string(), colors_enabled),
+        colorize_with_mode(name, "1", colors_enabled)
     )
 }
 
 fn colorize(text: &str, ansi_code: &str) -> String {
-    if output_colors_enabled() {
+    colorize_with_mode(text, ansi_code, output_colors_enabled())
+}
+
+fn colorize_with_mode(text: &str, ansi_code: &str, colors_enabled: bool) -> String {
+    if colors_enabled {
         format!("\u{1b}[{ansi_code}m{text}\u{1b}[0m")
     } else {
         text.to_owned()
     }
+}
+
+fn colors_enabled(
+    is_terminal: bool,
+    no_color: bool,
+    clicolor_disabled: bool,
+    clicolor_force: bool,
+    dumb_terminal: bool,
+) -> bool {
+    if no_color || clicolor_disabled {
+        return false;
+    }
+    if clicolor_force {
+        return true;
+    }
+
+    is_terminal && !dumb_terminal
 }
 
 fn output_colors_enabled() -> bool {
@@ -546,14 +576,13 @@ fn output_colors_enabled() -> bool {
     let dumb_terminal =
         std::env::var_os("TERM").is_some_and(|value| value.to_string_lossy() == "dumb");
 
-    if no_color || clicolor_disabled {
-        return false;
-    }
-    if clicolor_force {
-        return true;
-    }
-
-    std::io::stdout().is_terminal() && !dumb_terminal
+    colors_enabled(
+        std::io::stdout().is_terminal(),
+        no_color,
+        clicolor_disabled,
+        clicolor_force,
+        dumb_terminal,
+    )
 }
 
 fn format_sub_asset_ownership(ownership: SubAssetOwnership) -> &'static str {
@@ -1014,20 +1043,27 @@ pub(super) fn report_skipped_plugin(action: PluginAction, subject: &str) {
 
 pub(super) fn print_plugin_summary(summary: PluginOperationSummary) {
     println!(
-        "{} {} installed{} {} removed{} {} updated{} {} failed",
-        style_heading("Plugins:"),
-        style_success(&summary.installed.to_string()),
-        style_muted(" ·"),
-        style_warning(&summary.removed.to_string()),
-        style_muted(" ·"),
-        style_accent(&summary.updated.to_string()),
-        style_muted(" ·"),
-        if summary.failed > 0 {
-            style_error(&summary.failed.to_string())
-        } else {
-            style_muted(&summary.failed.to_string())
-        }
+        "{}",
+        render_plugin_summary(summary, output_colors_enabled())
     );
+}
+
+fn render_plugin_summary(summary: PluginOperationSummary, colors_enabled: bool) -> String {
+    format!(
+        "{} {} installed{} {} removed{} {} updated{} {} failed",
+        colorize_with_mode("Plugins:", "1", colors_enabled),
+        colorize_with_mode(&summary.installed.to_string(), "32", colors_enabled),
+        colorize_with_mode(" ·", "2", colors_enabled),
+        colorize_with_mode(&summary.removed.to_string(), "33", colors_enabled),
+        colorize_with_mode(" ·", "2", colors_enabled),
+        colorize_with_mode(&summary.updated.to_string(), "1;36", colors_enabled),
+        colorize_with_mode(" ·", "2", colors_enabled),
+        if summary.failed > 0 {
+            colorize_with_mode(&summary.failed.to_string(), "31", colors_enabled)
+        } else {
+            colorize_with_mode(&summary.failed.to_string(), "2", colors_enabled)
+        }
+    )
 }
 
 pub(super) fn plugin_requested_spec(name: &str, source: &AssetSource) -> String {
@@ -1348,50 +1384,35 @@ mod tests {
 
     #[test]
     fn style_asset_heading_keeps_plain_shape_without_color() {
-        let previous = std::env::var_os("NO_COLOR");
-        std::env::set_var("NO_COLOR", "1");
-
-        let rendered = style_asset_heading(AssetKind::Skill, Scope::Local, "tracked");
-
-        match previous {
-            Some(value) => std::env::set_var("NO_COLOR", value),
-            None => std::env::remove_var("NO_COLOR"),
-        }
-
-        assert_eq!(rendered, "skill [local] tracked");
+        assert_eq!(
+            style_asset_heading_with_colors(AssetKind::Skill, Scope::Local, "tracked", false),
+            "skill [local] tracked"
+        );
     }
 
     #[test]
     fn plugin_summary_plain_text_uses_new_human_readable_shape() {
-        let previous = std::env::var_os("NO_COLOR");
-        std::env::set_var("NO_COLOR", "1");
-
         let summary = PluginOperationSummary {
             installed: 1,
             removed: 0,
             updated: 2,
             failed: 0,
         };
-        let rendered = format!(
-            "{} {} installed{} {} removed{} {} updated{} {} failed",
-            style_heading("Plugins:"),
-            style_success(&summary.installed.to_string()),
-            style_muted(" ·"),
-            style_warning(&summary.removed.to_string()),
-            style_muted(" ·"),
-            style_accent(&summary.updated.to_string()),
-            style_muted(" ·"),
-            style_muted(&summary.failed.to_string())
-        );
-
-        match previous {
-            Some(value) => std::env::set_var("NO_COLOR", value),
-            None => std::env::remove_var("NO_COLOR"),
-        }
+        let rendered = render_plugin_summary(summary, false);
 
         assert_eq!(
             rendered,
             "Plugins: 1 installed · 0 removed · 2 updated · 0 failed"
         );
+    }
+
+    #[test]
+    fn colors_enabled_respects_priority_rules() {
+        assert!(!colors_enabled(true, true, false, true, false));
+        assert!(!colors_enabled(true, false, true, true, false));
+        assert!(colors_enabled(false, false, false, true, false));
+        assert!(!colors_enabled(true, false, false, false, true));
+        assert!(colors_enabled(true, false, false, false, false));
+        assert!(!colors_enabled(false, false, false, false, false));
     }
 }
