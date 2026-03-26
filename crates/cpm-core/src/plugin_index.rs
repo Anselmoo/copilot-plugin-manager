@@ -10,7 +10,6 @@
 use std::path::{Path, PathBuf};
 
 use camino::Utf8PathBuf;
-use dirs::home_dir;
 use indexmap::IndexMap;
 use serde::Deserialize;
 
@@ -44,7 +43,7 @@ pub struct InstalledPlugin {
 
 /// Return the default plugin-index path (`~/.copilot/plugin-index.json`).
 pub fn default_plugin_index_path() -> PathBuf {
-    home_dir()
+    copilot_home_dir()
         .unwrap_or_else(|| PathBuf::from("/tmp"))
         .join(".copilot")
         .join("plugin-index.json")
@@ -105,9 +104,7 @@ pub fn plugin_install_root(plugin: &InstalledPlugin) -> Option<PathBuf> {
             return Some(path);
         }
 
-        let home = std::env::var_os("HOME")
-            .or_else(|| std::env::var_os("USERPROFILE"))
-            .map(PathBuf::from)?;
+        let home = copilot_home_dir()?;
         return Some(home.join(path));
     }
 
@@ -115,6 +112,13 @@ pub fn plugin_install_root(plugin: &InstalledPlugin) -> Option<PathBuf> {
         .name
         .as_deref()
         .map(|name| preferred_plugin_install_root(name, plugin.registry.as_deref()))
+}
+
+fn copilot_home_dir() -> Option<PathBuf> {
+    std::env::var_os("HOME")
+        .or_else(|| std::env::var_os("USERPROFILE"))
+        .map(PathBuf::from)
+        .or_else(dirs::home_dir)
 }
 
 /// Return the delegated plugin install root for a plugin name.
@@ -542,6 +546,28 @@ mod tests {
         let plugins = read_installed_plugins_from(&path).expect("read");
 
         assert!(plugins.is_empty());
+    }
+
+    #[test]
+    fn default_plugin_index_path_honors_home_env_override() {
+        let dir = TempDir::new().expect("tempdir");
+        let previous_home = std::env::var_os("HOME");
+        let previous_userprofile = std::env::var_os("USERPROFILE");
+        std::env::set_var("HOME", dir.path());
+        std::env::remove_var("USERPROFILE");
+
+        let path = default_plugin_index_path();
+
+        match previous_home {
+            Some(value) => std::env::set_var("HOME", value),
+            None => std::env::remove_var("HOME"),
+        }
+        match previous_userprofile {
+            Some(value) => std::env::set_var("USERPROFILE", value),
+            None => std::env::remove_var("USERPROFILE"),
+        }
+
+        assert_eq!(path, dir.path().join(".copilot").join("plugin-index.json"));
     }
 
     #[test]
