@@ -85,5 +85,5 @@ def test_manifest_guardrail_is_wired_into_local_and_ci_validation() -> None:
     lefthook = (REPO_ROOT / "lefthook.yml").read_text(encoding="utf-8")
     assert "uv run --group dev python -m poethepoet manifests-check" in lefthook
 
-    ci_workflow = (REPO_ROOT / ".github/workflows/ci.yml").read_text(encoding="utf-8")
-    assert "uv run --group dev python -m poethepoet ci-full" in ci_workflow
+    cicd_workflow = (REPO_ROOT / ".github/workflows/cicd.yml").read_text(encoding="utf-8")
+    assert "uv run --group dev python -m poethepoet ci-full" in cicd_workflow

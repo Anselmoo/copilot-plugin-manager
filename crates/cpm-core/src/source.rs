@@ -1071,7 +1071,7 @@ fn source_segments(source: &str) -> Vec<String> {
 }
 
 fn last_segment(source: &str) -> Option<String> {
-    source_segments(source).into_iter().last()
+    source_segments(source).into_iter().next_back()
 }
 
 fn is_full_commit_sha(candidate: &str) -> bool {

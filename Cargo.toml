@@ -55,4 +55,4 @@ dirs = "5"
 
 # testing
 tempfile = "3"
-wiremock = "0.6"
+wiremock = "=0.6.4"
