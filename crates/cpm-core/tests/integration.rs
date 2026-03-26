@@ -254,6 +254,7 @@ fn mcp_json_secret_env_values_omitted() {
     asset.source.env = env;
 
     let json = mcp_json(&asset).expect("json");
+    assert_eq!(json["type"], "npx");
     let env_obj = json.get("env").expect("env key");
     assert!(
         env_obj.get("LITERAL_KEY").is_some(),

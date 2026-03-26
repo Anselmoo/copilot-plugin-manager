@@ -269,12 +269,12 @@ pub fn mcp_json(asset: &ResolvedAsset) -> Option<Value> {
 
     let json = match transport {
         McpTransport::Http { url } => json!({
-            "transport": "http",
+            "type": "http",
             "url": url,
             "env": env_obj,
         }),
         McpTransport::Sse { url } => json!({
-            "transport": "sse",
+            "type": "sse",
             "url": url,
             "env": env_obj,
         }),
@@ -283,7 +283,7 @@ pub fn mcp_json(asset: &ResolvedAsset) -> Option<Value> {
             entrypoint,
             args,
         } => json!({
-            "transport": "npx",
+            "type": "npx",
             "package": package,
             "entrypoint": entrypoint,
             "args": args,
@@ -294,20 +294,20 @@ pub fn mcp_json(asset: &ResolvedAsset) -> Option<Value> {
             entrypoint,
             args,
         } => json!({
-            "transport": "uvx",
+            "type": "uvx",
             "package": package,
             "entrypoint": entrypoint,
             "args": args,
             "env": env_obj,
         }),
         McpTransport::Docker { image, args } => json!({
-            "transport": "docker",
+            "type": "docker",
             "image": image,
             "args": args,
             "env": env_obj,
         }),
         McpTransport::Binary { url, bin, args } => json!({
-            "transport": "binary",
+            "type": "binary",
             "url": url,
             "bin": bin,
             "args": args,
@@ -315,13 +315,13 @@ pub fn mcp_json(asset: &ResolvedAsset) -> Option<Value> {
             "env": env_obj,
         }),
         McpTransport::Path { path, args } => json!({
-            "transport": "path",
+            "type": "path",
             "path": path,
             "args": args,
             "env": env_obj,
         }),
         McpTransport::Script { command, args } => json!({
-            "transport": "script",
+            "type": "script",
             "command": command,
             "args": args,
             "env": env_obj,
@@ -687,6 +687,7 @@ mod tests {
             env,
         );
         let json = mcp_json(&asset).expect("json");
+        assert_eq!(json["type"], "npx");
         let env_obj = json.get("env").expect("env key");
         assert_eq!(
             env_obj.get("KEY").and_then(|v| v.as_str()),

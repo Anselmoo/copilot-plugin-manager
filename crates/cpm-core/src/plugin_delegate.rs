@@ -138,16 +138,18 @@ mod tests {
         #[cfg(unix)]
         {
             let path = dir.path().join("copilot");
+            let staging = dir.path().join("copilot.tmp");
             let script = format!(
                 "#!/bin/sh\nprintf '%s\\n' '{}'\nprintf '%s\\n' '{}' >&2\nexit {}\n",
                 stdout_msg, stderr_msg, exit_code,
             );
-            fs::write(&path, script).expect("write fake copilot");
+            fs::write(&staging, script).expect("write fake copilot");
             {
                 use std::os::unix::fs::PermissionsExt;
-                fs::set_permissions(&path, fs::Permissions::from_mode(0o755))
+                fs::set_permissions(&staging, fs::Permissions::from_mode(0o755))
                     .expect("chmod fake copilot");
             }
+            fs::rename(&staging, &path).expect("rename fake copilot");
             path.to_string_lossy().into_owned()
         }
 
@@ -235,10 +237,19 @@ mod tests {
             .expect_err("uninstall should fail");
         match err {
             CpmError::PluginCommandFailed {
-                operation, code, ..
+                operation,
+                name,
+                code,
+                stderr,
+                ..
             } => {
                 assert_eq!(operation, "uninstall");
-                assert_eq!(code, 2);
+                assert_eq!(name, "gone");
+                assert_eq!(code, 2, "stderr should explain the failure: {stderr}");
+                assert!(
+                    stderr.contains("no such plugin"),
+                    "stderr should surface error text, got: {stderr}"
+                );
             }
             other => panic!("expected PluginCommandFailed, got {other:?}"),
         }

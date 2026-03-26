@@ -1192,9 +1192,7 @@ fn render_mcp_source_parts(
         }
         match transport {
             McpTransport::Http { url } | McpTransport::Sse { url } => {
-                if source.url.as_deref() != Some(url.as_str()) {
-                    parts.push(format!("url = {}", render_toml_value(url.clone())?));
-                }
+                parts.push(format!("url = {}", render_toml_value(url.clone())?));
             }
             McpTransport::Npx {
                 package,
@@ -1218,9 +1216,7 @@ fn render_mcp_source_parts(
                 parts.push(format!("image = {}", render_toml_value(image.clone())?));
             }
             McpTransport::Binary { url, bin, .. } => {
-                if source.url.as_deref() != Some(url.as_str()) {
-                    parts.push(format!("url = {}", render_toml_value(url.clone())?));
-                }
+                parts.push(format!("url = {}", render_toml_value(url.clone())?));
                 parts.push(format!("bin = {}", render_toml_value(bin.clone())?));
             }
             McpTransport::Path { path, .. } => {
@@ -4373,6 +4369,45 @@ args = []
             partners.rev.as_deref(),
             Some("1234567890abcdef1234567890abcdef12345678")
         );
+    }
+
+    #[test]
+    fn write_manifest_roundtrips_remote_http_mcp_entries() {
+        let dir = TempDir::new().expect("tempdir");
+        let path = dir.path().join("cpm.toml");
+        let mut manifest = Manifest::default();
+        manifest.mcps.insert(
+            "context7".into(),
+            AssetSource {
+                url: Some("https://mcp.context7.com/mcp".into()),
+                rev: None,
+                path: None,
+                group: "default".into(),
+                scope: Scope::Local,
+                transport: Some(McpTransport::Http {
+                    url: "https://mcp.context7.com/mcp".into(),
+                }),
+                env: vec![],
+                args: vec![],
+                engine: None,
+            },
+        );
+
+        write_manifest(&path, &manifest).expect("write manifest");
+        let text = std::fs::read_to_string(&path).expect("read manifest");
+        let loaded = load_manifest(&path).expect("reload manifest");
+
+        assert!(
+            text.contains("context7 = { type = \"http\", url = \"https://mcp.context7.com/mcp\" }")
+        );
+        assert_eq!(
+            loaded.mcps["context7"].url.as_deref(),
+            Some("https://mcp.context7.com/mcp")
+        );
+        assert!(matches!(
+            loaded.mcps["context7"].transport,
+            Some(McpTransport::Http { ref url }) if url == "https://mcp.context7.com/mcp"
+        ));
     }
 
     #[test]

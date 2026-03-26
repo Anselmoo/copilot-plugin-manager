@@ -19,6 +19,7 @@ use cpm_core::{
     CpmError,
 };
 use cpm_types::{AssetKind, AssetSource, EnvSpec, Manifest, McpTransport, Scope};
+use reqwest::Url;
 
 use crate::progress::{OperationKind, OperationStatus, ProgressReporter};
 
@@ -32,7 +33,12 @@ use super::{
 #[derive(Debug, Args)]
 pub struct AddArgs {
     /// URL, path, or package name of the asset to add.
-    pub source: String,
+    #[arg(required_unless_present = "url")]
+    pub source: Option<String>,
+
+    /// Remote MCP endpoint URL.
+    #[arg(long, conflicts_with = "source")]
+    pub url: Option<String>,
 
     /// Add as a plugin.
     #[arg(long, group = "kind")]
@@ -78,6 +84,10 @@ pub struct AddArgs {
     #[arg(long, group = "transport")]
     pub sse: bool,
 
+    /// Explicit MCP protocol for remote URLs.
+    #[arg(long = "type", value_enum, group = "transport")]
+    pub transport_type: Option<McpTypeArg>,
+
     /// Use npx transport (MCP only).
     #[arg(long, group = "transport")]
     pub npx: bool,
@@ -122,6 +132,12 @@ pub enum ScopeArg {
     Global,
 }
 
+#[derive(Debug, Clone, Copy, clap::ValueEnum, PartialEq, Eq)]
+pub enum McpTypeArg {
+    Http,
+    Sse,
+}
+
 pub async fn run(args: AddArgs) -> Result<(), CpmError> {
     let kind = infer_kind(&args)?;
     let manifest_path = std::path::Path::new("cpm.toml");
@@ -130,9 +146,10 @@ pub async fn run(args: AddArgs) -> Result<(), CpmError> {
     let runtime = load_runtime_config(&manifest)?;
     let resolved_scope = resolve_scope(args.scope, runtime.settings.default_scope);
     validate_kind_scope(kind, resolved_scope)?;
+    let requested_source = requested_add_source(&args)?;
 
-    if kind == AssetKind::Plugin && !plugin_request_is_native(&args.source) {
-        let requested = args.source.trim().to_owned();
+    if kind == AssetKind::Plugin && !plugin_request_is_native(requested_source) {
+        let requested = requested_source.trim().to_owned();
         let name = derive_plugin_name(&requested);
         let asset_source = AssetSource {
             url: Some(requested.clone()),
@@ -203,20 +220,14 @@ pub async fn run(args: AddArgs) -> Result<(), CpmError> {
     // For bare GitHub repo URLs with --mcp and no explicit transport flag,
     // probe the repo for high-confidence packaging signals before normalization.
     let github_inferred_runner = if kind == AssetKind::Mcp
-        && !args.npx
-        && !args.uvx
-        && !args.docker
-        && !args.sse
-        && !args.script
-        && !args.release
-        && !args.path
-        && (args.source.starts_with("https://github.com/")
-            || args.source.starts_with("http://github.com/"))
+        && !explicit_mcp_transport_requested(&args)
+        && (requested_source.starts_with("https://github.com/")
+            || requested_source.starts_with("http://github.com/"))
     {
         infer_github_repo_mcp_runner(
             &client,
             token.as_deref(),
-            &args.source,
+            requested_source,
             &runtime.source_rules,
         )
         .await
@@ -227,7 +238,7 @@ pub async fn run(args: AddArgs) -> Result<(), CpmError> {
     let (name, asset_source) = match kind {
         AssetKind::Mcp => normalize_mcp_source(&args, resolved_scope, github_inferred_runner)?,
         _ => {
-            let normalized = normalize_asset_source(kind, &args.source)?;
+            let normalized = normalize_asset_source(kind, requested_source)?;
             let rev = resolve_pinned_rev(
                 &client,
                 token.as_deref(),
@@ -336,18 +347,21 @@ fn infer_kind(args: &AddArgs) -> Result<AssetKind, CpmError> {
     }
     if args.mcp
         || args.sse
+        || args.transport_type.is_some()
         || args.npx
         || args.docker
         || args.uvx
         || args.script
         || args.release
         || args.path
+        || args.url.is_some()
     {
         return Ok(AssetKind::Mcp);
     }
 
-    infer_kind_from_source(&args.source).ok_or_else(|| CpmError::InvalidSource {
-        input: args.source.clone(),
+    let source = requested_add_source(args)?;
+    infer_kind_from_source(source).ok_or_else(|| CpmError::InvalidSource {
+        input: source.to_owned(),
         reason: "could not infer asset kind; pass --plugin, --skill, --agent, or --mcp".to_owned(),
     })
 }
@@ -450,12 +464,15 @@ fn normalize_mcp_source(
     scope: Scope,
     inferred_runner: Option<InferredMcpRunner>,
 ) -> Result<(String, AssetSource), CpmError> {
+    let source = requested_add_source(args)?;
     let env = parse_env_specs(&args.env)?;
-    let (pypi_package, pypi_version) = parse_pypi_package_request(&args.source);
-    let docker_pin = docker_image_pin(&args.source);
-    let transport = if args.npx {
+    let (pypi_package, pypi_version) = parse_pypi_package_request(source);
+    let docker_pin = docker_image_pin(source);
+    let transport = if let Some(protocol) = args.transport_type {
+        Some(remote_mcp_transport(source, protocol)?)
+    } else if args.npx {
         Some(McpTransport::Npx {
-            package: normalize_npm_package(&args.source).to_owned(),
+            package: normalize_npm_package(source).to_owned(),
             entrypoint: None,
             args: args.command_args.clone(),
         })
@@ -467,57 +484,54 @@ fn normalize_mcp_source(
         })
     } else if args.docker {
         Some(McpTransport::Docker {
-            image: args.source.clone(),
+            image: source.to_owned(),
             args: args.command_args.clone(),
         })
     } else if args.sse {
-        Some(McpTransport::Sse {
-            url: args.source.clone(),
-        })
+        Some(remote_mcp_transport(source, McpTypeArg::Sse)?)
     } else if args.script {
         Some(McpTransport::Script {
-            command: args.source.clone(),
+            command: source.to_owned(),
             args: args.command_args.clone(),
         })
     } else if args.release {
         return Err(CpmError::InvalidSource {
-            input: args.source.clone(),
+            input: source.to_owned(),
             reason: "--release MCP binary transport is not yet implemented; binary download and \
                  materialization are pending. Use --uvx, --npx, --docker, --script, or --path \
                  instead."
                 .to_owned(),
         });
-    } else if args.path || source_looks_like_local_path(&args.source) {
+    } else if args.path || source_looks_like_local_path(source) {
         Some(McpTransport::Path {
-            path: args.source.clone().into(),
+            path: source.to_owned().into(),
             args: args.command_args.clone(),
         })
-    } else if args.source.starts_with("https://pypi.org/project/")
-        || args.source.starts_with("http://pypi.org/project/")
+    } else if source.starts_with("https://pypi.org/project/")
+        || source.starts_with("http://pypi.org/project/")
     {
         Some(McpTransport::Uvx {
             package: pypi_package.clone(),
             entrypoint: None,
             args: args.command_args.clone(),
         })
-    } else if args.source.starts_with("https://www.npmjs.com/package/")
-        || args.source.starts_with("http://www.npmjs.com/package/")
-        || args.source.starts_with("https://npmjs.com/package/")
-        || args.source.starts_with("http://npmjs.com/package/")
-        || args.source.starts_with('@')
+    } else if source.starts_with("https://www.npmjs.com/package/")
+        || source.starts_with("http://www.npmjs.com/package/")
+        || source.starts_with("https://npmjs.com/package/")
+        || source.starts_with("http://npmjs.com/package/")
+        || source.starts_with('@')
     {
         Some(McpTransport::Npx {
-            package: normalize_npm_package(&args.source).to_owned(),
+            package: normalize_npm_package(source).to_owned(),
             entrypoint: None,
             args: args.command_args.clone(),
         })
-    } else if args.source.starts_with("https://github.com/")
-        || args.source.starts_with("http://github.com/")
+    } else if source.starts_with("https://github.com/") || source.starts_with("http://github.com/")
     {
         // Use pre-probed packaging signals when available; otherwise error.
         match inferred_runner {
             Some(InferredMcpRunner::Uvx) => {
-                let package = derive_name(&args.source);
+                let package = derive_name(source);
                 Some(McpTransport::Uvx {
                     package,
                     entrypoint: None,
@@ -525,7 +539,7 @@ fn normalize_mcp_source(
                 })
             }
             Some(InferredMcpRunner::Npx) => {
-                let package = derive_name(&args.source);
+                let package = derive_name(source);
                 Some(McpTransport::Npx {
                     package,
                     entrypoint: None,
@@ -534,19 +548,17 @@ fn normalize_mcp_source(
             }
             None => {
                 return Err(CpmError::InvalidSource {
-                    input: args.source.clone(),
+                    input: source.to_owned(),
                     reason: "cannot infer an MCP runner from this GitHub URL; use --npx, --uvx, \
                          --docker, --script, or --path to choose a transport"
                         .to_owned(),
                 });
             }
         }
-    } else if args.source.starts_with("http://") || args.source.starts_with("https://") {
-        Some(McpTransport::Http {
-            url: args.source.clone(),
-        })
+    } else if source.starts_with("http://") || source.starts_with("https://") {
+        Some(remote_mcp_transport(source, McpTypeArg::Http)?)
     } else {
-        let inferred = infer_package_runner(&args.source);
+        let inferred = infer_package_runner(source);
         Some(match inferred {
             McpTransport::Npx {
                 package,
@@ -569,12 +581,12 @@ fn normalize_mcp_source(
             _ => unreachable!("package runner inference only returns npx or uvx"),
         })
     };
-    let name = derive_mcp_name(&args.source, transport.as_ref());
+    let name = derive_mcp_name(source, transport.as_ref());
 
     validate_mcp_rev_usage(args, transport.as_ref())?;
 
     let path = if args.path {
-        Some(args.source.clone().into())
+        Some(source.to_owned().into())
     } else {
         None
     };
@@ -588,7 +600,7 @@ fn normalize_mcp_source(
                     | Some(McpTransport::Sse { .. })
                     | Some(McpTransport::Binary { .. })
             ) {
-                Some(args.source.clone())
+                Some(source.to_owned())
             } else {
                 None
             },
@@ -606,13 +618,115 @@ fn normalize_mcp_source(
 
 fn derive_mcp_name(source: &str, transport: Option<&McpTransport>) -> String {
     match transport {
+        Some(McpTransport::Http { url }) | Some(McpTransport::Sse { url }) => {
+            derive_remote_mcp_name(url)
+        }
         Some(McpTransport::Npx { package, .. }) => {
             package.rsplit('/').next().unwrap_or(package).to_owned()
         }
         Some(McpTransport::Uvx { package, .. }) => derive_name(package),
         Some(McpTransport::Docker { image, .. }) => docker_image_name(image),
+        Some(McpTransport::Binary { url, .. }) => derive_remote_mcp_name(url),
         _ => derive_name(source),
     }
+}
+
+fn requested_add_source(args: &AddArgs) -> Result<&str, CpmError> {
+    args.url
+        .as_deref()
+        .or(args.source.as_deref())
+        .ok_or_else(|| CpmError::InvalidSource {
+            input: String::new(),
+            reason: "missing source; pass a positional source or `--url <MCP_URL>`".to_owned(),
+        })
+}
+
+fn explicit_mcp_transport_requested(args: &AddArgs) -> bool {
+    args.transport_type.is_some()
+        || args.sse
+        || args.npx
+        || args.docker
+        || args.uvx
+        || args.script
+        || args.release
+        || args.path
+}
+
+fn remote_mcp_transport(source: &str, requested: McpTypeArg) -> Result<McpTransport, CpmError> {
+    if !looks_like_url(source) {
+        return Err(CpmError::InvalidSource {
+            input: source.to_owned(),
+            reason: "remote MCP transports require an http(s) URL; pass `--url <URL>` or an https:// source".to_owned(),
+        });
+    }
+
+    Ok(match canonical_remote_mcp_type(source, requested) {
+        McpTypeArg::Http => McpTransport::Http {
+            url: source.to_owned(),
+        },
+        McpTypeArg::Sse => McpTransport::Sse {
+            url: source.to_owned(),
+        },
+    })
+}
+
+fn canonical_remote_mcp_type(source: &str, requested: McpTypeArg) -> McpTypeArg {
+    let known_http_host = Url::parse(source)
+        .ok()
+        .and_then(|url| {
+            url.host_str()
+                .map(|host| matches!(host, "mcp.context7.com" | "api.githubcopilot.com"))
+        })
+        .unwrap_or(false);
+    if known_http_host {
+        McpTypeArg::Http
+    } else {
+        requested
+    }
+}
+
+fn derive_remote_mcp_name(source: &str) -> String {
+    let Some(host) = Url::parse(source)
+        .ok()
+        .and_then(|url| url.host_str().map(str::to_owned))
+    else {
+        return derive_name(source);
+    };
+
+    match host.as_str() {
+        "mcp.context7.com" => "context7".to_owned(),
+        "api.githubcopilot.com" => "githubcopilot".to_owned(),
+        _ => derive_host_identity(&host),
+    }
+}
+
+fn derive_host_identity(host: &str) -> String {
+    if host.parse::<std::net::IpAddr>().is_ok() {
+        return sanitize_name_component(host);
+    }
+
+    let labels: Vec<_> = host.split('.').filter(|label| !label.is_empty()).collect();
+    if labels.is_empty() {
+        return derive_name(host);
+    }
+    if labels.len() == 1 {
+        return sanitize_name_component(labels[0]);
+    }
+    sanitize_name_component(labels[labels.len() - 2])
+}
+
+fn sanitize_name_component(value: &str) -> String {
+    let sanitized: String = value
+        .chars()
+        .map(|ch| {
+            if ch.is_ascii_alphanumeric() {
+                ch.to_ascii_lowercase()
+            } else {
+                '-'
+            }
+        })
+        .collect();
+    sanitized.trim_matches('-').to_owned()
 }
 
 fn validate_mcp_rev_usage(
@@ -769,7 +883,8 @@ mod tests {
     #[test]
     fn infers_skill_kind_from_source_when_flag_missing() {
         let args = AddArgs {
-            source: "https://github.com/anthropics/skills/tree/main/skills/pdf".to_owned(),
+            source: Some("https://github.com/anthropics/skills/tree/main/skills/pdf".to_owned()),
+            url: None,
             plugin: false,
             skill: false,
             agent: false,
@@ -781,6 +896,7 @@ mod tests {
             group: "default".to_owned(),
             rev: None,
             sse: false,
+            transport_type: None,
             npx: false,
             docker: false,
             uvx: false,
@@ -848,7 +964,8 @@ mod tests {
     #[test]
     fn uvx_transport_does_not_write_bogus_url() {
         let args = AddArgs {
-            source: "mcp-server-git".to_owned(),
+            source: Some("mcp-server-git".to_owned()),
+            url: None,
             plugin: false,
             skill: false,
             agent: false,
@@ -860,6 +977,7 @@ mod tests {
             group: "default".to_owned(),
             rev: None,
             sse: false,
+            transport_type: None,
             npx: false,
             docker: false,
             uvx: true,
@@ -879,7 +997,8 @@ mod tests {
     #[test]
     fn rejects_rev_for_npx_transport() {
         let args = AddArgs {
-            source: "@modelcontextprotocol/server-github".to_owned(),
+            source: Some("@modelcontextprotocol/server-github".to_owned()),
+            url: None,
             plugin: false,
             skill: false,
             agent: false,
@@ -891,6 +1010,7 @@ mod tests {
             group: "default".to_owned(),
             rev: Some("v1.2.3".to_owned()),
             sse: false,
+            transport_type: None,
             npx: true,
             docker: false,
             uvx: false,
@@ -1014,7 +1134,8 @@ mod tests {
     #[test]
     fn uvx_with_pypi_url_normalizes_package_name() {
         let args = AddArgs {
-            source: "https://pypi.org/project/mcp-zen-of-docs/".to_owned(),
+            source: Some("https://pypi.org/project/mcp-zen-of-docs/".to_owned()),
+            url: None,
             plugin: false,
             skill: false,
             agent: false,
@@ -1026,6 +1147,7 @@ mod tests {
             group: "default".to_owned(),
             rev: None,
             sse: false,
+            transport_type: None,
             npx: false,
             docker: false,
             uvx: true,
@@ -1057,7 +1179,8 @@ mod tests {
     #[test]
     fn inferred_transport_for_pypi_url_is_uvx_not_local_path() {
         let args = AddArgs {
-            source: "https://pypi.org/project/mcp-zen-of-languages/".to_owned(),
+            source: Some("https://pypi.org/project/mcp-zen-of-languages/".to_owned()),
+            url: None,
             plugin: false,
             skill: false,
             agent: false,
@@ -1069,6 +1192,7 @@ mod tests {
             group: "default".to_owned(),
             rev: None,
             sse: false,
+            transport_type: None,
             npx: false,
             docker: false,
             uvx: false,
@@ -1097,7 +1221,8 @@ mod tests {
     #[test]
     fn versioned_pypi_url_sets_manifest_name_and_rev_pin() {
         let args = AddArgs {
-            source: "https://pypi.org/project/mcp-zen-of-docs/1.2.3/".to_owned(),
+            source: Some("https://pypi.org/project/mcp-zen-of-docs/1.2.3/".to_owned()),
+            url: None,
             plugin: false,
             skill: false,
             agent: false,
@@ -1109,6 +1234,7 @@ mod tests {
             group: "default".to_owned(),
             rev: None,
             sse: false,
+            transport_type: None,
             npx: false,
             docker: false,
             uvx: false,
@@ -1134,7 +1260,8 @@ mod tests {
     #[test]
     fn github_repo_url_requires_explicit_mcp_transport() {
         let args = AddArgs {
-            source: "https://github.com/oraios/serena".to_owned(),
+            source: Some("https://github.com/oraios/serena".to_owned()),
+            url: None,
             plugin: false,
             skill: false,
             agent: false,
@@ -1146,6 +1273,7 @@ mod tests {
             group: "default".to_owned(),
             rev: None,
             sse: false,
+            transport_type: None,
             npx: false,
             docker: false,
             uvx: false,
@@ -1173,7 +1301,8 @@ mod tests {
     #[test]
     fn docker_image_name_and_pin_are_preserved_for_tagged_images() {
         let args = AddArgs {
-            source: "ghcr.io/github/github-mcp-server:1.2.3".to_owned(),
+            source: Some("ghcr.io/github/github-mcp-server:1.2.3".to_owned()),
+            url: None,
             plugin: false,
             skill: false,
             agent: false,
@@ -1185,6 +1314,7 @@ mod tests {
             group: "default".to_owned(),
             rev: None,
             sse: false,
+            transport_type: None,
             npx: false,
             docker: true,
             uvx: false,
@@ -1210,7 +1340,8 @@ mod tests {
     #[test]
     fn docker_image_digest_is_preserved_as_rev_pin() {
         let args = AddArgs {
-            source: "ghcr.io/github/github-mcp-server@sha256:deadbeef".to_owned(),
+            source: Some("ghcr.io/github/github-mcp-server@sha256:deadbeef".to_owned()),
+            url: None,
             plugin: false,
             skill: false,
             agent: false,
@@ -1222,6 +1353,7 @@ mod tests {
             group: "default".to_owned(),
             rev: None,
             sse: false,
+            transport_type: None,
             npx: false,
             docker: true,
             uvx: false,
@@ -1243,7 +1375,10 @@ mod tests {
     #[test]
     fn npx_with_npm_url_normalizes_package_name() {
         let args = AddArgs {
-            source: "https://www.npmjs.com/package/@modelcontextprotocol/server-github".to_owned(),
+            source: Some(
+                "https://www.npmjs.com/package/@modelcontextprotocol/server-github".to_owned(),
+            ),
+            url: None,
             plugin: false,
             skill: false,
             agent: false,
@@ -1255,6 +1390,7 @@ mod tests {
             group: "default".to_owned(),
             rev: None,
             sse: false,
+            transport_type: None,
             npx: true,
             docker: false,
             uvx: false,
@@ -1285,7 +1421,8 @@ mod tests {
     #[test]
     fn release_transport_is_rejected_with_clear_error() {
         let args = AddArgs {
-            source: "https://github.com/org/repo/releases/tag/v1.0.0".to_owned(),
+            source: Some("https://github.com/org/repo/releases/tag/v1.0.0".to_owned()),
+            url: None,
             plugin: false,
             skill: false,
             agent: false,
@@ -1297,6 +1434,7 @@ mod tests {
             group: "default".to_owned(),
             rev: None,
             sse: false,
+            transport_type: None,
             npx: false,
             docker: false,
             uvx: false,
@@ -1324,7 +1462,8 @@ mod tests {
     #[test]
     fn script_transport_with_args_sets_command_and_args() {
         let args = AddArgs {
-            source: "python".to_owned(),
+            source: Some("python".to_owned()),
+            url: None,
             plugin: false,
             skill: false,
             agent: false,
@@ -1336,6 +1475,7 @@ mod tests {
             group: "default".to_owned(),
             rev: None,
             sse: false,
+            transport_type: None,
             npx: false,
             docker: false,
             uvx: false,
@@ -1363,7 +1503,8 @@ mod tests {
     #[test]
     fn github_repo_with_inferred_uvx_runner_produces_uvx_transport() {
         let args = AddArgs {
-            source: "https://github.com/org/python-mcp-server".to_owned(),
+            source: Some("https://github.com/org/python-mcp-server".to_owned()),
+            url: None,
             plugin: false,
             skill: false,
             agent: false,
@@ -1375,6 +1516,7 @@ mod tests {
             group: "default".to_owned(),
             rev: None,
             sse: false,
+            transport_type: None,
             npx: false,
             docker: false,
             uvx: false,
@@ -1401,7 +1543,8 @@ mod tests {
     #[test]
     fn github_repo_with_inferred_npx_runner_produces_npx_transport() {
         let args = AddArgs {
-            source: "https://github.com/org/node-mcp-server".to_owned(),
+            source: Some("https://github.com/org/node-mcp-server".to_owned()),
+            url: None,
             plugin: false,
             skill: false,
             agent: false,
@@ -1413,6 +1556,7 @@ mod tests {
             group: "default".to_owned(),
             rev: None,
             sse: false,
+            transport_type: None,
             npx: false,
             docker: false,
             uvx: false,
@@ -1439,7 +1583,8 @@ mod tests {
     #[test]
     fn github_repo_without_inference_produces_clear_error() {
         let args = AddArgs {
-            source: "https://github.com/org/ambiguous-server".to_owned(),
+            source: Some("https://github.com/org/ambiguous-server".to_owned()),
+            url: None,
             plugin: false,
             skill: false,
             agent: false,
@@ -1451,6 +1596,7 @@ mod tests {
             group: "default".to_owned(),
             rev: None,
             sse: false,
+            transport_type: None,
             npx: false,
             docker: false,
             uvx: false,
@@ -1474,5 +1620,82 @@ mod tests {
             }
             other => panic!("expected InvalidSource, got {other:?}"),
         }
+    }
+
+    #[test]
+    fn url_based_mcp_adds_infer_kind_and_keep_http_type() {
+        let args = AddArgs {
+            source: None,
+            url: Some("https://api.githubcopilot.com/mcp".to_owned()),
+            plugin: false,
+            skill: false,
+            agent: false,
+            mcp: false,
+            hook: false,
+            workflow: false,
+            instruction: false,
+            scope: Some(ScopeArg::Local),
+            group: "default".to_owned(),
+            rev: None,
+            sse: false,
+            transport_type: Some(McpTypeArg::Http),
+            npx: false,
+            docker: false,
+            uvx: false,
+            script: false,
+            release: false,
+            bin: None,
+            path: false,
+            command_args: vec![],
+            env: vec![],
+        };
+
+        assert!(matches!(infer_kind(&args), Ok(AssetKind::Mcp)));
+        let (name, source) = normalize_mcp_source(&args, Scope::Local, None).expect("normalize");
+        assert_eq!(name, "githubcopilot");
+        assert_eq!(
+            source.url.as_deref(),
+            Some("https://api.githubcopilot.com/mcp")
+        );
+        assert!(matches!(
+            source.transport,
+            Some(McpTransport::Http { ref url }) if url == "https://api.githubcopilot.com/mcp"
+        ));
+    }
+
+    #[test]
+    fn context7_remote_endpoint_uses_http_and_host_based_name() {
+        let args = AddArgs {
+            source: None,
+            url: Some("https://mcp.context7.com/mcp".to_owned()),
+            plugin: false,
+            skill: false,
+            agent: false,
+            mcp: true,
+            hook: false,
+            workflow: false,
+            instruction: false,
+            scope: Some(ScopeArg::Local),
+            group: "default".to_owned(),
+            rev: None,
+            sse: true,
+            transport_type: None,
+            npx: false,
+            docker: false,
+            uvx: false,
+            script: false,
+            release: false,
+            bin: None,
+            path: false,
+            command_args: vec![],
+            env: vec![],
+        };
+
+        let (name, source) = normalize_mcp_source(&args, Scope::Local, None).expect("normalize");
+        assert_eq!(name, "context7");
+        assert!(matches!(
+            source.transport,
+            Some(McpTransport::Http { ref url }) if url == "https://mcp.context7.com/mcp"
+        ));
     }
 }
