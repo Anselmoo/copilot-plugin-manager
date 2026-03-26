@@ -2323,12 +2323,16 @@ fn overview_reports_unmanaged_global_mcp_entries_from_config() {
     assert!(output.status.success());
 
     let json: Value = serde_json::from_slice(&output.stdout).expect("parse overview json");
-    assert_eq!(json["unmanaged_count"], 0);
-    let unmanaged_mcp = json["external"]["unmanaged_mcp"]
-        .as_array()
-        .expect("unmanaged_mcp array");
-    assert_eq!(unmanaged_mcp.len(), 1);
-    assert_eq!(unmanaged_mcp[0]["name"], "external-server");
+    assert_eq!(json["unmanaged_count"], 1);
+    assert_eq!(json["unmanaged"][0]["entry_type"], "mcp-server");
+    assert_eq!(
+        json["unmanaged"][0]["path"],
+        home.path()
+            .join(".copilot/mcp-config.json")
+            .display()
+            .to_string()
+            + "#external-server"
+    );
 }
 
 // ── cpm cache ────────────────────────────────────────────────────────────────
