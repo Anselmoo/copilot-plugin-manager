@@ -20,7 +20,7 @@ use super::{
 /// Arguments for `cpm lock`.
 #[derive(Debug, Args)]
 pub struct LockArgs {
-    /// Exit 1 if the lockfile is out of date.
+    /// Exit 1 if the lockfile is missing or out of date.
     #[arg(long)]
     pub check: bool,
 }

@@ -537,7 +537,7 @@ fn init_does_not_overwrite_without_force() {
 }
 
 #[test]
-fn lock_check_without_lockfile_reports_out_of_date() {
+fn lock_check_without_lockfile_reports_missing_lockfile() {
     let dir = tempfile::TempDir::new().expect("tempdir");
 
     let init_output = cpm_bin()
