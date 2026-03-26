@@ -347,6 +347,7 @@ set "op=%2"
 set "request=%3"
 set "name=%request:@=^>%"
 if not "!name!"=="!request!" (
+    for /f "tokens=1 delims=@" %%a in ("!request!") do set "name=%%a"
     for /f "tokens=2 delims=@" %%a in ("!request!") do set "registry=%%a"
 ) else (
     set "registry=awesome-copilot"

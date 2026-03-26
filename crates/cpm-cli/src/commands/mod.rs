@@ -414,33 +414,34 @@ pub(super) fn find_locked_asset<'a>(
 pub(super) fn asset_install_target(asset: &ResolvedAsset) -> String {
     let repo_root = Path::new(".");
     if asset.kind == AssetKind::Mcp {
-        return copilot_mcp_config_path(asset.scope, repo_root)
-            .display()
-            .to_string();
+        return normalized_display_path(&copilot_mcp_config_path(asset.scope, repo_root));
     }
     if asset.kind == AssetKind::Plugin && asset.files.is_empty() {
-        return preferred_plugin_install_root(
+        let install_root = preferred_plugin_install_root(
             &asset.name,
             asset
                 .plugin_meta
                 .as_ref()
                 .and_then(|meta| meta.registry.as_deref()),
-        )
-        .display()
-        .to_string();
+        );
+        return normalized_display_path(&install_root);
     }
 
     let root = install_dir(asset.kind, asset.scope, repo_root);
     if asset.files.is_empty() {
-        return root.display().to_string();
+        return normalized_display_path(&root);
     }
 
     asset
         .files
         .iter()
-        .map(|file| root.join(file.path.as_std_path()).display().to_string())
+        .map(|file| normalized_display_path(&root.join(file.path.as_std_path())))
         .collect::<Vec<_>>()
         .join(", ")
+}
+
+fn normalized_display_path(path: &Path) -> String {
+    path.to_string_lossy().replace('\\', "/")
 }
 
 pub(super) fn asset_source_url(asset: &ResolvedAsset) -> Option<&str> {

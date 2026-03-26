@@ -18,6 +18,8 @@
 //! # }
 //! ```
 
+use std::path::Path;
+
 use tokio::process::Command;
 use tracing::{debug, info};
 
@@ -87,11 +89,19 @@ impl PluginDelegate {
     async fn run_op(&self, operation: &str, name: &str) -> Result<(), CpmError> {
         debug!(bin = %self.copilot_bin, %operation, plugin = %name, "spawning copilot plugin subcommand");
 
-        // On Windows, if copilot_bin points to a .cmd or .bat script, we need to invoke it
-        // through cmd /C to properly execute batch files. Otherwise use direct invocation.
-        let (cmd, args) = if cfg!(windows)
-            && (self.copilot_bin.ends_with(".cmd") || self.copilot_bin.ends_with(".bat"))
-        {
+        let wraps_windows_script = cfg!(windows)
+            && matches!(
+                Path::new(&self.copilot_bin)
+                    .extension()
+                    .and_then(|ext| ext.to_str()),
+                Some(ext) if ext.eq_ignore_ascii_case("cmd") || ext.eq_ignore_ascii_case("bat")
+            );
+
+        if wraps_windows_script && windows_script_path_is_missing(&self.copilot_bin) {
+            return Err(CpmError::CopilotNotFound);
+        }
+
+        let (cmd, args) = if wraps_windows_script {
             (
                 "cmd".to_string(),
                 vec!["/C", &self.copilot_bin, "plugin", operation, name],
@@ -124,6 +134,24 @@ impl PluginDelegate {
             stdout,
             stderr,
         })
+    }
+}
+
+fn windows_script_path_is_missing(bin: &str) -> bool {
+    #[cfg(windows)]
+    {
+        let path = Path::new(bin);
+        let has_explicit_path = path.is_absolute()
+            || bin.contains(std::path::MAIN_SEPARATOR)
+            || bin.contains('/')
+            || bin.contains('\\');
+        has_explicit_path && !path.exists()
+    }
+
+    #[cfg(not(windows))]
+    {
+        let _ = bin;
+        false
     }
 }
 
@@ -339,6 +367,19 @@ mod tests {
             .install("any-plugin")
             .await
             .expect_err("should fail when binary is missing");
+        assert!(
+            matches!(err, CpmError::CopilotNotFound),
+            "expected CopilotNotFound, got {err:?}"
+        );
+    }
+
+    #[tokio::test]
+    #[cfg_attr(not(windows), ignore)]
+    async fn returns_copilot_not_found_for_missing_cmd_wrapper() {
+        let err = PluginDelegate::with_binary(r"C:\nonexistent\copilot.cmd")
+            .install("any-plugin")
+            .await
+            .expect_err("should fail when cmd wrapper is missing");
         assert!(
             matches!(err, CpmError::CopilotNotFound),
             "expected CopilotNotFound, got {err:?}"
