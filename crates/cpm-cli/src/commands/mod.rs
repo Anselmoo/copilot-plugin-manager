@@ -13,6 +13,7 @@ use cpm_core::{
     config::{build_http_client, load_runtime_config},
     fetcher::sha256_hex,
     installer::{copilot_mcp_config_path, install_dir, remove_asset},
+    paths::portable_path_string,
     plugin_delegate::PluginDelegate,
     plugin_index::{
         find_installed_plugin_by_name, hash_installed_plugin_manifest, installed_plugin_request,
@@ -441,7 +442,7 @@ pub(super) fn asset_install_target(asset: &ResolvedAsset) -> String {
 }
 
 fn normalized_display_path(path: &Path) -> String {
-    path.to_string_lossy().replace('\\', "/")
+    portable_path_string(path)
 }
 
 pub(super) fn asset_source_url(asset: &ResolvedAsset) -> Option<&str> {

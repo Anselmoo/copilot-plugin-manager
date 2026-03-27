@@ -14,6 +14,7 @@ use indexmap::IndexMap;
 use serde::Deserialize;
 
 use crate::fetcher::sha256_file;
+use crate::paths::{copilot_home_dir, copilot_state_dir};
 use crate::CpmError;
 
 /// A plugin entry read from the Copilot plugin index.
@@ -43,10 +44,7 @@ pub struct InstalledPlugin {
 
 /// Return the default plugin-index path (`~/.copilot/plugin-index.json`).
 pub fn default_plugin_index_path() -> PathBuf {
-    copilot_home_dir()
-        .unwrap_or_else(|| PathBuf::from("/tmp"))
-        .join(".copilot")
-        .join("plugin-index.json")
+    copilot_state_dir().join("plugin-index.json")
 }
 
 /// Return the default Copilot plugin install directory (`~/.copilot/plugins`).
@@ -112,13 +110,6 @@ pub fn plugin_install_root(plugin: &InstalledPlugin) -> Option<PathBuf> {
         .name
         .as_deref()
         .map(|name| preferred_plugin_install_root(name, plugin.registry.as_deref()))
-}
-
-fn copilot_home_dir() -> Option<PathBuf> {
-    std::env::var_os("HOME")
-        .or_else(|| std::env::var_os("USERPROFILE"))
-        .map(PathBuf::from)
-        .or_else(dirs::home_dir)
 }
 
 /// Return the delegated plugin install root for a plugin name.

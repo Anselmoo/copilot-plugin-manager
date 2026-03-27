@@ -2,7 +2,7 @@
 
 use std::path::{Path, PathBuf};
 
-use camino::Utf8PathBuf;
+use camino::{Utf8Path, Utf8PathBuf};
 use chrono::Utc;
 use cpm_types::{
     AssetKind, AssetOwnership, AssetSource, EnvSpec, EnvValue, GitMetadata, GitSourceKind,
@@ -25,6 +25,7 @@ use crate::{
         write_mcp_server_entry,
     },
     license::{detect_license, enforce_license_policy},
+    paths::copilot_state_dir,
     resolver::detect_conflicts,
     source::{
         docker_image_pin, parse_github_source, resolve_package_transport_version,
@@ -1871,10 +1872,7 @@ pub fn drop_asset_from_lockfile(
 
 /// Return the default machine-global cpm lockfile path in `~/.copilot`.
 pub fn default_global_lockfile_path() -> PathBuf {
-    dirs::home_dir()
-        .unwrap_or_else(|| PathBuf::from("/tmp"))
-        .join(".copilot")
-        .join("cpm.lock")
+    copilot_state_dir().join("cpm.lock")
 }
 
 /// Load the machine-local global lockfile from the default path.
@@ -2806,20 +2804,17 @@ fn detect_sub_assets(kind: AssetKind, files: &[PreparedFile]) -> Vec<SubAsset> {
 
     let mut detected = Vec::new();
     for file in files {
-        let path = file.relative_path.as_str();
-        let Some(remainder) = path
-            .strip_prefix(&plugin_name)
-            .and_then(|rest| rest.strip_prefix('/'))
-        else {
+        let Some(remainder) = plugin_bundle_remainder(&file.relative_path, &plugin_name) else {
             continue;
         };
 
-        if matches_declared_sub_asset(remainder, &agent_roots) && is_nested_agent_path(remainder) {
+        if matches_declared_sub_asset(&remainder, &agent_roots) && is_nested_agent_path(&remainder)
+        {
             let file_name = file
                 .relative_path
                 .file_name()
                 .map(str::to_owned)
-                .unwrap_or_else(|| remainder.to_owned());
+                .unwrap_or_else(|| remainder.clone());
             let name = file_name
                 .strip_suffix(".agent.md")
                 .or_else(|| file_name.strip_suffix(".md"))
@@ -2834,7 +2829,8 @@ fn detect_sub_assets(kind: AssetKind, files: &[PreparedFile]) -> Vec<SubAsset> {
             continue;
         }
 
-        if matches_declared_sub_asset(remainder, &skill_roots) && remainder.ends_with("/SKILL.md") {
+        if matches_declared_sub_asset(&remainder, &skill_roots) && remainder.ends_with("/SKILL.md")
+        {
             let Some(skill_root) = file.relative_path.parent() else {
                 continue;
             };
@@ -2862,17 +2858,19 @@ fn detect_sub_assets(kind: AssetKind, files: &[PreparedFile]) -> Vec<SubAsset> {
 
 fn parse_plugin_bundle_manifest(files: &[PreparedFile]) -> Option<PluginBundleManifest> {
     let manifest = files.iter().find(|file| {
-        file.relative_path
-            .as_str()
-            .ends_with("/.github/plugin/plugin.json")
+        path_ends_with_components(&file.relative_path, &[".github", "plugin", "plugin.json"])
     })?;
     serde_json::from_slice(&manifest.bytes).ok()
 }
 
 fn normalize_bundle_declared_path(path: String) -> String {
-    path.trim()
-        .trim_start_matches("./")
-        .trim_matches('/')
+    let trimmed = path.trim();
+    trimmed
+        .strip_prefix("./")
+        .or_else(|| trimmed.strip_prefix(".\\"))
+        .unwrap_or(trimmed)
+        .trim_matches(['/', '\\'])
+        .replace('\\', "/")
         .to_owned()
 }
 
@@ -2889,6 +2887,30 @@ fn is_nested_agent_path(path: &str) -> bool {
             !file_name.eq_ignore_ascii_case("README.md")
                 && !file_name.eq_ignore_ascii_case("SKILL.md")
         })
+}
+
+fn plugin_bundle_remainder(path: &Utf8Path, plugin_name: &str) -> Option<String> {
+    let mut components = path.components().map(|component| component.as_str());
+    if components.next()? != plugin_name {
+        return None;
+    }
+    let remainder: Vec<_> = components.collect();
+    if remainder.is_empty() {
+        None
+    } else {
+        Some(remainder.join("/"))
+    }
+}
+
+fn path_ends_with_components(path: &Utf8Path, suffix: &[&str]) -> bool {
+    let components: Vec<_> = path
+        .components()
+        .map(|component| component.as_str())
+        .collect();
+    let Some(start) = components.len().checked_sub(suffix.len()) else {
+        return false;
+    };
+    components[start..] == *suffix
 }
 
 fn install_relative_path(
@@ -3721,6 +3743,14 @@ mod tests {
                     ownership: SubAssetOwnership::Parent,
                 },
             ]
+        );
+    }
+
+    #[test]
+    fn normalize_bundle_declared_path_rewrites_windows_separators() {
+        assert_eq!(
+            normalize_bundle_declared_path(r".\skills\prompt-lib\".to_owned()),
+            "skills/prompt-lib"
         );
     }
 

@@ -29,6 +29,7 @@ use serde_json::{json, Value};
 use tracing::{debug, info};
 
 use crate::fetcher::atomic_write;
+use crate::paths::{copilot_home_dir, copilot_state_dir};
 use crate::CpmError;
 
 /// Return the base install directory for the given `kind` and `scope`.
@@ -58,10 +59,7 @@ pub fn install_dir(kind: AssetKind, scope: Scope, repo_root: &Path) -> PathBuf {
                 AssetKind::Workflow => "workflows",
                 AssetKind::Instruction => "instructions",
             };
-            dirs::home_dir()
-                .unwrap_or_else(|| PathBuf::from("/tmp"))
-                .join(".copilot")
-                .join(sub)
+            copilot_state_dir().join(sub)
         }
     }
 }
@@ -77,10 +75,7 @@ pub fn install_dir(kind: AssetKind, scope: Scope, repo_root: &Path) -> PathBuf {
 pub fn copilot_mcp_config_path(scope: Scope, repo_root: &Path) -> PathBuf {
     match scope {
         Scope::Local => repo_root.join(".vscode").join("mcp.json"),
-        Scope::Global => dirs::home_dir()
-            .unwrap_or_else(|| PathBuf::from("/tmp"))
-            .join(".copilot")
-            .join("mcp-config.json"),
+        Scope::Global => copilot_state_dir().join("mcp-config.json"),
     }
 }
 
@@ -585,7 +580,7 @@ fn preferred_mcp_servers_key(scope: Scope) -> &'static str {
 fn prune_stop(scope: Scope, repo_root: &Path) -> PathBuf {
     match scope {
         Scope::Local => repo_root.to_path_buf(),
-        Scope::Global => dirs::home_dir().unwrap_or_else(|| PathBuf::from("/tmp")),
+        Scope::Global => copilot_home_dir().unwrap_or_else(std::env::temp_dir),
     }
 }
 

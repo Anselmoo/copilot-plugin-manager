@@ -6,6 +6,7 @@
 use std::{path::Path, process::Command};
 
 use camino::Utf8PathBuf;
+use cpm_core::paths::portable_path_string;
 use cpm_core::project::{
     load_global_lockfile_from, load_lockfile, write_global_lockfile_to, write_lockfile,
     write_manifest,
@@ -25,7 +26,7 @@ fn cpm_bin() -> Command {
 }
 
 fn normalized_path_string(path: &Path) -> String {
-    path.to_string_lossy().replace('\\', "/")
+    portable_path_string(path)
 }
 
 fn write_global_skill_manifest(repo_root: &Path, asset_path: &Path) {
@@ -937,6 +938,7 @@ fn add_plugin_delegates_and_writes_lock_metadata() {
         .args(["add", "pptx@awesome-copilot", "--plugin"])
         .env("HOME", home.path())
         .env("USERPROFILE", home.path())
+        .env("APPDATA", home.path().join("AppData").join("Roaming"))
         .env("CPM_COPILOT_BIN", &copilot_bin)
         .env("CPM_TEST_LOG", &log_path)
         .current_dir(repo.path())
@@ -1001,6 +1003,7 @@ fn add_plugin_tree_source_installs_natively_without_delegate() {
         ])
         .env("HOME", home.path())
         .env("USERPROFILE", home.path())
+        .env("APPDATA", home.path().join("AppData").join("Roaming"))
         .env("CPM_COPILOT_BIN", &copilot_bin)
         .env("CPM_TEST_LOG", &log_path)
         .current_dir(repo.path())
@@ -1053,6 +1056,7 @@ fn remove_plugin_delegates_and_clears_lock_entry() {
         .args(["add", "pptx@awesome-copilot", "--plugin"])
         .env("HOME", home.path())
         .env("USERPROFILE", home.path())
+        .env("APPDATA", home.path().join("AppData").join("Roaming"))
         .env("CPM_COPILOT_BIN", &copilot_bin)
         .env("CPM_TEST_LOG", &log_path)
         .current_dir(repo.path())
@@ -1064,6 +1068,7 @@ fn remove_plugin_delegates_and_clears_lock_entry() {
         .args(["remove", "pptx", "--plugin"])
         .env("HOME", home.path())
         .env("USERPROFILE", home.path())
+        .env("APPDATA", home.path().join("AppData").join("Roaming"))
         .env("CPM_COPILOT_BIN", &copilot_bin)
         .env("CPM_TEST_LOG", &log_path)
         .current_dir(repo.path())
@@ -1097,6 +1102,7 @@ fn sync_global_scope_installs_legacy_local_delegated_plugin_and_normalizes_lock(
         .args(["sync", "--scope", "global"])
         .env("HOME", home.path())
         .env("USERPROFILE", home.path())
+        .env("APPDATA", home.path().join("AppData").join("Roaming"))
         .env("CPM_COPILOT_BIN", &copilot_bin)
         .env("CPM_TEST_LOG", &log_path)
         .current_dir(repo.path())
@@ -1129,6 +1135,7 @@ fn demote_rejects_delegated_plugins() {
         .args(["add", "pptx@awesome-copilot", "--plugin"])
         .env("HOME", home.path())
         .env("USERPROFILE", home.path())
+        .env("APPDATA", home.path().join("AppData").join("Roaming"))
         .env("CPM_COPILOT_BIN", &copilot_bin)
         .env("CPM_TEST_LOG", &log_path)
         .current_dir(repo.path())
@@ -1140,6 +1147,7 @@ fn demote_rejects_delegated_plugins() {
         .args(["demote", "pptx", "--plugin"])
         .env("HOME", home.path())
         .env("USERPROFILE", home.path())
+        .env("APPDATA", home.path().join("AppData").join("Roaming"))
         .env("CPM_COPILOT_BIN", &copilot_bin)
         .env("CPM_TEST_LOG", &log_path)
         .current_dir(repo.path())
@@ -1179,6 +1187,7 @@ fn sync_plugin_tree_source_installs_natively_without_delegate() {
         .args(["sync"])
         .env("HOME", home.path())
         .env("USERPROFILE", home.path())
+        .env("APPDATA", home.path().join("AppData").join("Roaming"))
         .env("CPM_COPILOT_BIN", &copilot_bin)
         .env("CPM_TEST_LOG", &log_path)
         .current_dir(repo.path())
@@ -1224,6 +1233,7 @@ fn doctor_passes_on_fresh_install() {
         .args(["add", skill_dir.to_str().expect("utf8"), "--skill"])
         .env("HOME", home.path())
         .env("USERPROFILE", home.path())
+        .env("APPDATA", home.path().join("AppData").join("Roaming"))
         .current_dir(dir.path())
         .output()
         .expect("add");
@@ -1232,6 +1242,7 @@ fn doctor_passes_on_fresh_install() {
         .args(["doctor"])
         .env("HOME", home.path())
         .env("USERPROFILE", home.path())
+        .env("APPDATA", home.path().join("AppData").join("Roaming"))
         .current_dir(dir.path())
         .output()
         .expect("doctor");
@@ -1255,6 +1266,7 @@ fn sync_records_global_claim_for_repo() {
         .args(["sync"])
         .env("HOME", home.path())
         .env("USERPROFILE", home.path())
+        .env("APPDATA", home.path().join("AppData").join("Roaming"))
         .current_dir(repo.path())
         .output()
         .expect("sync");
@@ -1298,6 +1310,7 @@ fn sync_fails_when_global_asset_conflicts_with_other_repo_claim() {
         .args(["sync"])
         .env("HOME", home.path())
         .env("USERPROFILE", home.path())
+        .env("APPDATA", home.path().join("AppData").join("Roaming"))
         .current_dir(repo.path())
         .output()
         .expect("sync");
@@ -1326,6 +1339,7 @@ fn sync_plugin_delegates_install_and_writes_lock() {
         .args(["sync"])
         .env("HOME", home.path())
         .env("USERPROFILE", home.path())
+        .env("APPDATA", home.path().join("AppData").join("Roaming"))
         .env("CPM_COPILOT_BIN", &copilot_bin)
         .env("CPM_TEST_LOG", &log_path)
         .current_dir(repo.path())
@@ -1390,6 +1404,7 @@ fn update_plugin_delegates_and_refreshes_lock_metadata() {
         .args(["add", "pptx@awesome-copilot", "--plugin"])
         .env("HOME", home.path())
         .env("USERPROFILE", home.path())
+        .env("APPDATA", home.path().join("AppData").join("Roaming"))
         .env("CPM_COPILOT_BIN", &copilot_bin)
         .env("CPM_TEST_LOG", &log_path)
         .current_dir(repo.path())
@@ -1402,6 +1417,7 @@ fn update_plugin_delegates_and_refreshes_lock_metadata() {
         .args(["update", "pptx"])
         .env("HOME", home.path())
         .env("USERPROFILE", home.path())
+        .env("APPDATA", home.path().join("AppData").join("Roaming"))
         .env("CPM_COPILOT_BIN", &copilot_bin)
         .env("CPM_TEST_LOG", &log_path)
         .current_dir(repo.path())
@@ -1437,6 +1453,7 @@ fn overview_and_status_use_plugin_markers_when_index_is_missing() {
         .args(["add", "pptx@awesome-copilot", "--plugin"])
         .env("HOME", home.path())
         .env("USERPROFILE", home.path())
+        .env("APPDATA", home.path().join("AppData").join("Roaming"))
         .env("CPM_COPILOT_BIN", &copilot_bin)
         .env("CPM_TEST_LOG", &log_path)
         .current_dir(repo.path())
@@ -1454,6 +1471,7 @@ fn overview_and_status_use_plugin_markers_when_index_is_missing() {
         .args(["overview", "--plugin", "--external", "--json"])
         .env("HOME", home.path())
         .env("USERPROFILE", home.path())
+        .env("APPDATA", home.path().join("AppData").join("Roaming"))
         .current_dir(repo.path())
         .output()
         .expect("overview");
@@ -1483,6 +1501,7 @@ fn overview_and_status_use_plugin_markers_when_index_is_missing() {
         .args(["status", "--json"])
         .env("HOME", home.path())
         .env("USERPROFILE", home.path())
+        .env("APPDATA", home.path().join("AppData").join("Roaming"))
         .current_dir(repo.path())
         .output()
         .expect("status");
@@ -1899,6 +1918,7 @@ fn reset_drops_global_claim_via_canonicalized_repo_path() {
             .args(["reset", "--skill", "--scope", "global", "--force"])
             .env("HOME", home.path())
             .env("USERPROFILE", home.path())
+            .env("APPDATA", home.path().join("AppData").join("Roaming"))
             .current_dir(&link_path)
             .output()
             .expect("run cpm reset via symlink");
@@ -1962,6 +1982,7 @@ fn reset_hard_skips_assets_claimed_by_other_repo() {
         .args(["reset", "--scope", "global", "--dry-run", "--hard"])
         .env("HOME", home.path())
         .env("USERPROFILE", home.path())
+        .env("APPDATA", home.path().join("AppData").join("Roaming"))
         .current_dir(repo.path())
         .output()
         .expect("reset dry-run hard");
@@ -1986,6 +2007,7 @@ fn reset_managed_plugin_delegates_to_copilot_uninstall() {
         .args(["add", "pptx@awesome-copilot", "--plugin"])
         .env("HOME", home.path())
         .env("USERPROFILE", home.path())
+        .env("APPDATA", home.path().join("AppData").join("Roaming"))
         .env("CPM_COPILOT_BIN", &copilot_bin)
         .env("CPM_TEST_LOG", &log_path)
         .current_dir(repo.path())
@@ -1998,6 +2020,7 @@ fn reset_managed_plugin_delegates_to_copilot_uninstall() {
         .args(["reset", "--plugin", "--force"])
         .env("HOME", home.path())
         .env("USERPROFILE", home.path())
+        .env("APPDATA", home.path().join("AppData").join("Roaming"))
         .env("CPM_COPILOT_BIN", &copilot_bin)
         .env("CPM_TEST_LOG", &log_path)
         .current_dir(repo.path())
@@ -2055,6 +2078,7 @@ fn reset_hard_unmanaged_plugin_delegates_to_copilot_uninstall() {
         ])
         .env("HOME", home.path())
         .env("USERPROFILE", home.path())
+        .env("APPDATA", home.path().join("AppData").join("Roaming"))
         .env("CPM_COPILOT_BIN", &copilot_bin)
         .env("CPM_TEST_LOG", &log_path)
         .current_dir(repo.path())
@@ -2115,6 +2139,7 @@ fn reset_hard_unmanaged_plugin_dedup_prevents_double_uninstall() {
         ])
         .env("HOME", home.path())
         .env("USERPROFILE", home.path())
+        .env("APPDATA", home.path().join("AppData").join("Roaming"))
         .env("CPM_COPILOT_BIN", &copilot_bin)
         .env("CPM_TEST_LOG", &log_path)
         .current_dir(repo.path())
@@ -2170,6 +2195,7 @@ fn reset_hard_removes_stale_plugin_dirs_when_copilot_reports_not_installed() {
         ])
         .env("HOME", home.path())
         .env("USERPROFILE", home.path())
+        .env("APPDATA", home.path().join("AppData").join("Roaming"))
         .env("CPM_COPILOT_BIN", &copilot_bin)
         .env("CPM_TEST_LOG", &log_path)
         .current_dir(repo.path())
@@ -2224,6 +2250,7 @@ fn reset_hard_removes_stale_plugin_config_entries_when_copilot_reports_not_insta
         ])
         .env("HOME", home.path())
         .env("USERPROFILE", home.path())
+        .env("APPDATA", home.path().join("AppData").join("Roaming"))
         .env("CPM_COPILOT_BIN", &copilot_bin)
         .env("CPM_TEST_LOG", &log_path)
         .current_dir(repo.path())
@@ -2262,6 +2289,7 @@ fn reset_global_asset_drops_claim_from_global_lockfile() {
         .args(["sync"])
         .env("HOME", home.path())
         .env("USERPROFILE", home.path())
+        .env("APPDATA", home.path().join("AppData").join("Roaming"))
         .current_dir(repo.path())
         .output()
         .expect("seed sync");
@@ -2283,6 +2311,7 @@ fn reset_global_asset_drops_claim_from_global_lockfile() {
         .args(["reset", "--skill", "--scope", "global", "--force"])
         .env("HOME", home.path())
         .env("USERPROFILE", home.path())
+        .env("APPDATA", home.path().join("AppData").join("Roaming"))
         .current_dir(repo.path())
         .output()
         .expect("run cpm reset");
@@ -2319,6 +2348,7 @@ fn overview_reports_unmanaged_global_mcp_entries_from_config() {
         .args(["overview", "--mcp", "--scope", "global", "--json"])
         .env("HOME", home.path())
         .env("USERPROFILE", home.path())
+        .env("APPDATA", home.path().join("AppData").join("Roaming"))
         .current_dir(repo.path())
         .output()
         .expect("overview json");
@@ -2329,11 +2359,7 @@ fn overview_reports_unmanaged_global_mcp_entries_from_config() {
     assert_eq!(json["unmanaged"][0]["entry_type"], "mcp-server");
     assert_eq!(
         json["unmanaged"][0]["path"],
-        home.path()
-            .join(".copilot/mcp-config.json")
-            .display()
-            .to_string()
-            + "#external-server"
+        normalized_path_string(&home.path().join(".copilot/mcp-config.json")) + "#external-server"
     );
 }
 
@@ -2407,6 +2433,7 @@ fn sync_removes_stale_local_skill_when_removed_from_manifest() {
         .args(["add", skill_src.to_str().expect("utf8"), "--skill"])
         .env("HOME", home.path())
         .env("USERPROFILE", home.path())
+        .env("APPDATA", home.path().join("AppData").join("Roaming"))
         .current_dir(dir.path())
         .output()
         .expect("cpm add");
@@ -2432,6 +2459,7 @@ fn sync_removes_stale_local_skill_when_removed_from_manifest() {
         .args(["sync"])
         .env("HOME", home.path())
         .env("USERPROFILE", home.path())
+        .env("APPDATA", home.path().join("AppData").join("Roaming"))
         .current_dir(dir.path())
         .output()
         .expect("cpm sync");
@@ -2464,6 +2492,7 @@ fn sync_removes_stale_local_install_when_skill_scope_changes_to_global() {
         .args(["add", skill_src.to_str().expect("utf8"), "--skill"])
         .env("HOME", home.path())
         .env("USERPROFILE", home.path())
+        .env("APPDATA", home.path().join("AppData").join("Roaming"))
         .current_dir(dir.path())
         .output()
         .expect("cpm add local");
@@ -2491,6 +2520,7 @@ fn sync_removes_stale_local_install_when_skill_scope_changes_to_global() {
         .args(["sync"])
         .env("HOME", home.path())
         .env("USERPROFILE", home.path())
+        .env("APPDATA", home.path().join("AppData").join("Roaming"))
         .current_dir(dir.path())
         .output()
         .expect("cpm sync");
@@ -2536,6 +2566,7 @@ fn sync_reports_progress_for_non_plugin_skill_install() {
         .args(["sync"])
         .env("HOME", home.path())
         .env("USERPROFILE", home.path())
+        .env("APPDATA", home.path().join("AppData").join("Roaming"))
         // Ensure CI env is unset so plain progress lines are emitted to stderr
         // regardless of whether there is a terminal.
         .env_remove("CI")

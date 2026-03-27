@@ -16,6 +16,7 @@ pub mod external;
 pub mod fetcher;
 pub mod installer;
 pub mod license;
+pub mod paths;
 pub mod plugin_delegate;
 pub mod plugin_index;
 pub mod project;

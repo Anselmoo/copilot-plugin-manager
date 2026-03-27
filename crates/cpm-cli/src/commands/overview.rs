@@ -7,6 +7,7 @@ use clap::Args;
 use cpm_core::{
     external::{scan_external_assets, ExternalAssets},
     installer::{copilot_mcp_config_path, install_dir, read_copilot_mcp_server_names},
+    paths::portable_path_string,
     plugin_index::{
         delegated_plugin_marker_path_by_name, installed_plugin_request, plugin_install_root,
         plugin_install_root_candidates, read_installed_plugins,
@@ -666,7 +667,7 @@ pub(super) fn scan_unmanaged_assets(
                         full_path: config_path.clone(),
                         kind: AssetKind::Mcp.to_string(),
                         scope: scope.to_string(),
-                        path: format!("{}#{name}", config_path.display()),
+                        path: format!("{}#{name}", portable_path_string(&config_path)),
                         entry_type: "mcp-server".to_owned(),
                         file_count: 1,
                         config_key: Some(name),
@@ -910,7 +911,7 @@ fn serialize_path<S>(path: &Path, serializer: S) -> Result<S::Ok, S::Error>
 where
     S: Serializer,
 {
-    serializer.serialize_str(&path.to_string_lossy().replace('\\', "/"))
+    serializer.serialize_str(&portable_path_string(path))
 }
 
 pub(super) fn compiled_workflow_path(path: &Path) -> Option<PathBuf> {
