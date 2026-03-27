@@ -469,7 +469,7 @@ fn global_mcp_config_path_ends_with_copilot_mcp_config_json() {
     // path helper returns the expected pattern.
     let fake_root = Path::new("/fake-home");
     let global_path = copilot_mcp_config_path(Scope::Global, fake_root);
-    let path_str = global_path.to_string_lossy();
+    let path_str = cpm_core::paths::portable_path_string(&global_path);
     assert!(
         path_str.ends_with(".copilot/mcp-config.json"),
         "global path should end with .copilot/mcp-config.json, got {path_str}"
