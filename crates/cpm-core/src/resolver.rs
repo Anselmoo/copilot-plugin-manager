@@ -480,8 +480,7 @@ mod tests {
     #[test]
     fn reconcile_global_lockfile_transfers_matching_claim_to_current_repo() {
         let dir = TempDir::new().expect("tempdir");
-        let repo_path = Utf8PathBuf::from_path_buf(dir.path().canonicalize().expect("canonical"))
-            .expect("utf8 repo path");
+        let repo_path = canonical_repo_root(dir.path()).expect("canonical repo path");
         let mut repo_lock = Lockfile::new();
         repo_lock
             .plugins

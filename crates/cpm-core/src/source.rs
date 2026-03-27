@@ -1234,10 +1234,12 @@ mod tests {
         use tempfile::TempDir;
 
         let dir = TempDir::new().expect("tempdir");
-        let file_path = dir.path().join("test-skill.md");
+        let skill_dir = dir.path().join("my-skill");
+        std::fs::create_dir_all(&skill_dir).expect("create skill dir");
+        let file_path = skill_dir.join("SKILL.md");
         std::fs::write(&file_path, "# Test").expect("write file");
 
-        let path_str = file_path.to_string_lossy().to_string();
+        let path_str = skill_dir.to_string_lossy().to_string();
         // path_str should be like C:\Users\... on Windows
         assert!(
             path_str.contains(":"),
@@ -1254,7 +1256,7 @@ mod tests {
         assert!(normalized.url.is_none(), "Windows path should not have URL");
         assert_eq!(
             normalized.path.as_ref().map(|path| path.as_str()),
-            Some(crate::paths::portable_path_string(&file_path).as_str())
+            Some(crate::paths::portable_path_string(&skill_dir).as_str())
         );
     }
 
