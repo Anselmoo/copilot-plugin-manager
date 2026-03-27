@@ -6,10 +6,12 @@
 use std::{path::Path, process::Command};
 
 use camino::Utf8PathBuf;
+use cpm_core::paths::{join_portable_path, portable_path_string};
 use cpm_core::project::{
     load_global_lockfile_from, load_lockfile, write_global_lockfile_to, write_lockfile,
     write_manifest,
 };
+use cpm_core::resolver::canonical_repo_root;
 use cpm_types::{
     AssetKind, AssetOwnership, AssetSource, GlobalClaim, GlobalLockfile, Lockfile, Manifest,
     ManifestGroup, McpTransport, PluginMeta, ResolvedAsset, Scope, SubAsset, SubAssetOwnership,
@@ -24,17 +26,25 @@ fn cpm_bin() -> Command {
     cmd
 }
 
+fn normalized_path_string(path: &Path) -> String {
+    portable_path_string(path)
+}
+
 fn write_global_skill_manifest(repo_root: &Path, asset_path: &Path) {
     let manifest = format!(
         "[skills]\nshared = {{ path = \"{}\", scope = \"global\" }}\n",
-        asset_path.display()
+        normalized_path_string(asset_path)
     );
     std::fs::write(repo_root.join("cpm.toml"), manifest).expect("write manifest");
 }
 
 fn make_global_claim(claimed_by: &Path, hash: &str) -> GlobalClaim {
     GlobalClaim::new(
-        Utf8PathBuf::from_path_buf(claimed_by.to_path_buf()).expect("utf8 claimed_by"),
+        if claimed_by.exists() {
+            canonical_repo_root(claimed_by).expect("canonical claimed_by")
+        } else {
+            Utf8PathBuf::from(portable_path_string(claimed_by))
+        },
         ResolvedAsset {
             name: "shared".into(),
             kind: AssetKind::Skill,
@@ -253,8 +263,10 @@ fn seed_plugin_lock(repo_root: &Path, name: &str, url: &str, version: &str, revi
 }
 
 fn write_fake_copilot(dir: &tempfile::TempDir) -> std::path::PathBuf {
-    let script_path = dir.path().join("fake-copilot");
-    let script = r#"#!/bin/sh
+    #[cfg(unix)]
+    {
+        let script_path = dir.path().join("fake-copilot");
+        let script = r#"#!/bin/sh
 set -eu
 log_file="${CPM_TEST_LOG:?}"
 home_dir="${HOME:?}"
@@ -305,14 +317,85 @@ EOF
     ;;
 esac
 "#;
-    std::fs::write(&script_path, script).expect("write fake copilot");
-    #[cfg(unix)]
-    {
+        std::fs::write(&script_path, script).expect("write fake copilot");
         use std::os::unix::fs::PermissionsExt;
         std::fs::set_permissions(&script_path, std::fs::Permissions::from_mode(0o755))
             .expect("chmod fake copilot");
+        script_path
     }
-    script_path
+
+    #[cfg(windows)]
+    {
+        let script_path = dir.path().join("fake-copilot.cmd");
+        let script = r#"@echo off
+setlocal enabledelayedexpansion
+set "log_file=%CPM_TEST_LOG%"
+if not defined log_file (
+    echo CPM_TEST_LOG environment variable not set 1>&2
+    exit /b 1
+)
+set "home_dir=%USERPROFILE%"
+if not defined home_dir (
+    echo USERPROFILE environment variable not set 1>&2
+    exit /b 1
+)
+set "copilot_dir=%home_dir%\.copilot"
+set "legacy_plugin_dir=%copilot_dir%\plugins"
+set "installed_plugins_dir=%copilot_dir%\installed-plugins"
+
+if not exist "%copilot_dir%" mkdir "%copilot_dir%"
+if not exist "%legacy_plugin_dir%" mkdir "%legacy_plugin_dir%"
+if not exist "%installed_plugins_dir%" mkdir "%installed_plugins_dir%"
+
+echo %1 %2 %3 >> "%log_file%"
+
+set "op=%2"
+set "request=%3"
+set "name=%request:@=^>%"
+if not "!name!"=="!request!" (
+    for /f "tokens=1 delims=@" %%a in ("!request!") do set "name=%%a"
+    for /f "tokens=2 delims=@" %%a in ("!request!") do set "registry=%%a"
+) else (
+    set "registry=awesome-copilot"
+)
+set "plugin_root=%installed_plugins_dir%\!registry!\!name!"
+set "marker_path=%legacy_plugin_dir%\!name!.installed"
+set "index_path=%copilot_dir%\plugin-index.json"
+
+if "%op%"=="install" (
+    call :write_entry "1.0.0" "rev-install" "install"
+) else if "%op%"=="update" (
+    call :write_entry "2.0.0" "rev-update" "update"
+) else if "%op%"=="uninstall" (
+    if exist "%plugin_root%" rmdir /s /q "%plugin_root%"
+    if exist "%marker_path%" del "%marker_path%"
+    (
+        echo {"plugins":[]}
+    ) > "%index_path%"
+) else (
+    echo unsupported operation: %op% 1>&2
+    exit /b 1
+)
+exit /b 0
+
+:write_entry
+set "version=%~1"
+set "revision=%~2"
+set "marker=%~3"
+set "escaped_plugin_root=!plugin_root:\=\\!"
+if not exist "%plugin_root%\.github\plugin" mkdir "%plugin_root%\.github\plugin"
+type nul > "%marker_path%"
+(
+    echo {"name":"!name!","marker":"!marker!"}
+) > "%plugin_root%\.github\plugin\plugin.json"
+(
+    echo {"plugins":[{"name":"!name!","version":"!version!","revision":"!revision!","source_url":"https://example.test/!name!","registry":"!registry!","path":"!escaped_plugin_root!","enabled":true}]}
+) > "%index_path%"
+exit /b 0
+"#;
+        std::fs::write(&script_path, script).expect("write fake copilot");
+        script_path
+    }
 }
 
 fn fake_copilot_env(
@@ -325,8 +408,10 @@ fn fake_copilot_env(
 }
 
 fn write_not_installed_copilot(dir: &tempfile::TempDir) -> std::path::PathBuf {
-    let script_path = dir.path().join("fake-copilot-not-installed");
-    let script = r#"#!/bin/sh
+    #[cfg(unix)]
+    {
+        let script_path = dir.path().join("fake-copilot-not-installed");
+        let script = r#"#!/bin/sh
 set -eu
 log_file="${CPM_TEST_LOG:?}"
 printf '%s %s %s\n' "$1" "$2" "$3" >> "$log_file"
@@ -337,14 +422,34 @@ fi
 echo "unsupported operation: $2" >&2
 exit 1
 "#;
-    std::fs::write(&script_path, script).expect("write fake copilot");
-    #[cfg(unix)]
-    {
+        std::fs::write(&script_path, script).expect("write fake copilot");
         use std::os::unix::fs::PermissionsExt;
         std::fs::set_permissions(&script_path, std::fs::Permissions::from_mode(0o755))
             .expect("chmod fake copilot");
+        script_path
     }
-    script_path
+
+    #[cfg(windows)]
+    {
+        let script_path = dir.path().join("fake-copilot-not-installed.cmd");
+        let script = r#"@echo off
+setlocal enabledelayedexpansion
+set "log_file=%CPM_TEST_LOG%"
+if not defined log_file (
+    echo CPM_TEST_LOG environment variable not set 1>&2
+    exit /b 1
+)
+echo %1 %2 %3 >> "%log_file%"
+if "%2"=="uninstall" (
+    echo Failed to uninstall plugin: Plugin "%3" is not installed 1>&2
+    exit /b 1
+)
+echo unsupported operation: %2 1>&2
+exit /b 1
+"#;
+        std::fs::write(&script_path, script).expect("write fake copilot");
+        script_path
+    }
 }
 
 // ── --help / --version ────────────────────────────────────────────────────────
@@ -537,7 +642,7 @@ fn init_does_not_overwrite_without_force() {
 }
 
 #[test]
-fn lock_check_without_lockfile_reports_out_of_date() {
+fn lock_check_without_lockfile_reports_missing_lockfile() {
     let dir = tempfile::TempDir::new().expect("tempdir");
 
     let init_output = cpm_bin()
@@ -566,8 +671,8 @@ fn lock_check_without_lockfile_reports_out_of_date() {
 
     let stderr = String::from_utf8_lossy(&output.stderr);
     assert!(
-        stderr.contains("lock out of date"),
-        "expected lock-out-of-date error\n{stderr}"
+        stderr.contains("does not exist"),
+        "expected missing-lockfile error\n{stderr}"
     );
 }
 
@@ -576,7 +681,7 @@ fn lock_check_without_lockfile_reports_out_of_date() {
 #[test]
 fn add_local_skill_creates_manifest_and_lock() {
     let dir = tempfile::TempDir::new().expect("tempdir");
-    let skill_dir = dir.path().join("skills/my-skill");
+    let skill_dir = join_portable_path(dir.path(), "skills/my-skill");
     std::fs::create_dir_all(&skill_dir).expect("mkdir");
     std::fs::write(skill_dir.join("SKILL.md"), "# My Skill\n").expect("write SKILL.md");
 
@@ -594,14 +699,14 @@ fn add_local_skill_creates_manifest_and_lock() {
     assert!(dir.path().join("cpm.toml").exists());
     assert!(dir.path().join("cpm.lock").exists());
 
-    let installed = dir.path().join(".github/skills/my-skill/SKILL.md");
+    let installed = join_portable_path(dir.path(), ".github/skills/my-skill/SKILL.md");
     assert!(installed.exists(), "installed skill file should exist");
 }
 
 #[test]
 fn add_local_skill_writes_canonical_toml() {
     let dir = tempfile::TempDir::new().expect("tempdir");
-    let skill_dir = dir.path().join("skills/canonical-skill");
+    let skill_dir = join_portable_path(dir.path(), "skills/canonical-skill");
     std::fs::create_dir_all(&skill_dir).expect("mkdir");
     std::fs::write(skill_dir.join("SKILL.md"), "# Canonical\n").expect("write");
 
@@ -648,7 +753,9 @@ fn add_local_instruction_normalizes_filename_and_uses_group_section() {
 
     let installed = dir
         .path()
-        .join(".github/instructions/shell.instructions.md");
+        .join(".github")
+        .join("instructions")
+        .join("shell.instructions.md");
     assert!(
         installed.exists(),
         "installed instruction file should exist"
@@ -798,7 +905,7 @@ fn requested_dev_group_examples_round_trip_in_manifest() {
 #[test]
 fn remove_skill_updates_manifest() {
     let dir = tempfile::TempDir::new().expect("tempdir");
-    let skill_dir = dir.path().join("skills/to-remove");
+    let skill_dir = join_portable_path(dir.path(), "skills/to-remove");
     std::fs::create_dir_all(&skill_dir).expect("mkdir");
     std::fs::write(skill_dir.join("SKILL.md"), "# To Remove\n").expect("write");
 
@@ -837,6 +944,8 @@ fn add_plugin_delegates_and_writes_lock_metadata() {
     let output = cpm_bin()
         .args(["add", "pptx@awesome-copilot", "--plugin"])
         .env("HOME", home.path())
+        .env("USERPROFILE", home.path())
+        .env("APPDATA", home.path().join("AppData").join("Roaming"))
         .env("CPM_COPILOT_BIN", &copilot_bin)
         .env("CPM_TEST_LOG", &log_path)
         .current_dir(repo.path())
@@ -880,18 +989,23 @@ fn add_plugin_tree_source_installs_natively_without_delegate() {
     let home = tempfile::TempDir::new().expect("home tempdir");
     let fake_copilot = tempfile::TempDir::new().expect("copilot tempdir");
     let repo = tempfile::TempDir::new().expect("repo tempdir");
-    let plugin_dir = repo.path().join("plugins/native-bundle");
+    let plugin_dir = join_portable_path(repo.path(), "plugins/native-bundle");
     let (copilot_bin, log_path) = fake_copilot_env(&home, &fake_copilot);
 
-    std::fs::create_dir_all(plugin_dir.join(".github/plugin")).expect("mkdir plugin");
-    std::fs::create_dir_all(plugin_dir.join("skills/pdf")).expect("mkdir skill");
+    std::fs::create_dir_all(join_portable_path(&plugin_dir, ".github/plugin"))
+        .expect("mkdir plugin");
+    std::fs::create_dir_all(join_portable_path(&plugin_dir, "skills/pdf")).expect("mkdir skill");
     std::fs::write(plugin_dir.join("README.md"), "# Native Bundle\n").expect("write readme");
     std::fs::write(
-        plugin_dir.join(".github/plugin/plugin.json"),
+        join_portable_path(&plugin_dir, ".github/plugin/plugin.json"),
         r#"{"name":"native-bundle","version":"1.0.0"}"#,
     )
     .expect("write plugin json");
-    std::fs::write(plugin_dir.join("skills/pdf/SKILL.md"), "# PDF\n").expect("write skill");
+    std::fs::write(
+        join_portable_path(&plugin_dir, "skills/pdf/SKILL.md"),
+        "# PDF\n",
+    )
+    .expect("write skill");
 
     let output = cpm_bin()
         .args([
@@ -900,6 +1014,8 @@ fn add_plugin_tree_source_installs_natively_without_delegate() {
             "--plugin",
         ])
         .env("HOME", home.path())
+        .env("USERPROFILE", home.path())
+        .env("APPDATA", home.path().join("AppData").join("Roaming"))
         .env("CPM_COPILOT_BIN", &copilot_bin)
         .env("CPM_TEST_LOG", &log_path)
         .current_dir(repo.path())
@@ -918,7 +1034,10 @@ fn add_plugin_tree_source_installs_natively_without_delegate() {
     );
     assert!(
         repo.path()
-            .join(".github/plugins/native-bundle/README.md")
+            .join(".github")
+            .join("plugins")
+            .join("native-bundle")
+            .join("README.md")
             .exists(),
         "native plugin files should be installed into the repo"
     );
@@ -951,6 +1070,8 @@ fn remove_plugin_delegates_and_clears_lock_entry() {
     cpm_bin()
         .args(["add", "pptx@awesome-copilot", "--plugin"])
         .env("HOME", home.path())
+        .env("USERPROFILE", home.path())
+        .env("APPDATA", home.path().join("AppData").join("Roaming"))
         .env("CPM_COPILOT_BIN", &copilot_bin)
         .env("CPM_TEST_LOG", &log_path)
         .current_dir(repo.path())
@@ -961,6 +1082,8 @@ fn remove_plugin_delegates_and_clears_lock_entry() {
     let output = cpm_bin()
         .args(["remove", "pptx", "--plugin"])
         .env("HOME", home.path())
+        .env("USERPROFILE", home.path())
+        .env("APPDATA", home.path().join("AppData").join("Roaming"))
         .env("CPM_COPILOT_BIN", &copilot_bin)
         .env("CPM_TEST_LOG", &log_path)
         .current_dir(repo.path())
@@ -993,6 +1116,8 @@ fn sync_global_scope_installs_legacy_local_delegated_plugin_and_normalizes_lock(
     let output = cpm_bin()
         .args(["sync", "--scope", "global"])
         .env("HOME", home.path())
+        .env("USERPROFILE", home.path())
+        .env("APPDATA", home.path().join("AppData").join("Roaming"))
         .env("CPM_COPILOT_BIN", &copilot_bin)
         .env("CPM_TEST_LOG", &log_path)
         .current_dir(repo.path())
@@ -1024,6 +1149,8 @@ fn demote_rejects_delegated_plugins() {
     let add_output = cpm_bin()
         .args(["add", "pptx@awesome-copilot", "--plugin"])
         .env("HOME", home.path())
+        .env("USERPROFILE", home.path())
+        .env("APPDATA", home.path().join("AppData").join("Roaming"))
         .env("CPM_COPILOT_BIN", &copilot_bin)
         .env("CPM_TEST_LOG", &log_path)
         .current_dir(repo.path())
@@ -1034,6 +1161,8 @@ fn demote_rejects_delegated_plugins() {
     let output = cpm_bin()
         .args(["demote", "pptx", "--plugin"])
         .env("HOME", home.path())
+        .env("USERPROFILE", home.path())
+        .env("APPDATA", home.path().join("AppData").join("Roaming"))
         .env("CPM_COPILOT_BIN", &copilot_bin)
         .env("CPM_TEST_LOG", &log_path)
         .current_dir(repo.path())
@@ -1053,13 +1182,14 @@ fn sync_plugin_tree_source_installs_natively_without_delegate() {
     let home = tempfile::TempDir::new().expect("home tempdir");
     let fake_copilot = tempfile::TempDir::new().expect("copilot tempdir");
     let repo = tempfile::TempDir::new().expect("repo tempdir");
-    let plugin_dir = repo.path().join("plugins/testing-automation");
+    let plugin_dir = join_portable_path(repo.path(), "plugins/testing-automation");
     let (copilot_bin, log_path) = fake_copilot_env(&home, &fake_copilot);
 
-    std::fs::create_dir_all(plugin_dir.join(".github/plugin")).expect("mkdir plugin");
+    std::fs::create_dir_all(join_portable_path(&plugin_dir, ".github/plugin"))
+        .expect("mkdir plugin");
     std::fs::write(plugin_dir.join("README.md"), "# Testing Automation\n").expect("write readme");
     std::fs::write(
-        plugin_dir.join(".github/plugin/plugin.json"),
+        join_portable_path(&plugin_dir, ".github/plugin/plugin.json"),
         r#"{"name":"testing-automation","version":"1.0.0"}"#,
     )
     .expect("write plugin json");
@@ -1072,6 +1202,8 @@ fn sync_plugin_tree_source_installs_natively_without_delegate() {
     let output = cpm_bin()
         .args(["sync"])
         .env("HOME", home.path())
+        .env("USERPROFILE", home.path())
+        .env("APPDATA", home.path().join("AppData").join("Roaming"))
         .env("CPM_COPILOT_BIN", &copilot_bin)
         .env("CPM_TEST_LOG", &log_path)
         .current_dir(repo.path())
@@ -1090,7 +1222,10 @@ fn sync_plugin_tree_source_installs_natively_without_delegate() {
     );
     assert!(
         repo.path()
-            .join(".github/plugins/testing-automation/README.md")
+            .join(".github")
+            .join("plugins")
+            .join("testing-automation")
+            .join("README.md")
             .exists(),
         "native plugin files should be materialized during sync"
     );
@@ -1109,13 +1244,15 @@ fn sync_plugin_tree_source_installs_natively_without_delegate() {
 fn doctor_passes_on_fresh_install() {
     let home = tempfile::TempDir::new().expect("home tempdir");
     let dir = tempfile::TempDir::new().expect("tempdir");
-    let skill_dir = dir.path().join("skills/healthy");
+    let skill_dir = join_portable_path(dir.path(), "skills/healthy");
     std::fs::create_dir_all(&skill_dir).expect("mkdir");
     std::fs::write(skill_dir.join("SKILL.md"), "# Healthy\n").expect("write");
 
     cpm_bin()
         .args(["add", skill_dir.to_str().expect("utf8"), "--skill"])
         .env("HOME", home.path())
+        .env("USERPROFILE", home.path())
+        .env("APPDATA", home.path().join("AppData").join("Roaming"))
         .current_dir(dir.path())
         .output()
         .expect("add");
@@ -1123,6 +1260,8 @@ fn doctor_passes_on_fresh_install() {
     let output = cpm_bin()
         .args(["doctor"])
         .env("HOME", home.path())
+        .env("USERPROFILE", home.path())
+        .env("APPDATA", home.path().join("AppData").join("Roaming"))
         .current_dir(dir.path())
         .output()
         .expect("doctor");
@@ -1137,7 +1276,7 @@ fn doctor_passes_on_fresh_install() {
 fn sync_records_global_claim_for_repo() {
     let home = tempfile::TempDir::new().expect("home tempdir");
     let repo = tempfile::TempDir::new().expect("repo tempdir");
-    let skill_dir = repo.path().join("skills/shared");
+    let skill_dir = join_portable_path(repo.path(), "skills/shared");
     std::fs::create_dir_all(&skill_dir).expect("mkdir");
     std::fs::write(skill_dir.join("SKILL.md"), "# Shared\n").expect("write skill");
     write_global_skill_manifest(repo.path(), &skill_dir);
@@ -1145,6 +1284,8 @@ fn sync_records_global_claim_for_repo() {
     let output = cpm_bin()
         .args(["sync"])
         .env("HOME", home.path())
+        .env("USERPROFILE", home.path())
+        .env("APPDATA", home.path().join("AppData").join("Roaming"))
         .current_dir(repo.path())
         .output()
         .expect("sync");
@@ -1155,15 +1296,15 @@ fn sync_records_global_claim_for_repo() {
         String::from_utf8_lossy(&output.stderr)
     );
 
-    let global_lock = load_global_lockfile_from(&home.path().join(".copilot/cpm.lock"))
-        .expect("load global lock");
+    let global_lock =
+        load_global_lockfile_from(&join_portable_path(home.path(), ".copilot/cpm.lock"))
+            .expect("load global lock");
     assert_eq!(global_lock.claims.len(), 1);
     assert_eq!(global_lock.claims[0].asset.name, "shared");
     assert_eq!(global_lock.claims[0].asset.scope, Scope::Global);
     assert_eq!(
         global_lock.claims[0].claimed_by,
-        Utf8PathBuf::from_path_buf(repo.path().canonicalize().expect("canonical repo"))
-            .expect("utf8 repo path")
+        canonical_repo_root(repo.path()).expect("canonical repo path")
     );
 }
 
@@ -1171,7 +1312,7 @@ fn sync_records_global_claim_for_repo() {
 fn sync_fails_when_global_asset_conflicts_with_other_repo_claim() {
     let home = tempfile::TempDir::new().expect("home tempdir");
     let repo = tempfile::TempDir::new().expect("repo tempdir");
-    let skill_dir = repo.path().join("skills/shared");
+    let skill_dir = join_portable_path(repo.path(), "skills/shared");
     std::fs::create_dir_all(&skill_dir).expect("mkdir");
     std::fs::write(skill_dir.join("SKILL.md"), "# Shared\n").expect("write skill");
     write_global_skill_manifest(repo.path(), &skill_dir);
@@ -1181,12 +1322,17 @@ fn sync_fails_when_global_asset_conflicts_with_other_repo_claim() {
         Path::new("/tmp/other-repo"),
         "sha256:conflict",
     ));
-    write_global_lockfile_to(&home.path().join(".copilot/cpm.lock"), &global_lock)
-        .expect("seed global lock");
+    write_global_lockfile_to(
+        &join_portable_path(home.path(), ".copilot/cpm.lock"),
+        &global_lock,
+    )
+    .expect("seed global lock");
 
     let output = cpm_bin()
         .args(["sync"])
         .env("HOME", home.path())
+        .env("USERPROFILE", home.path())
+        .env("APPDATA", home.path().join("AppData").join("Roaming"))
         .current_dir(repo.path())
         .output()
         .expect("sync");
@@ -1214,6 +1360,8 @@ fn sync_plugin_delegates_install_and_writes_lock() {
     let output = cpm_bin()
         .args(["sync"])
         .env("HOME", home.path())
+        .env("USERPROFILE", home.path())
+        .env("APPDATA", home.path().join("AppData").join("Roaming"))
         .env("CPM_COPILOT_BIN", &copilot_bin)
         .env("CPM_TEST_LOG", &log_path)
         .current_dir(repo.path())
@@ -1239,7 +1387,7 @@ fn sync_plugin_delegates_install_and_writes_lock() {
 #[test]
 fn list_includes_installed_assets() {
     let dir = tempfile::TempDir::new().expect("tempdir");
-    let skill_dir = dir.path().join("skills/listed");
+    let skill_dir = join_portable_path(dir.path(), "skills/listed");
     std::fs::create_dir_all(&skill_dir).expect("mkdir");
     std::fs::write(skill_dir.join("SKILL.md"), "# Listed\n").expect("write");
 
@@ -1277,6 +1425,8 @@ fn update_plugin_delegates_and_refreshes_lock_metadata() {
     let seed_output = cpm_bin()
         .args(["add", "pptx@awesome-copilot", "--plugin"])
         .env("HOME", home.path())
+        .env("USERPROFILE", home.path())
+        .env("APPDATA", home.path().join("AppData").join("Roaming"))
         .env("CPM_COPILOT_BIN", &copilot_bin)
         .env("CPM_TEST_LOG", &log_path)
         .current_dir(repo.path())
@@ -1288,6 +1438,8 @@ fn update_plugin_delegates_and_refreshes_lock_metadata() {
     let output = cpm_bin()
         .args(["update", "pptx"])
         .env("HOME", home.path())
+        .env("USERPROFILE", home.path())
+        .env("APPDATA", home.path().join("AppData").join("Roaming"))
         .env("CPM_COPILOT_BIN", &copilot_bin)
         .env("CPM_TEST_LOG", &log_path)
         .current_dir(repo.path())
@@ -1322,6 +1474,8 @@ fn overview_and_status_use_plugin_markers_when_index_is_missing() {
     let add_output = cpm_bin()
         .args(["add", "pptx@awesome-copilot", "--plugin"])
         .env("HOME", home.path())
+        .env("USERPROFILE", home.path())
+        .env("APPDATA", home.path().join("AppData").join("Roaming"))
         .env("CPM_COPILOT_BIN", &copilot_bin)
         .env("CPM_TEST_LOG", &log_path)
         .current_dir(repo.path())
@@ -1333,11 +1487,17 @@ fn overview_and_status_use_plugin_markers_when_index_is_missing() {
         String::from_utf8_lossy(&add_output.stderr)
     );
 
-    std::fs::remove_file(home.path().join(".copilot/plugin-index.json")).expect("remove index");
+    std::fs::remove_file(join_portable_path(
+        home.path(),
+        ".copilot/plugin-index.json",
+    ))
+    .expect("remove index");
 
     let overview_output = cpm_bin()
         .args(["overview", "--plugin", "--external", "--json"])
         .env("HOME", home.path())
+        .env("USERPROFILE", home.path())
+        .env("APPDATA", home.path().join("AppData").join("Roaming"))
         .current_dir(repo.path())
         .output()
         .expect("overview");
@@ -1352,10 +1512,14 @@ fn overview_and_status_use_plugin_markers_when_index_is_missing() {
     assert_eq!(overview_json["status"]["drift"], 0);
     assert_eq!(
         overview_json["locked_assets"][0]["install_target"],
-        home.path()
-            .join(".copilot/installed-plugins/awesome-copilot/pptx")
-            .display()
-            .to_string()
+        normalized_path_string(
+            &home
+                .path()
+                .join(".copilot")
+                .join("installed-plugins")
+                .join("awesome-copilot")
+                .join("pptx")
+        )
     );
     assert!(overview_json["external"]["unclaimed_global"]
         .as_array()
@@ -1365,6 +1529,8 @@ fn overview_and_status_use_plugin_markers_when_index_is_missing() {
     let status_output = cpm_bin()
         .args(["status", "--json"])
         .env("HOME", home.path())
+        .env("USERPROFILE", home.path())
+        .env("APPDATA", home.path().join("AppData").join("Roaming"))
         .current_dir(repo.path())
         .output()
         .expect("status");
@@ -1573,8 +1739,12 @@ fn reporting_commands_emit_json_with_install_targets() {
 #[test]
 fn status_json_reports_unlocked_assets() {
     let dir = tempfile::TempDir::new().expect("tempdir");
-    std::fs::create_dir_all(dir.path().join("skills/unlocked")).expect("mkdir");
-    std::fs::write(dir.path().join("skills/unlocked/SKILL.md"), "# Unlocked\n").expect("write");
+    std::fs::create_dir_all(join_portable_path(dir.path(), "skills/unlocked")).expect("mkdir");
+    std::fs::write(
+        join_portable_path(dir.path(), "skills/unlocked/SKILL.md"),
+        "# Unlocked\n",
+    )
+    .expect("write");
 
     let mut manifest = Manifest::default();
     manifest.skills.insert(
@@ -1767,19 +1937,24 @@ fn reset_drops_global_claim_via_canonicalized_repo_path() {
         write_lockfile(&real_repo.path().join("cpm.lock"), &lockfile).expect("write lockfile");
 
         // Seed the global lock with the claim stored under the canonical real path.
-        let canonical_utf8 = Utf8PathBuf::from_path_buf(canonical_repo).expect("utf8");
+        let canonical_utf8 = canonical_repo_root(&canonical_repo).expect("utf8");
         let mut global_lock = GlobalLockfile::new();
         global_lock
             .claims
             .push(GlobalClaim::new(canonical_utf8, lock_skill));
-        write_global_lockfile_to(&home.path().join(".copilot/cpm.lock"), &global_lock)
-            .expect("write global lock");
+        write_global_lockfile_to(
+            &join_portable_path(home.path(), ".copilot/cpm.lock"),
+            &global_lock,
+        )
+        .expect("write global lock");
 
         // Run reset from the *symlink* path — the old code would compare the
         // symlink string against the canonical path and fail to remove the claim.
         let output = cpm_bin()
             .args(["reset", "--skill", "--scope", "global", "--force"])
             .env("HOME", home.path())
+            .env("USERPROFILE", home.path())
+            .env("APPDATA", home.path().join("AppData").join("Roaming"))
             .current_dir(&link_path)
             .output()
             .expect("run cpm reset via symlink");
@@ -1790,8 +1965,9 @@ fn reset_drops_global_claim_via_canonicalized_repo_path() {
             String::from_utf8_lossy(&output.stderr)
         );
 
-        let updated_global = load_global_lockfile_from(&home.path().join(".copilot/cpm.lock"))
-            .expect("load updated global lock");
+        let updated_global =
+            load_global_lockfile_from(&join_portable_path(home.path(), ".copilot/cpm.lock"))
+                .expect("load updated global lock");
         assert!(
             updated_global.claims.is_empty(),
             "reset via symlink should have removed the global claim; claims: {:?}",
@@ -1824,7 +2000,7 @@ fn reset_dry_run_reports_unmanaged_scan_requirement_without_hard() {
 fn reset_hard_skips_assets_claimed_by_other_repo() {
     let home = tempfile::TempDir::new().expect("home tempdir");
     let repo = tempfile::TempDir::new().expect("repo tempdir");
-    let global_skill_dir = home.path().join(".copilot/skills/shared");
+    let global_skill_dir = join_portable_path(home.path(), ".copilot/skills/shared");
     std::fs::create_dir_all(&global_skill_dir).expect("mkdir");
     std::fs::write(global_skill_dir.join("SKILL.md"), "# Shared\n").expect("write");
 
@@ -1836,12 +2012,17 @@ fn reset_hard_skips_assets_claimed_by_other_repo() {
         Path::new("/tmp/other-repo"),
         "sha256:shared",
     ));
-    write_global_lockfile_to(&home.path().join(".copilot/cpm.lock"), &global_lock)
-        .expect("write global lock");
+    write_global_lockfile_to(
+        &join_portable_path(home.path(), ".copilot/cpm.lock"),
+        &global_lock,
+    )
+    .expect("write global lock");
 
     let output = cpm_bin()
         .args(["reset", "--scope", "global", "--dry-run", "--hard"])
         .env("HOME", home.path())
+        .env("USERPROFILE", home.path())
+        .env("APPDATA", home.path().join("AppData").join("Roaming"))
         .current_dir(repo.path())
         .output()
         .expect("reset dry-run hard");
@@ -1865,6 +2046,8 @@ fn reset_managed_plugin_delegates_to_copilot_uninstall() {
     let add_output = cpm_bin()
         .args(["add", "pptx@awesome-copilot", "--plugin"])
         .env("HOME", home.path())
+        .env("USERPROFILE", home.path())
+        .env("APPDATA", home.path().join("AppData").join("Roaming"))
         .env("CPM_COPILOT_BIN", &copilot_bin)
         .env("CPM_TEST_LOG", &log_path)
         .current_dir(repo.path())
@@ -1876,6 +2059,8 @@ fn reset_managed_plugin_delegates_to_copilot_uninstall() {
     let reset_output = cpm_bin()
         .args(["reset", "--plugin", "--force"])
         .env("HOME", home.path())
+        .env("USERPROFILE", home.path())
+        .env("APPDATA", home.path().join("AppData").join("Roaming"))
         .env("CPM_COPILOT_BIN", &copilot_bin)
         .env("CPM_TEST_LOG", &log_path)
         .current_dir(repo.path())
@@ -1910,10 +2095,13 @@ fn reset_hard_unmanaged_plugin_delegates_to_copilot_uninstall() {
     // Create an unmanaged plugin directory in Copilot's modern installed-plugin root.
     let plugin_dir = home
         .path()
-        .join(".copilot/installed-plugins/awesome-copilot/orphan-plugin");
-    std::fs::create_dir_all(plugin_dir.join(".github/plugin")).expect("mkdir");
+        .join(".copilot")
+        .join("installed-plugins")
+        .join("awesome-copilot")
+        .join("orphan-plugin");
+    std::fs::create_dir_all(join_portable_path(&plugin_dir, ".github/plugin")).expect("mkdir");
     std::fs::write(
-        plugin_dir.join(".github/plugin/plugin.json"),
+        join_portable_path(&plugin_dir, ".github/plugin/plugin.json"),
         br#"{"name":"orphan-plugin"}"#,
     )
     .expect("write plugin file");
@@ -1922,7 +2110,7 @@ fn reset_hard_unmanaged_plugin_delegates_to_copilot_uninstall() {
     write_manifest(&repo.path().join("cpm.toml"), &Manifest::default()).expect("write manifest");
     write_lockfile(&repo.path().join("cpm.lock"), &Lockfile::new()).expect("write lock");
     write_global_lockfile_to(
-        &home.path().join(".copilot/cpm.lock"),
+        &join_portable_path(home.path(), ".copilot/cpm.lock"),
         &GlobalLockfile::new(),
     )
     .expect("write empty global lock");
@@ -1932,6 +2120,8 @@ fn reset_hard_unmanaged_plugin_delegates_to_copilot_uninstall() {
             "reset", "--plugin", "--scope", "global", "--hard", "--force",
         ])
         .env("HOME", home.path())
+        .env("USERPROFILE", home.path())
+        .env("APPDATA", home.path().join("AppData").join("Roaming"))
         .env("CPM_COPILOT_BIN", &copilot_bin)
         .env("CPM_TEST_LOG", &log_path)
         .current_dir(repo.path())
@@ -1965,12 +2155,15 @@ fn reset_hard_unmanaged_plugin_dedup_prevents_double_uninstall() {
     // plugin directory and the *.installed marker file are present.
     let installed_plugins_dir = home
         .path()
-        .join(".copilot/installed-plugins/awesome-copilot");
-    let legacy_plugins_dir = home.path().join(".copilot/plugins");
+        .join(".copilot")
+        .join("installed-plugins")
+        .join("awesome-copilot");
+    let legacy_plugins_dir = join_portable_path(home.path(), ".copilot/plugins");
     let plugin_dir = installed_plugins_dir.join("orphan-plugin");
-    std::fs::create_dir_all(plugin_dir.join(".github/plugin")).expect("mkdir plugin dir");
+    std::fs::create_dir_all(join_portable_path(&plugin_dir, ".github/plugin"))
+        .expect("mkdir plugin dir");
     std::fs::write(
-        plugin_dir.join(".github/plugin/plugin.json"),
+        join_portable_path(&plugin_dir, ".github/plugin/plugin.json"),
         br#"{"name":"orphan-plugin"}"#,
     )
     .expect("write plugin file");
@@ -1981,7 +2174,7 @@ fn reset_hard_unmanaged_plugin_dedup_prevents_double_uninstall() {
     write_manifest(&repo.path().join("cpm.toml"), &Manifest::default()).expect("write manifest");
     write_lockfile(&repo.path().join("cpm.lock"), &Lockfile::new()).expect("write lock");
     write_global_lockfile_to(
-        &home.path().join(".copilot/cpm.lock"),
+        &join_portable_path(home.path(), ".copilot/cpm.lock"),
         &GlobalLockfile::new(),
     )
     .expect("write empty global lock");
@@ -1991,6 +2184,8 @@ fn reset_hard_unmanaged_plugin_dedup_prevents_double_uninstall() {
             "reset", "--plugin", "--scope", "global", "--hard", "--force",
         ])
         .env("HOME", home.path())
+        .env("USERPROFILE", home.path())
+        .env("APPDATA", home.path().join("AppData").join("Roaming"))
         .env("CPM_COPILOT_BIN", &copilot_bin)
         .env("CPM_TEST_LOG", &log_path)
         .current_dir(repo.path())
@@ -2024,10 +2219,14 @@ fn reset_hard_removes_stale_plugin_dirs_when_copilot_reports_not_installed() {
 
     let plugin_dir = home
         .path()
-        .join(".copilot/installed-plugins/awesome-copilot/orphan-plugin");
-    std::fs::create_dir_all(plugin_dir.join(".github/plugin")).expect("mkdir plugin dir");
+        .join(".copilot")
+        .join("installed-plugins")
+        .join("awesome-copilot")
+        .join("orphan-plugin");
+    std::fs::create_dir_all(join_portable_path(&plugin_dir, ".github/plugin"))
+        .expect("mkdir plugin dir");
     std::fs::write(
-        plugin_dir.join(".github/plugin/plugin.json"),
+        join_portable_path(&plugin_dir, ".github/plugin/plugin.json"),
         br#"{"name":"orphan-plugin"}"#,
     )
     .expect("write plugin file");
@@ -2035,7 +2234,7 @@ fn reset_hard_removes_stale_plugin_dirs_when_copilot_reports_not_installed() {
     write_manifest(&repo.path().join("cpm.toml"), &Manifest::default()).expect("write manifest");
     write_lockfile(&repo.path().join("cpm.lock"), &Lockfile::new()).expect("write lock");
     write_global_lockfile_to(
-        &home.path().join(".copilot/cpm.lock"),
+        &join_portable_path(home.path(), ".copilot/cpm.lock"),
         &GlobalLockfile::new(),
     )
     .expect("write empty global lock");
@@ -2045,6 +2244,8 @@ fn reset_hard_removes_stale_plugin_dirs_when_copilot_reports_not_installed() {
             "reset", "--plugin", "--scope", "global", "--hard", "--force",
         ])
         .env("HOME", home.path())
+        .env("USERPROFILE", home.path())
+        .env("APPDATA", home.path().join("AppData").join("Roaming"))
         .env("CPM_COPILOT_BIN", &copilot_bin)
         .env("CPM_TEST_LOG", &log_path)
         .current_dir(repo.path())
@@ -2088,7 +2289,7 @@ fn reset_hard_removes_stale_plugin_config_entries_when_copilot_reports_not_insta
     write_manifest(&repo.path().join("cpm.toml"), &Manifest::default()).expect("write manifest");
     write_lockfile(&repo.path().join("cpm.lock"), &Lockfile::new()).expect("write lock");
     write_global_lockfile_to(
-        &home.path().join(".copilot/cpm.lock"),
+        &join_portable_path(home.path(), ".copilot/cpm.lock"),
         &GlobalLockfile::new(),
     )
     .expect("write empty global lock");
@@ -2098,6 +2299,8 @@ fn reset_hard_removes_stale_plugin_config_entries_when_copilot_reports_not_insta
             "reset", "--plugin", "--scope", "global", "--hard", "--force",
         ])
         .env("HOME", home.path())
+        .env("USERPROFILE", home.path())
+        .env("APPDATA", home.path().join("AppData").join("Roaming"))
         .env("CPM_COPILOT_BIN", &copilot_bin)
         .env("CPM_TEST_LOG", &log_path)
         .current_dir(repo.path())
@@ -2126,7 +2329,7 @@ fn reset_hard_removes_stale_plugin_config_entries_when_copilot_reports_not_insta
 fn reset_global_asset_drops_claim_from_global_lockfile() {
     let home = tempfile::TempDir::new().expect("home tempdir");
     let repo = tempfile::TempDir::new().expect("repo tempdir");
-    let skill_dir = repo.path().join("skills/shared");
+    let skill_dir = join_portable_path(repo.path(), "skills/shared");
     std::fs::create_dir_all(&skill_dir).expect("mkdir");
     std::fs::write(skill_dir.join("SKILL.md"), "# Shared\n").expect("write skill");
     write_global_skill_manifest(repo.path(), &skill_dir);
@@ -2135,6 +2338,8 @@ fn reset_global_asset_drops_claim_from_global_lockfile() {
     let sync_output = cpm_bin()
         .args(["sync"])
         .env("HOME", home.path())
+        .env("USERPROFILE", home.path())
+        .env("APPDATA", home.path().join("AppData").join("Roaming"))
         .current_dir(repo.path())
         .output()
         .expect("seed sync");
@@ -2144,7 +2349,7 @@ fn reset_global_asset_drops_claim_from_global_lockfile() {
         String::from_utf8_lossy(&sync_output.stderr)
     );
 
-    let global_lock_path = home.path().join(".copilot/cpm.lock");
+    let global_lock_path = join_portable_path(home.path(), ".copilot/cpm.lock");
     let before = load_global_lockfile_from(&global_lock_path).expect("load before");
     assert_eq!(
         before.claims.len(),
@@ -2155,6 +2360,8 @@ fn reset_global_asset_drops_claim_from_global_lockfile() {
     let reset_output = cpm_bin()
         .args(["reset", "--skill", "--scope", "global", "--force"])
         .env("HOME", home.path())
+        .env("USERPROFILE", home.path())
+        .env("APPDATA", home.path().join("AppData").join("Roaming"))
         .current_dir(repo.path())
         .output()
         .expect("run cpm reset");
@@ -2179,7 +2386,7 @@ fn overview_reports_unmanaged_global_mcp_entries_from_config() {
     let repo = tempfile::TempDir::new().expect("repo tempdir");
     std::fs::create_dir_all(home.path().join(".copilot")).expect("mkdir");
     std::fs::write(
-        home.path().join(".copilot/mcp-config.json"),
+        join_portable_path(home.path(), ".copilot/mcp-config.json"),
         r#"{ "mcpServers": { "external-server": { "type": "http", "url": "https://example.com/mcp" } } }"#,
     )
     .expect("write mcp config");
@@ -2190,6 +2397,8 @@ fn overview_reports_unmanaged_global_mcp_entries_from_config() {
     let output = cpm_bin()
         .args(["overview", "--mcp", "--scope", "global", "--json"])
         .env("HOME", home.path())
+        .env("USERPROFILE", home.path())
+        .env("APPDATA", home.path().join("AppData").join("Roaming"))
         .current_dir(repo.path())
         .output()
         .expect("overview json");
@@ -2200,10 +2409,7 @@ fn overview_reports_unmanaged_global_mcp_entries_from_config() {
     assert_eq!(json["unmanaged"][0]["entry_type"], "mcp-server");
     assert_eq!(
         json["unmanaged"][0]["path"],
-        home.path()
-            .join(".copilot/mcp-config.json")
-            .display()
-            .to_string()
+        normalized_path_string(&join_portable_path(home.path(), ".copilot/mcp-config.json"))
             + "#external-server"
     );
 }
@@ -2269,7 +2475,7 @@ fn sync_removes_stale_local_skill_when_removed_from_manifest() {
     let dir = tempfile::TempDir::new().expect("repo dir");
 
     // Create a source skill directory with a real file.
-    let skill_src = dir.path().join("src-skills/vanishing");
+    let skill_src = join_portable_path(dir.path(), "src-skills/vanishing");
     std::fs::create_dir_all(&skill_src).expect("mkdir skill src");
     std::fs::write(skill_src.join("SKILL.md"), "# Vanishing\n").expect("write skill");
 
@@ -2277,6 +2483,8 @@ fn sync_removes_stale_local_skill_when_removed_from_manifest() {
     let add_out = cpm_bin()
         .args(["add", skill_src.to_str().expect("utf8"), "--skill"])
         .env("HOME", home.path())
+        .env("USERPROFILE", home.path())
+        .env("APPDATA", home.path().join("AppData").join("Roaming"))
         .current_dir(dir.path())
         .output()
         .expect("cpm add");
@@ -2286,7 +2494,7 @@ fn sync_removes_stale_local_skill_when_removed_from_manifest() {
         String::from_utf8_lossy(&add_out.stderr)
     );
 
-    let installed_file = dir.path().join(".github/skills/vanishing/SKILL.md");
+    let installed_file = join_portable_path(dir.path(), ".github/skills/vanishing/SKILL.md");
     assert!(
         installed_file.exists(),
         "skill must be installed before the test"
@@ -2301,6 +2509,8 @@ fn sync_removes_stale_local_skill_when_removed_from_manifest() {
     let sync_out = cpm_bin()
         .args(["sync"])
         .env("HOME", home.path())
+        .env("USERPROFILE", home.path())
+        .env("APPDATA", home.path().join("AppData").join("Roaming"))
         .current_dir(dir.path())
         .output()
         .expect("cpm sync");
@@ -2324,7 +2534,7 @@ fn sync_removes_stale_local_install_when_skill_scope_changes_to_global() {
     let dir = tempfile::TempDir::new().expect("repo dir");
 
     // Create a source skill directory.
-    let skill_src = dir.path().join("src-skills/shared");
+    let skill_src = join_portable_path(dir.path(), "src-skills/shared");
     std::fs::create_dir_all(&skill_src).expect("mkdir skill src");
     std::fs::write(skill_src.join("SKILL.md"), "# Shared\n").expect("write skill");
 
@@ -2332,6 +2542,8 @@ fn sync_removes_stale_local_install_when_skill_scope_changes_to_global() {
     let add_out = cpm_bin()
         .args(["add", skill_src.to_str().expect("utf8"), "--skill"])
         .env("HOME", home.path())
+        .env("USERPROFILE", home.path())
+        .env("APPDATA", home.path().join("AppData").join("Roaming"))
         .current_dir(dir.path())
         .output()
         .expect("cpm add local");
@@ -2341,7 +2553,7 @@ fn sync_removes_stale_local_install_when_skill_scope_changes_to_global() {
         String::from_utf8_lossy(&add_out.stderr)
     );
 
-    let local_file = dir.path().join(".github/skills/shared/SKILL.md");
+    let local_file = join_portable_path(dir.path(), ".github/skills/shared/SKILL.md");
     assert!(
         local_file.exists(),
         "local skill must be present before scope change"
@@ -2350,7 +2562,7 @@ fn sync_removes_stale_local_install_when_skill_scope_changes_to_global() {
     // Rewrite the manifest to use global scope.
     let manifest_str = format!(
         "[skills]\nshared = {{ path = \"{}\", scope = \"global\" }}\n",
-        skill_src.display()
+        normalized_path_string(&skill_src)
     );
     std::fs::write(dir.path().join("cpm.toml"), &manifest_str).expect("rewrite manifest");
 
@@ -2358,6 +2570,8 @@ fn sync_removes_stale_local_install_when_skill_scope_changes_to_global() {
     let sync_out = cpm_bin()
         .args(["sync"])
         .env("HOME", home.path())
+        .env("USERPROFILE", home.path())
+        .env("APPDATA", home.path().join("AppData").join("Roaming"))
         .current_dir(dir.path())
         .output()
         .expect("cpm sync");
@@ -2372,7 +2586,7 @@ fn sync_removes_stale_local_install_when_skill_scope_changes_to_global() {
         "old local install should have been removed after scope change to global"
     );
 
-    let global_file = home.path().join(".copilot/skills/shared/SKILL.md");
+    let global_file = join_portable_path(home.path(), ".copilot/skills/shared/SKILL.md");
     assert!(
         global_file.exists(),
         "new global install should exist after scope change"
@@ -2388,20 +2602,22 @@ fn sync_reports_progress_for_non_plugin_skill_install() {
     let home = tempfile::TempDir::new().expect("home tempdir");
     let dir = tempfile::TempDir::new().expect("repo dir");
 
-    let skill_src = dir.path().join("src-skills/tracked");
+    let skill_src = join_portable_path(dir.path(), "src-skills/tracked");
     std::fs::create_dir_all(&skill_src).expect("mkdir skill src");
     std::fs::write(skill_src.join("SKILL.md"), "# Tracked\n").expect("write skill");
 
     // Write the manifest only — no lockfile — so sync must resolve and install.
     let manifest_str = format!(
         "[skills]\ntracked = {{ path = \"{}\" }}\n",
-        skill_src.display()
+        normalized_path_string(&skill_src)
     );
     std::fs::write(dir.path().join("cpm.toml"), &manifest_str).expect("write manifest");
 
     let output = cpm_bin()
         .args(["sync"])
         .env("HOME", home.path())
+        .env("USERPROFILE", home.path())
+        .env("APPDATA", home.path().join("AppData").join("Roaming"))
         // Ensure CI env is unset so plain progress lines are emitted to stderr
         // regardless of whether there is a terminal.
         .env_remove("CI")

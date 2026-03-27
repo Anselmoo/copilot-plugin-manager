@@ -22,6 +22,7 @@ use cpm_types::{AssetKind, GlobalLockfile, Lockfile, Manifest, Scope};
 
 use crate::{
     installer::{copilot_mcp_config_path, install_dir},
+    paths::portable_path_string,
     plugin_index::{
         default_plugin_index_path, installed_plugin_request, plugin_install_root,
         plugin_install_root_candidates, plugin_request, read_installed_plugins_from,
@@ -411,7 +412,7 @@ fn serialize_path<S>(path: &Path, serializer: S) -> Result<S::Ok, S::Error>
 where
     S: Serializer,
 {
-    serializer.serialize_str(&path.to_string_lossy().replace('\\', "/"))
+    serializer.serialize_str(&portable_path_string(path))
 }
 
 // ─── Tests ───────────────────────────────────────────────────────────────────

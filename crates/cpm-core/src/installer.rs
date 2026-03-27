@@ -29,6 +29,7 @@ use serde_json::{json, Value};
 use tracing::{debug, info};
 
 use crate::fetcher::atomic_write;
+use crate::paths::{copilot_home_dir, copilot_state_dir};
 use crate::CpmError;
 
 /// Return the base install directory for the given `kind` and `scope`.
@@ -58,10 +59,7 @@ pub fn install_dir(kind: AssetKind, scope: Scope, repo_root: &Path) -> PathBuf {
                 AssetKind::Workflow => "workflows",
                 AssetKind::Instruction => "instructions",
             };
-            dirs::home_dir()
-                .unwrap_or_else(|| PathBuf::from("/tmp"))
-                .join(".copilot")
-                .join(sub)
+            copilot_state_dir().join(sub)
         }
     }
 }
@@ -77,10 +75,7 @@ pub fn install_dir(kind: AssetKind, scope: Scope, repo_root: &Path) -> PathBuf {
 pub fn copilot_mcp_config_path(scope: Scope, repo_root: &Path) -> PathBuf {
     match scope {
         Scope::Local => repo_root.join(".vscode").join("mcp.json"),
-        Scope::Global => dirs::home_dir()
-            .unwrap_or_else(|| PathBuf::from("/tmp"))
-            .join(".copilot")
-            .join("mcp-config.json"),
+        Scope::Global => copilot_state_dir().join("mcp-config.json"),
     }
 }
 
@@ -269,12 +264,12 @@ pub fn mcp_json(asset: &ResolvedAsset) -> Option<Value> {
 
     let json = match transport {
         McpTransport::Http { url } => json!({
-            "transport": "http",
+            "type": "http",
             "url": url,
             "env": env_obj,
         }),
         McpTransport::Sse { url } => json!({
-            "transport": "sse",
+            "type": "sse",
             "url": url,
             "env": env_obj,
         }),
@@ -283,7 +278,7 @@ pub fn mcp_json(asset: &ResolvedAsset) -> Option<Value> {
             entrypoint,
             args,
         } => json!({
-            "transport": "npx",
+            "type": "npx",
             "package": package,
             "entrypoint": entrypoint,
             "args": args,
@@ -294,20 +289,20 @@ pub fn mcp_json(asset: &ResolvedAsset) -> Option<Value> {
             entrypoint,
             args,
         } => json!({
-            "transport": "uvx",
+            "type": "uvx",
             "package": package,
             "entrypoint": entrypoint,
             "args": args,
             "env": env_obj,
         }),
         McpTransport::Docker { image, args } => json!({
-            "transport": "docker",
+            "type": "docker",
             "image": image,
             "args": args,
             "env": env_obj,
         }),
         McpTransport::Binary { url, bin, args } => json!({
-            "transport": "binary",
+            "type": "binary",
             "url": url,
             "bin": bin,
             "args": args,
@@ -315,13 +310,13 @@ pub fn mcp_json(asset: &ResolvedAsset) -> Option<Value> {
             "env": env_obj,
         }),
         McpTransport::Path { path, args } => json!({
-            "transport": "path",
+            "type": "path",
             "path": path,
             "args": args,
             "env": env_obj,
         }),
         McpTransport::Script { command, args } => json!({
-            "transport": "script",
+            "type": "script",
             "command": command,
             "args": args,
             "env": env_obj,
@@ -585,7 +580,7 @@ fn preferred_mcp_servers_key(scope: Scope) -> &'static str {
 fn prune_stop(scope: Scope, repo_root: &Path) -> PathBuf {
     match scope {
         Scope::Local => repo_root.to_path_buf(),
-        Scope::Global => dirs::home_dir().unwrap_or_else(|| PathBuf::from("/tmp")),
+        Scope::Global => copilot_home_dir().unwrap_or_else(std::env::temp_dir),
     }
 }
 
@@ -609,6 +604,7 @@ fn prune_empty_dirs(current: Option<&Path>, stop_at: &Path) -> Result<(), CpmErr
 #[cfg(test)]
 mod tests {
     use super::*;
+    use crate::paths::join_portable_path;
     use cpm_types::{AssetOwnership, AssetSource, EnvSpec};
     use std::path::PathBuf;
     use tempfile::TempDir;
@@ -687,6 +683,7 @@ mod tests {
             env,
         );
         let json = mcp_json(&asset).expect("json");
+        assert_eq!(json["type"], "npx");
         let env_obj = json.get("env").expect("env key");
         assert_eq!(
             env_obj.get("KEY").and_then(|v| v.as_str()),
@@ -913,7 +910,7 @@ mod tests {
             vec![],
         );
         install_asset(&asset, dir.path()).expect("install");
-        let config_path = dir.path().join(".vscode/mcp.json");
+        let config_path = join_portable_path(dir.path(), ".vscode/mcp.json");
         assert!(config_path.exists(), ".vscode/mcp.json should be created");
         let raw = std::fs::read_to_string(&config_path).expect("read");
         let v: serde_json::Value = serde_json::from_str(&raw).expect("parse");
@@ -943,7 +940,7 @@ mod tests {
         install_asset(&asset_a, dir.path()).expect("install a");
         install_asset(&asset_b, dir.path()).expect("install b");
 
-        let config_path = dir.path().join(".vscode/mcp.json");
+        let config_path = join_portable_path(dir.path(), ".vscode/mcp.json");
         let raw = std::fs::read_to_string(&config_path).expect("read");
         let v: serde_json::Value = serde_json::from_str(&raw).expect("parse");
         assert_eq!(v["servers"]["server-a"]["type"], "http");
@@ -972,7 +969,7 @@ mod tests {
         install_asset(&asset_b, dir.path()).expect("install b");
         remove_asset(&asset_a, dir.path()).expect("remove a");
 
-        let config_path = dir.path().join(".vscode/mcp.json");
+        let config_path = join_portable_path(dir.path(), ".vscode/mcp.json");
         assert!(
             config_path.exists(),
             "config file should survive after partial removal"
@@ -1067,7 +1064,7 @@ mod tests {
     #[test]
     fn remove_asset_prunes_empty_install_directories() {
         let dir = TempDir::new().expect("tempdir");
-        let install_path = dir.path().join(".github/skills/my-skill/SKILL.md");
+        let install_path = join_portable_path(dir.path(), ".github/skills/my-skill/SKILL.md");
         std::fs::create_dir_all(install_path.parent().expect("skill dir"))
             .expect("create skill dir");
         std::fs::write(&install_path, "# My Skill\n").expect("write skill");
@@ -1104,7 +1101,7 @@ mod tests {
 
         remove_asset(&asset, dir.path()).expect("remove");
 
-        assert!(!dir.path().join(".github/skills/my-skill").exists());
-        assert!(!dir.path().join(".github/skills").exists());
+        assert!(!join_portable_path(dir.path(), ".github/skills/my-skill").exists());
+        assert!(!join_portable_path(dir.path(), ".github/skills").exists());
     }
 }

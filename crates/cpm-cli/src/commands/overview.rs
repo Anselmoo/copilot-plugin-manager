@@ -7,6 +7,7 @@ use clap::Args;
 use cpm_core::{
     external::{scan_external_assets, ExternalAssets},
     installer::{copilot_mcp_config_path, install_dir, read_copilot_mcp_server_names},
+    paths::portable_path_string,
     plugin_index::{
         delegated_plugin_marker_path_by_name, installed_plugin_request, plugin_install_root,
         plugin_install_root_candidates, read_installed_plugins,
@@ -666,7 +667,7 @@ pub(super) fn scan_unmanaged_assets(
                         full_path: config_path.clone(),
                         kind: AssetKind::Mcp.to_string(),
                         scope: scope.to_string(),
-                        path: format!("{}#{name}", config_path.display()),
+                        path: format!("{}#{name}", portable_path_string(&config_path)),
                         entry_type: "mcp-server".to_owned(),
                         file_count: 1,
                         config_key: Some(name),
@@ -675,21 +676,29 @@ pub(super) fn scan_unmanaged_assets(
                 continue;
             }
             if *kind == AssetKind::Plugin && *scope == Scope::Global {
-                let managed_names: HashSet<_> = lockfile
+                let managed_requests: HashSet<_> = lockfile
                     .all_assets()
                     .chain(global_lockfile.all_assets())
-                    .filter(|asset| asset.kind == AssetKind::Plugin)
-                    .map(|asset| asset.name.clone())
+                    .filter(|asset| asset.kind == AssetKind::Plugin && asset.scope == *scope)
+                    .map(|asset| {
+                        let registry = asset
+                            .plugin_meta
+                            .as_ref()
+                            .and_then(|meta| meta.registry.as_deref());
+                        cpm_core::plugin_index::plugin_request(&asset.name, registry)
+                    })
                     .collect();
                 for plugin in read_installed_plugins()? {
                     let Some(name) = plugin.name.as_deref() else {
                         continue;
                     };
-                    if managed_names.contains(name) {
+                    let request =
+                        installed_plugin_request(&plugin).unwrap_or_else(|| name.to_owned());
+                    if managed_requests.contains(&request) {
                         continue;
                     }
                     let full_path = plugin_install_root(&plugin)
-                        .unwrap_or_else(|| PathBuf::from(format!("plugin:{name}")));
+                        .unwrap_or_else(|| PathBuf::from(format!("plugin:{request}")));
                     let file_count = if full_path.is_dir() {
                         count_files(&full_path).unwrap_or(0)
                     } else {
@@ -701,10 +710,10 @@ pub(super) fn scan_unmanaged_assets(
                         full_path,
                         kind: AssetKind::Plugin.to_string(),
                         scope: scope.to_string(),
-                        path: installed_plugin_request(&plugin).unwrap_or_else(|| name.to_owned()),
+                        path: request.clone(),
                         entry_type: "plugin".to_owned(),
                         file_count,
-                        config_key: installed_plugin_request(&plugin),
+                        config_key: Some(request),
                     });
                 }
                 continue;
@@ -837,8 +846,8 @@ fn unmanaged_path(root: &Path, path: &Path, is_dir: bool) -> String {
     let mut relative = path
         .strip_prefix(root)
         .unwrap_or(path)
-        .display()
-        .to_string();
+        .to_string_lossy()
+        .replace('\\', "/");
     if is_dir && !relative.ends_with('/') {
         relative.push('/');
     }
@@ -902,7 +911,7 @@ fn serialize_path<S>(path: &Path, serializer: S) -> Result<S::Ok, S::Error>
 where
     S: Serializer,
 {
-    serializer.serialize_str(&path.to_string_lossy().replace('\\', "/"))
+    serializer.serialize_str(&portable_path_string(path))
 }
 
 pub(super) fn compiled_workflow_path(path: &Path) -> Option<PathBuf> {
@@ -922,13 +931,17 @@ impl From<ScopeArg> for Scope {
 
 #[cfg(test)]
 mod tests {
+    use std::sync::{Mutex, MutexGuard, OnceLock};
+
     use camino::Utf8PathBuf;
+    use cpm_core::paths::join_portable_path;
     use cpm_core::project::load_lockfile;
     use tempfile::TempDir;
 
     use super::*;
     use cpm_types::{
-        AssetSource, Lockfile, Manifest, ResolvedAsset, Scope, SubAsset, SubAssetOwnership,
+        AssetOwnership, AssetSource, Lockfile, Manifest, PluginMeta, ResolvedAsset, Scope,
+        SubAsset, SubAssetOwnership,
     };
 
     fn make_source() -> AssetSource {
@@ -943,6 +956,13 @@ mod tests {
             args: vec![],
             engine: None,
         }
+    }
+
+    fn home_env_lock() -> MutexGuard<'static, ()> {
+        static LOCK: OnceLock<Mutex<()>> = OnceLock::new();
+        LOCK.get_or_init(|| Mutex::new(()))
+            .lock()
+            .expect("lock HOME/USERPROFILE")
     }
 
     fn make_resolved() -> ResolvedAsset {
@@ -1043,11 +1063,23 @@ path = "workflows/review.md"
         let skills_dir = dir.path().join(".github").join("skills");
         let lock_path = dir.path().join("cpm.lock");
         std::fs::create_dir_all(skills_dir.join("tracked-skill")).expect("create tracked dir");
-        std::fs::write(skills_dir.join("tracked-skill/SKILL.md"), "# tracked\n")
-            .expect("write tracked");
-        std::fs::create_dir_all(skills_dir.join("manual/docs")).expect("create unmanaged dir");
-        std::fs::write(skills_dir.join("manual/SKILL.md"), "# manual\n").expect("write manual");
-        std::fs::write(skills_dir.join("manual/docs/guide.md"), "# guide\n").expect("write guide");
+        std::fs::write(
+            join_portable_path(&skills_dir, "tracked-skill/SKILL.md"),
+            "# tracked\n",
+        )
+        .expect("write tracked");
+        std::fs::create_dir_all(join_portable_path(&skills_dir, "manual/docs"))
+            .expect("create unmanaged dir");
+        std::fs::write(
+            join_portable_path(&skills_dir, "manual/SKILL.md"),
+            "# manual\n",
+        )
+        .expect("write manual");
+        std::fs::write(
+            join_portable_path(&skills_dir, "manual/docs/guide.md"),
+            "# guide\n",
+        )
+        .expect("write guide");
         std::fs::write(
             &lock_path,
             r#"
@@ -1087,11 +1119,18 @@ path = "skills/tracked-skill"
         let dir = TempDir::new().expect("tempdir");
         let skills_dir = dir.path().join(".github").join("skills");
         let lock_path = dir.path().join("cpm.lock");
-        std::fs::create_dir_all(skills_dir.join("tracked-skill/docs")).expect("create tracked dir");
-        std::fs::write(skills_dir.join("tracked-skill/SKILL.md"), "# tracked\n")
-            .expect("write tracked");
-        std::fs::write(skills_dir.join("tracked-skill/docs/notes.md"), "# notes\n")
-            .expect("write extra file");
+        std::fs::create_dir_all(join_portable_path(&skills_dir, "tracked-skill/docs"))
+            .expect("create tracked dir");
+        std::fs::write(
+            join_portable_path(&skills_dir, "tracked-skill/SKILL.md"),
+            "# tracked\n",
+        )
+        .expect("write tracked");
+        std::fs::write(
+            join_portable_path(&skills_dir, "tracked-skill/docs/notes.md"),
+            "# notes\n",
+        )
+        .expect("write extra file");
         std::fs::write(
             &lock_path,
             r#"
@@ -1158,17 +1197,24 @@ path = "skills/tracked-skill"
 
     #[test]
     fn scan_unmanaged_assets_discovers_global_plugins_from_modern_install_layout() {
+        let _env_lock = home_env_lock();
         let dir = TempDir::new().expect("tempdir");
         let home = TempDir::new().expect("home");
         let previous_home = std::env::var_os("HOME");
+        let previous_userprofile = std::env::var_os("USERPROFILE");
         std::env::set_var("HOME", home.path());
+        std::env::set_var("USERPROFILE", home.path());
 
         let plugin_dir = home
             .path()
-            .join(".copilot/installed-plugins/awesome-copilot/orphan-plugin");
-        std::fs::create_dir_all(plugin_dir.join(".github/plugin")).expect("mkdir plugin dir");
+            .join(".copilot")
+            .join("installed-plugins")
+            .join("awesome-copilot")
+            .join("orphan-plugin");
+        std::fs::create_dir_all(join_portable_path(&plugin_dir, ".github/plugin"))
+            .expect("mkdir plugin dir");
         std::fs::write(
-            plugin_dir.join(".github/plugin/plugin.json"),
+            join_portable_path(&plugin_dir, ".github/plugin/plugin.json"),
             br#"{"name":"orphan-plugin"}"#,
         )
         .expect("write plugin json");
@@ -1186,10 +1232,98 @@ path = "skills/tracked-skill"
             Some(value) => std::env::set_var("HOME", value),
             None => std::env::remove_var("HOME"),
         }
+        match previous_userprofile {
+            Some(value) => std::env::set_var("USERPROFILE", value),
+            None => std::env::remove_var("USERPROFILE"),
+        }
 
         assert_eq!(unmanaged.len(), 1);
         assert_eq!(unmanaged[0].path, "orphan-plugin@awesome-copilot");
         assert_eq!(unmanaged[0].entry_type, "plugin");
+        assert_eq!(
+            unmanaged[0].config_key.as_deref(),
+            Some("orphan-plugin@awesome-copilot")
+        );
+    }
+
+    #[test]
+    fn scan_unmanaged_assets_keeps_cross_registry_global_plugins_visible() {
+        let _env_lock = home_env_lock();
+        let dir = TempDir::new().expect("tempdir");
+        let home = TempDir::new().expect("home");
+        let previous_home = std::env::var_os("HOME");
+        let previous_userprofile = std::env::var_os("USERPROFILE");
+        std::env::set_var("HOME", home.path());
+        std::env::set_var("USERPROFILE", home.path());
+
+        let plugin_dir = home
+            .path()
+            .join(".copilot")
+            .join("installed-plugins")
+            .join("awesome-copilot")
+            .join("orphan-plugin");
+        std::fs::create_dir_all(join_portable_path(&plugin_dir, ".github/plugin"))
+            .expect("mkdir plugin dir");
+        std::fs::write(
+            join_portable_path(&plugin_dir, ".github/plugin/plugin.json"),
+            br#"{"name":"orphan-plugin"}"#,
+        )
+        .expect("write plugin json");
+
+        let mut lockfile = Lockfile::new();
+        lockfile.plugins.push(ResolvedAsset {
+            name: "orphan-plugin".to_owned(),
+            kind: AssetKind::Plugin,
+            source: AssetSource {
+                url: Some("https://example.com/orphan-plugin".to_owned()),
+                rev: None,
+                path: None,
+                group: "default".to_owned(),
+                scope: Scope::Global,
+                transport: None,
+                env: vec![],
+                args: vec![],
+                engine: None,
+            },
+            resolved_rev: "aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa".to_owned(),
+            resolved_date: chrono::Utc::now(),
+            hash: "sha256:orphan".to_owned(),
+            scope: Scope::Global,
+            ownership: AssetOwnership::Upstream,
+            files: vec![],
+            executable: vec![],
+            file_hashes: Default::default(),
+            git: None,
+            sub_assets: vec![],
+            license: None,
+            bin_path: None,
+            compiled_path: None,
+            plugin_meta: Some(PluginMeta {
+                registry: Some("different-registry".to_owned()),
+                ..PluginMeta::default()
+            }),
+        });
+
+        let unmanaged = scan_unmanaged_assets(
+            &lockfile,
+            &GlobalLockfile::new(),
+            dir.path(),
+            &[AssetKind::Plugin],
+            Some(Scope::Global),
+        )
+        .expect("scan unmanaged");
+
+        match previous_home {
+            Some(value) => std::env::set_var("HOME", value),
+            None => std::env::remove_var("HOME"),
+        }
+        match previous_userprofile {
+            Some(value) => std::env::set_var("USERPROFILE", value),
+            None => std::env::remove_var("USERPROFILE"),
+        }
+
+        assert_eq!(unmanaged.len(), 1);
+        assert_eq!(unmanaged[0].path, "orphan-plugin@awesome-copilot");
         assert_eq!(
             unmanaged[0].config_key.as_deref(),
             Some("orphan-plugin@awesome-copilot")

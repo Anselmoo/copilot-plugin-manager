@@ -20,7 +20,7 @@ use super::{
 /// Arguments for `cpm lock`.
 #[derive(Debug, Args)]
 pub struct LockArgs {
-    /// Exit 1 if the lockfile is out of date.
+    /// Exit 1 if the lockfile is missing or out of date.
     #[arg(long)]
     pub check: bool,
 }
@@ -33,7 +33,7 @@ pub async fn run(args: LockArgs) -> Result<(), CpmError> {
 
     if args.check {
         if !lockfile_path.exists() {
-            return Err(CpmError::LockOutOfDate);
+            return Err(CpmError::MissingLockfile);
         }
         let lockfile = load_lockfile(lockfile_path)?;
         check_lock_freshness(&manifest, &lockfile)?;

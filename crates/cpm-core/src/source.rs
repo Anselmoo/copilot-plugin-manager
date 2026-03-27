@@ -12,6 +12,7 @@ use sha2::{Digest, Sha256};
 
 use crate::config::rewrite_source_url;
 use crate::fetcher::{atomic_write, cache_dir};
+use crate::paths::portable_path_string;
 use crate::CpmError;
 
 /// A normalized asset source that can be written into `cpm.toml`.
@@ -95,6 +96,19 @@ pub fn normalize_asset_source(
     kind: AssetKind,
     source: &str,
 ) -> Result<NormalizedAssetSource, CpmError> {
+    // On Windows, absolute paths like C:\ or C:/ may parse as URLs with scheme 'C'.
+    // Check for Windows absolute paths before attempting URL parsing to ensure they
+    // go through path normalization instead of being treated as unsupported URL schemes.
+    #[cfg(windows)]
+    {
+        let is_windows_absolute = source.len() >= 3
+            && source.chars().nth(1) == Some(':')
+            && (source.chars().nth(2) == Some('\\') || source.chars().nth(2) == Some('/'));
+        if is_windows_absolute {
+            return normalize_path_source(kind, source);
+        }
+    }
+
     if let Ok(url) = Url::parse(source) {
         return normalize_url_source(kind, source, &url);
     }
@@ -702,12 +716,7 @@ fn normalize_path_source(kind: AssetKind, source: &str) -> Result<NormalizedAsse
         });
     }
 
-    let utf8_path = Utf8PathBuf::from_path_buf(normalized_path.to_path_buf()).map_err(|_| {
-        CpmError::InvalidSource {
-            input: source.to_owned(),
-            reason: "local paths must be valid UTF-8".to_owned(),
-        }
-    })?;
+    let utf8_path = Utf8PathBuf::from(portable_path_string(normalized_path));
 
     Ok(NormalizedAssetSource {
         name: normalized.name,
@@ -759,6 +768,21 @@ impl GitHubMode {
     }
 }
 
+fn trim_path_end(path: &str) -> &str {
+    path.trim_end_matches(['/', '\\'])
+}
+
+fn last_path_segment(path: &str) -> &str {
+    let trimmed = trim_path_end(path);
+    trimmed.rsplit(['/', '\\']).next().unwrap_or(trimmed)
+}
+
+fn parent_path(path: &str) -> Option<&str> {
+    trim_path_end(path)
+        .rsplit_once(['/', '\\'])
+        .map(|(parent, _)| parent)
+}
+
 fn normalize_asset_path(
     kind: AssetKind,
     source: &str,
@@ -773,8 +797,8 @@ fn normalize_asset_path(
         });
     }
 
-    let trimmed = path.trim_end_matches('/');
-    let last = trimmed.rsplit('/').next().unwrap_or(trimmed);
+    let trimmed = trim_path_end(path);
+    let last = last_path_segment(trimmed);
 
     if last == plural_dir(kind) {
         return Err(CpmError::InvalidSource {
@@ -802,12 +826,12 @@ fn normalize_directory_path(
     match kind {
         AssetKind::Skill | AssetKind::Plugin => Ok(NormalizedPath {
             name: path
-                .trim_end_matches('/')
-                .rsplit('/')
+                .trim_end_matches(['/', '\\'])
+                .rsplit(['/', '\\'])
                 .next()
                 .unwrap_or(path)
                 .to_owned(),
-            path: path.trim_end_matches('/').to_owned(),
+            path: path.trim_end_matches(['/', '\\']).to_owned(),
             mode: GitHubMode::Tree,
         }),
         AssetKind::Agent => Err(CpmError::InvalidSource {
@@ -816,22 +840,22 @@ fn normalize_directory_path(
         }),
         AssetKind::Mcp => Ok(NormalizedPath {
             name: path
-                .trim_end_matches('/')
-                .rsplit('/')
+                .trim_end_matches(['/', '\\'])
+                .rsplit(['/', '\\'])
                 .next()
                 .unwrap_or(path)
                 .to_owned(),
-            path: path.trim_end_matches('/').to_owned(),
+            path: path.trim_end_matches(['/', '\\']).to_owned(),
             mode: GitHubMode::Tree,
         }),
         AssetKind::Hook => Ok(NormalizedPath {
             name: path
-                .trim_end_matches('/')
-                .rsplit('/')
+                .trim_end_matches(['/', '\\'])
+                .rsplit(['/', '\\'])
                 .next()
                 .unwrap_or(path)
                 .to_owned(),
-            path: path.trim_end_matches('/').to_owned(),
+            path: path.trim_end_matches(['/', '\\']).to_owned(),
             mode: GitHubMode::Tree,
         }),
         AssetKind::Workflow => Err(CpmError::InvalidSource {
@@ -852,7 +876,7 @@ fn normalize_explicit_file_path(
     source: &str,
     path: &str,
 ) -> Result<NormalizedPath, CpmError> {
-    let last = path.rsplit('/').next().unwrap_or(path);
+    let last = last_path_segment(path);
     if !is_explicit_file_for_kind(kind, last) {
         return Err(CpmError::InvalidSource {
             input: source.to_owned(),
@@ -862,11 +886,9 @@ fn normalize_explicit_file_path(
 
     match kind {
         AssetKind::Skill | AssetKind::Plugin => {
-            let directory = path.rsplit_once('/').map(|(dir, _)| dir).ok_or_else(|| {
-                CpmError::InvalidSource {
-                    input: source.to_owned(),
-                    reason: "asset file must live under a named directory".to_owned(),
-                }
+            let directory = parent_path(path).ok_or_else(|| CpmError::InvalidSource {
+                input: source.to_owned(),
+                reason: "asset file must live under a named directory".to_owned(),
             })?;
             Ok(NormalizedPath {
                 name: infer_name_from_file_path(kind, path)?,
@@ -880,11 +902,9 @@ fn normalize_explicit_file_path(
             mode: GitHubMode::Blob,
         }),
         AssetKind::Hook => {
-            let directory = path.rsplit_once('/').map(|(dir, _)| dir).ok_or_else(|| {
-                CpmError::InvalidSource {
-                    input: source.to_owned(),
-                    reason: "hook files must live under a named directory".to_owned(),
-                }
+            let directory = parent_path(path).ok_or_else(|| CpmError::InvalidSource {
+                input: source.to_owned(),
+                reason: "hook files must live under a named directory".to_owned(),
             })?;
             Ok(NormalizedPath {
                 name: infer_name_from_file_path(kind, path)?,
@@ -906,9 +926,9 @@ fn normalize_explicit_file_path(
 }
 
 fn infer_name_from_file_path(kind: AssetKind, path: &str) -> Result<String, CpmError> {
-    let trimmed = path.trim_end_matches('/');
+    let trimmed = trim_path_end(path);
     let segments: Vec<_> = trimmed
-        .split('/')
+        .split(['/', '\\'])
         .filter(|segment| !segment.is_empty())
         .collect();
     let last = segments.last().copied().unwrap_or_default();
@@ -1203,6 +1223,71 @@ mod tests {
                 "https://github.com/github/awesome-copilot/blob/main/instructions/shell.instructions.md",
             )
         );
+    }
+
+    #[test]
+    #[cfg_attr(not(windows), ignore)]
+    fn windows_absolute_paths_not_parsed_as_urls() {
+        // Ensure Windows absolute paths like C:\path or C:/path are handled as local paths,
+        // not incorrectly parsed as URLs with scheme "C".
+        // This test only runs on Windows; on other platforms it's ignored.
+        use tempfile::TempDir;
+
+        let dir = TempDir::new().expect("tempdir");
+        let skill_dir = dir.path().join("my-skill");
+        std::fs::create_dir_all(&skill_dir).expect("create skill dir");
+        let file_path = skill_dir.join("SKILL.md");
+        std::fs::write(&file_path, "# Test").expect("write file");
+
+        let path_str = skill_dir.to_string_lossy().to_string();
+        // path_str should be like C:\Users\... on Windows
+        assert!(
+            path_str.contains(":"),
+            "test requires Windows absolute path"
+        );
+
+        let normalized = normalize_asset_source(AssetKind::Skill, &path_str)
+            .expect("Windows absolute paths should normalize to local paths");
+
+        assert!(
+            normalized.path.is_some(),
+            "Windows path should resolve to local path"
+        );
+        assert!(normalized.url.is_none(), "Windows path should not have URL");
+        assert_eq!(
+            normalized.path.as_ref().map(|path| path.as_str()),
+            Some(crate::paths::portable_path_string(&skill_dir).as_str())
+        );
+    }
+
+    #[test]
+    #[cfg_attr(not(windows), ignore)]
+    fn windows_style_instruction_paths_use_filename_for_name() {
+        use tempfile::TempDir;
+
+        let dir = TempDir::new().expect("tempdir");
+        let instructions_dir = dir.path().join("instructions");
+        std::fs::create_dir_all(&instructions_dir).expect("mkdir instructions");
+        let file_path = instructions_dir.join("shell.md");
+        std::fs::write(&file_path, "# shell").expect("write instruction");
+
+        let path_str = file_path.to_string_lossy().to_string();
+        let normalized = normalize_asset_source(AssetKind::Instruction, &path_str)
+            .expect("normalize instruction path");
+
+        assert_eq!(normalized.name, "shell");
+        assert_eq!(
+            normalized.path.as_ref().map(|path| path.as_str()),
+            Some(crate::paths::portable_path_string(&file_path).as_str())
+        );
+    }
+
+    #[test]
+    fn infer_instruction_name_from_backslash_path() {
+        let name = infer_name_from_file_path(AssetKind::Instruction, r"tmp\instructions\shell.md")
+            .expect("infer instruction name");
+
+        assert_eq!(name, "shell");
     }
 
     #[test]

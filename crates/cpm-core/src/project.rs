@@ -2,7 +2,7 @@
 
 use std::path::{Path, PathBuf};
 
-use camino::Utf8PathBuf;
+use camino::{Utf8Path, Utf8PathBuf};
 use chrono::Utc;
 use cpm_types::{
     AssetKind, AssetOwnership, AssetSource, EnvSpec, EnvValue, GitMetadata, GitSourceKind,
@@ -25,6 +25,7 @@ use crate::{
         write_mcp_server_entry,
     },
     license::{detect_license, enforce_license_policy},
+    paths::{copilot_state_dir, portable_path_string},
     resolver::detect_conflicts,
     source::{
         docker_image_pin, parse_github_source, resolve_package_transport_version,
@@ -1192,9 +1193,7 @@ fn render_mcp_source_parts(
         }
         match transport {
             McpTransport::Http { url } | McpTransport::Sse { url } => {
-                if source.url.as_deref() != Some(url.as_str()) {
-                    parts.push(format!("url = {}", render_toml_value(url.clone())?));
-                }
+                parts.push(format!("url = {}", render_toml_value(url.clone())?));
             }
             McpTransport::Npx {
                 package,
@@ -1218,9 +1217,7 @@ fn render_mcp_source_parts(
                 parts.push(format!("image = {}", render_toml_value(image.clone())?));
             }
             McpTransport::Binary { url, bin, .. } => {
-                if source.url.as_deref() != Some(url.as_str()) {
-                    parts.push(format!("url = {}", render_toml_value(url.clone())?));
-                }
+                parts.push(format!("url = {}", render_toml_value(url.clone())?));
                 parts.push(format!("bin = {}", render_toml_value(bin.clone())?));
             }
             McpTransport::Path { path, .. } => {
@@ -1875,10 +1872,7 @@ pub fn drop_asset_from_lockfile(
 
 /// Return the default machine-global cpm lockfile path in `~/.copilot`.
 pub fn default_global_lockfile_path() -> PathBuf {
-    dirs::home_dir()
-        .unwrap_or_else(|| PathBuf::from("/tmp"))
-        .join(".copilot")
-        .join("cpm.lock")
+    copilot_state_dir().join("cpm.lock")
 }
 
 /// Load the machine-local global lockfile from the default path.
@@ -2810,20 +2804,17 @@ fn detect_sub_assets(kind: AssetKind, files: &[PreparedFile]) -> Vec<SubAsset> {
 
     let mut detected = Vec::new();
     for file in files {
-        let path = file.relative_path.as_str();
-        let Some(remainder) = path
-            .strip_prefix(&plugin_name)
-            .and_then(|rest| rest.strip_prefix('/'))
-        else {
+        let Some(remainder) = plugin_bundle_remainder(&file.relative_path, &plugin_name) else {
             continue;
         };
 
-        if matches_declared_sub_asset(remainder, &agent_roots) && is_nested_agent_path(remainder) {
+        if matches_declared_sub_asset(&remainder, &agent_roots) && is_nested_agent_path(&remainder)
+        {
             let file_name = file
                 .relative_path
                 .file_name()
                 .map(str::to_owned)
-                .unwrap_or_else(|| remainder.to_owned());
+                .unwrap_or_else(|| remainder.clone());
             let name = file_name
                 .strip_suffix(".agent.md")
                 .or_else(|| file_name.strip_suffix(".md"))
@@ -2838,7 +2829,8 @@ fn detect_sub_assets(kind: AssetKind, files: &[PreparedFile]) -> Vec<SubAsset> {
             continue;
         }
 
-        if matches_declared_sub_asset(remainder, &skill_roots) && remainder.ends_with("/SKILL.md") {
+        if matches_declared_sub_asset(&remainder, &skill_roots) && remainder.ends_with("/SKILL.md")
+        {
             let Some(skill_root) = file.relative_path.parent() else {
                 continue;
             };
@@ -2866,17 +2858,19 @@ fn detect_sub_assets(kind: AssetKind, files: &[PreparedFile]) -> Vec<SubAsset> {
 
 fn parse_plugin_bundle_manifest(files: &[PreparedFile]) -> Option<PluginBundleManifest> {
     let manifest = files.iter().find(|file| {
-        file.relative_path
-            .as_str()
-            .ends_with("/.github/plugin/plugin.json")
+        path_ends_with_components(&file.relative_path, &[".github", "plugin", "plugin.json"])
     })?;
     serde_json::from_slice(&manifest.bytes).ok()
 }
 
 fn normalize_bundle_declared_path(path: String) -> String {
-    path.trim()
-        .trim_start_matches("./")
-        .trim_matches('/')
+    let trimmed = path.trim();
+    trimmed
+        .strip_prefix("./")
+        .or_else(|| trimmed.strip_prefix(".\\"))
+        .unwrap_or(trimmed)
+        .trim_matches(['/', '\\'])
+        .replace('\\', "/")
         .to_owned()
 }
 
@@ -2893,6 +2887,30 @@ fn is_nested_agent_path(path: &str) -> bool {
             !file_name.eq_ignore_ascii_case("README.md")
                 && !file_name.eq_ignore_ascii_case("SKILL.md")
         })
+}
+
+fn plugin_bundle_remainder(path: &Utf8Path, plugin_name: &str) -> Option<String> {
+    let mut components = path.components().map(|component| component.as_str());
+    if components.next()? != plugin_name {
+        return None;
+    }
+    let remainder: Vec<_> = components.collect();
+    if remainder.is_empty() {
+        None
+    } else {
+        Some(remainder.join("/"))
+    }
+}
+
+fn path_ends_with_components(path: &Utf8Path, suffix: &[&str]) -> bool {
+    let components: Vec<_> = path
+        .components()
+        .map(|component| component.as_str())
+        .collect();
+    let Some(start) = components.len().checked_sub(suffix.len()) else {
+        return false;
+    };
+    components[start..] == *suffix
 }
 
 fn install_relative_path(
@@ -2979,12 +2997,7 @@ fn collect_local_directory_files(
             file: path.display().to_string(),
             msg: err.to_string(),
         })?;
-        let relative = Utf8PathBuf::from_path_buf(relative.to_path_buf()).map_err(|_| {
-            CpmError::InvalidSource {
-                input: path.display().to_string(),
-                reason: "local asset paths must be valid UTF-8".to_owned(),
-            }
-        })?;
+        let relative = Utf8PathBuf::from(portable_path_string(relative));
 
         files.push(SourceFile {
             relative_path: relative,
@@ -3328,15 +3341,7 @@ impl From<&ResolvedAsset> for LockfileRecord {
                     None,
                     args.clone(),
                     asset.source.url.clone(),
-                    Some(
-                        Utf8PathBuf::from_path_buf(path.clone()).unwrap_or_else(|path| {
-                            tracing::warn!(
-                                path = %path.display(),
-                                "non-UTF-8 MCP path was lossy-converted before writing the lockfile"
-                            );
-                            Utf8PathBuf::from(path.to_string_lossy().into_owned())
-                        }),
-                    ),
+                    Some(Utf8PathBuf::from(portable_path_string(path))),
                 ),
                 Some(McpTransport::Script { command, args }) => (
                     Some(LockfileTransport::Name("script".into())),
@@ -3571,12 +3576,13 @@ impl GlobalClaimRecord {
 #[cfg(test)]
 mod tests {
     use super::*;
+    use crate::paths::join_portable_path;
     use tempfile::TempDir;
 
     #[tokio::test]
     async fn apply_manifest_materializes_local_skill_and_populates_lock() {
         let repo = TempDir::new().expect("tempdir");
-        let skill_dir = repo.path().join("skills/pdf");
+        let skill_dir = join_portable_path(repo.path(), "skills/pdf");
         std::fs::create_dir_all(&skill_dir).expect("mkdir");
         std::fs::write(skill_dir.join("SKILL.md"), "# PDF\n").expect("write skill");
         std::fs::write(skill_dir.join("helper.txt"), "helper").expect("write helper");
@@ -3631,8 +3637,8 @@ mod tests {
                 Utf8PathBuf::from("pdf/helper.txt")
             ]
         );
-        assert!(repo.path().join(".github/skills/pdf/SKILL.md").exists());
-        assert!(repo.path().join(".github/skills/pdf/helper.txt").exists());
+        assert!(join_portable_path(repo.path(), ".github/skills/pdf/SKILL.md").exists());
+        assert!(join_portable_path(repo.path(), ".github/skills/pdf/helper.txt").exists());
         assert!(lock.skills[0].hash.starts_with("sha256:"));
         assert_eq!(
             lock.skills[0]
@@ -3646,12 +3652,14 @@ mod tests {
     #[tokio::test]
     async fn apply_manifest_detects_plugin_bundle_sub_assets() {
         let repo = TempDir::new().expect("tempdir");
-        let plugin_dir = repo.path().join("plugins/partners");
-        std::fs::create_dir_all(plugin_dir.join(".github/plugin")).expect("create plugin manifest");
+        let plugin_dir = join_portable_path(repo.path(), "plugins/partners");
+        std::fs::create_dir_all(join_portable_path(&plugin_dir, ".github/plugin"))
+            .expect("create plugin manifest");
         std::fs::create_dir_all(plugin_dir.join("agents")).expect("create agents");
-        std::fs::create_dir_all(plugin_dir.join("skills/prompt-lib/docs")).expect("create skills");
+        std::fs::create_dir_all(join_portable_path(&plugin_dir, "skills/prompt-lib/docs"))
+            .expect("create skills");
         std::fs::write(
-            plugin_dir.join(".github/plugin/plugin.json"),
+            join_portable_path(&plugin_dir, ".github/plugin/plugin.json"),
             r#"{
   "name": "partners",
   "agents": ["./agents"],
@@ -3659,15 +3667,18 @@ mod tests {
 }"#,
         )
         .expect("write plugin manifest");
-        std::fs::write(plugin_dir.join("agents/terraform.md"), "# Terraform\n")
-            .expect("write agent");
         std::fs::write(
-            plugin_dir.join("skills/prompt-lib/SKILL.md"),
+            join_portable_path(&plugin_dir, "agents/terraform.md"),
+            "# Terraform\n",
+        )
+        .expect("write agent");
+        std::fs::write(
+            join_portable_path(&plugin_dir, "skills/prompt-lib/SKILL.md"),
             "# Prompt Lib\n",
         )
         .expect("write skill");
         std::fs::write(
-            plugin_dir.join("skills/prompt-lib/docs/guide.md"),
+            join_portable_path(&plugin_dir, "skills/prompt-lib/docs/guide.md"),
             "# Guide\n",
         )
         .expect("write helper");
@@ -3728,10 +3739,18 @@ mod tests {
         );
     }
 
+    #[test]
+    fn normalize_bundle_declared_path_rewrites_windows_separators() {
+        assert_eq!(
+            normalize_bundle_declared_path(r".\skills\prompt-lib\".to_owned()),
+            "skills/prompt-lib"
+        );
+    }
+
     #[tokio::test]
     async fn apply_manifest_rejects_disallowed_license() {
         let repo = TempDir::new().expect("tempdir");
-        let skill_dir = repo.path().join("skills/gpl-skill");
+        let skill_dir = join_portable_path(repo.path(), "skills/gpl-skill");
         std::fs::create_dir_all(&skill_dir).expect("mkdir");
         std::fs::write(skill_dir.join("SKILL.md"), "# GPL\n").expect("write skill");
         std::fs::write(
@@ -3787,7 +3806,7 @@ mod tests {
     #[tokio::test]
     async fn apply_manifest_installs_grouped_asset_when_group_requested() {
         let repo = TempDir::new().expect("tempdir");
-        let skill_dir = repo.path().join("skills/research-pdf");
+        let skill_dir = join_portable_path(repo.path(), "skills/research-pdf");
         std::fs::create_dir_all(&skill_dir).expect("mkdir");
         std::fs::write(skill_dir.join("SKILL.md"), "# Research PDF\n").expect("write skill");
 
@@ -3834,10 +3853,7 @@ mod tests {
 
         assert_eq!(lock.skills.len(), 1);
         assert_eq!(lock.skills[0].source.group, "research");
-        assert!(repo
-            .path()
-            .join(".github/skills/research-pdf/SKILL.md")
-            .exists());
+        assert!(join_portable_path(repo.path(), ".github/skills/research-pdf/SKILL.md").exists());
     }
 
     /// Regression: `cpm add <pypi-url> --uvx --scope local` used to call
@@ -4376,6 +4392,45 @@ args = []
     }
 
     #[test]
+    fn write_manifest_roundtrips_remote_http_mcp_entries() {
+        let dir = TempDir::new().expect("tempdir");
+        let path = dir.path().join("cpm.toml");
+        let mut manifest = Manifest::default();
+        manifest.mcps.insert(
+            "context7".into(),
+            AssetSource {
+                url: Some("https://mcp.context7.com/mcp".into()),
+                rev: None,
+                path: None,
+                group: "default".into(),
+                scope: Scope::Local,
+                transport: Some(McpTransport::Http {
+                    url: "https://mcp.context7.com/mcp".into(),
+                }),
+                env: vec![],
+                args: vec![],
+                engine: None,
+            },
+        );
+
+        write_manifest(&path, &manifest).expect("write manifest");
+        let text = std::fs::read_to_string(&path).expect("read manifest");
+        let loaded = load_manifest(&path).expect("reload manifest");
+
+        assert!(
+            text.contains("context7 = { type = \"http\", url = \"https://mcp.context7.com/mcp\" }")
+        );
+        assert_eq!(
+            loaded.mcps["context7"].url.as_deref(),
+            Some("https://mcp.context7.com/mcp")
+        );
+        assert!(matches!(
+            loaded.mcps["context7"].transport,
+            Some(McpTransport::Http { ref url }) if url == "https://mcp.context7.com/mcp"
+        ));
+    }
+
+    #[test]
     fn lockfile_roundtrip() {
         let dir = TempDir::new().expect("tempdir");
         let path = dir.path().join("cpm.lock");
@@ -4834,7 +4889,7 @@ args = []
     fn install_prepared_skips_user_owned_existing_file() {
         let dir = TempDir::new().expect("tempdir");
         // Pre-write the file so it already exists on disk.
-        let dest = dir.path().join(".github/skills/my-skill/SKILL.md");
+        let dest = join_portable_path(dir.path(), ".github/skills/my-skill/SKILL.md");
         std::fs::create_dir_all(dest.parent().expect("parent")).expect("mkdir");
         std::fs::write(&dest, b"original").expect("pre-write");
 
@@ -4858,7 +4913,7 @@ args = []
     fn install_prepared_writes_user_owned_file_on_first_install() {
         let dir = TempDir::new().expect("tempdir");
         // The file does NOT exist yet — first install must succeed.
-        let dest = dir.path().join(".github/skills/new-skill/SKILL.md");
+        let dest = join_portable_path(dir.path(), ".github/skills/new-skill/SKILL.md");
 
         let prepared = make_prepared_skill(
             "new-skill",
@@ -4876,7 +4931,7 @@ args = []
     #[test]
     fn install_prepared_overwrites_upstream_owned_existing_file() {
         let dir = TempDir::new().expect("tempdir");
-        let dest = dir.path().join(".github/skills/up-skill/SKILL.md");
+        let dest = join_portable_path(dir.path(), ".github/skills/up-skill/SKILL.md");
         std::fs::create_dir_all(dest.parent().expect("parent")).expect("mkdir");
         std::fs::write(&dest, b"old content").expect("pre-write");
 
@@ -5482,8 +5537,8 @@ url = "https://example.com/legacy"
         let repo = TempDir::new().expect("tempdir");
 
         // Create two distinct skill directories.
-        let skill_v1 = repo.path().join("skills/v1");
-        let skill_v2 = repo.path().join("skills/v2");
+        let skill_v1 = join_portable_path(repo.path(), "skills/v1");
+        let skill_v2 = join_portable_path(repo.path(), "skills/v2");
         std::fs::create_dir_all(&skill_v1).expect("mkdir v1");
         std::fs::create_dir_all(&skill_v2).expect("mkdir v2");
         std::fs::write(skill_v1.join("SKILL.md"), "# V1\n").expect("write v1");

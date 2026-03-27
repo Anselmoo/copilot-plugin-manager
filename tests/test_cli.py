@@ -410,7 +410,7 @@ def test_python_module_show_returns_details(tmp_path: Path) -> None:
     assert "detail-skill" in result.stdout
 
 
-def test_python_module_lock_check_exits_nonzero_when_manifest_needs_lock(tmp_path: Path) -> None:
+def test_python_module_lock_check_exits_nonzero_when_lockfile_is_missing(tmp_path: Path) -> None:
     """lock --check should fail if manifest entries exist but cpm.lock is absent."""
     skill_dir = _make_skill_dir(tmp_path / "skills", "needs-lock")
     (tmp_path / "cpm.toml").write_text(
@@ -419,7 +419,7 @@ def test_python_module_lock_check_exits_nonzero_when_manifest_needs_lock(tmp_pat
     )
     result = _run_cpm("lock", "--check", cwd=tmp_path)
     assert result.returncode != 0
-    assert "lock out of date" in (result.stderr or result.stdout)
+    assert "does not exist" in (result.stderr or result.stdout)
 
 
 def test_python_module_cache_dir_prints_path(tmp_path: Path) -> None:

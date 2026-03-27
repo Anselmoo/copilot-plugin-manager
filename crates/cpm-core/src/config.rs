@@ -76,7 +76,8 @@ pub struct NetworkTarget {
 /// Return the default user config path.
 pub fn default_user_config_path() -> PathBuf {
     dirs::config_dir()
-        .unwrap_or_else(|| PathBuf::from("~/.config"))
+        .or_else(|| dirs::home_dir().map(|h| h.join(".config")))
+        .unwrap_or_else(|| PathBuf::from("."))
         .join("cpm")
         .join("config.toml")
 }

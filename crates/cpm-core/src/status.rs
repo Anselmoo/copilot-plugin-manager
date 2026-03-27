@@ -352,6 +352,7 @@ fn describe_global_issue(issue: &GlobalClaimIssue) -> String {
 #[cfg(test)]
 mod tests {
     use super::*;
+    use crate::paths::{join_portable_path, portable_path_string};
     use cpm_types::{
         AssetSource, GlobalClaim, GlobalLockfile, Lockfile, Manifest, PluginMeta, ResolvedAsset,
         Scope,
@@ -402,7 +403,7 @@ mod tests {
             source: Some(format!("https://example.com/{name}")),
             registry: Some("awesome-copilot".to_owned()),
             description: None,
-            path: camino::Utf8PathBuf::from_path_buf(path.to_path_buf()).ok(),
+            path: Some(camino::Utf8PathBuf::from(portable_path_string(path))),
             enabled: Some(true),
             installed_at: None,
             extra: Default::default(),
@@ -414,10 +415,10 @@ mod tests {
     #[test]
     fn empty_list_when_manifest_and_lock_match() {
         let dir = TempDir::new().expect("tempdir");
-        let plugin_root = dir.path().join("plugins/p");
-        std::fs::create_dir_all(plugin_root.join(".github/plugin")).expect("mkdir");
+        let plugin_root = join_portable_path(dir.path(), "plugins/p");
+        std::fs::create_dir_all(join_portable_path(&plugin_root, ".github/plugin")).expect("mkdir");
         std::fs::write(
-            plugin_root.join(".github/plugin/plugin.json"),
+            join_portable_path(&plugin_root, ".github/plugin/plugin.json"),
             br#"{"name":"p"}"#,
         )
         .expect("write");
@@ -603,10 +604,10 @@ mod tests {
     #[test]
     fn delegated_plugin_reports_manifest_hash_drift() {
         let dir = TempDir::new().expect("tempdir");
-        let plugin_root = dir.path().join("plugins/pptx");
-        std::fs::create_dir_all(plugin_root.join(".github/plugin")).expect("mkdir");
+        let plugin_root = join_portable_path(dir.path(), "plugins/pptx");
+        std::fs::create_dir_all(join_portable_path(&plugin_root, ".github/plugin")).expect("mkdir");
         std::fs::write(
-            plugin_root.join(".github/plugin/plugin.json"),
+            join_portable_path(&plugin_root, ".github/plugin/plugin.json"),
             br#"{"name":"pptx","version":"2.0.0"}"#,
         )
         .expect("write");
@@ -674,7 +675,11 @@ mod tests {
     #[test]
     fn drift_reports_per_file_hash_mismatch_detail() {
         let dir = TempDir::new().expect("tempdir");
-        let file_path = dir.path().join(".github/plugins").join("bundle.yml");
+        let file_path = dir
+            .path()
+            .join(".github")
+            .join("plugins")
+            .join("bundle.yml");
         std::fs::create_dir_all(file_path.parent().expect("parent")).expect("mkdir");
         std::fs::write(&file_path, b"tampered").expect("write");
 
@@ -713,10 +718,10 @@ mod tests {
     #[test]
     fn same_name_different_kind_both_unlocked() {
         let dir = TempDir::new().expect("tempdir");
-        let plugin_root = dir.path().join("plugins/x");
-        std::fs::create_dir_all(plugin_root.join(".github/plugin")).expect("mkdir");
+        let plugin_root = join_portable_path(dir.path(), "plugins/x");
+        std::fs::create_dir_all(join_portable_path(&plugin_root, ".github/plugin")).expect("mkdir");
         std::fs::write(
-            plugin_root.join(".github/plugin/plugin.json"),
+            join_portable_path(&plugin_root, ".github/plugin/plugin.json"),
             br#"{"name":"x"}"#,
         )
         .expect("write");
@@ -759,10 +764,10 @@ mod tests {
     #[test]
     fn global_asset_reports_missing_machine_claim() {
         let dir = TempDir::new().expect("tempdir");
-        let plugin_root = dir.path().join("plugins/shared");
-        std::fs::create_dir_all(plugin_root.join(".github/plugin")).expect("mkdir");
+        let plugin_root = join_portable_path(dir.path(), "plugins/shared");
+        std::fs::create_dir_all(join_portable_path(&plugin_root, ".github/plugin")).expect("mkdir");
         std::fs::write(
-            plugin_root.join(".github/plugin/plugin.json"),
+            join_portable_path(&plugin_root, ".github/plugin/plugin.json"),
             br#"{"name":"shared"}"#,
         )
         .expect("write");
@@ -799,10 +804,10 @@ mod tests {
     #[test]
     fn global_asset_reports_cross_repo_conflict() {
         let dir = TempDir::new().expect("tempdir");
-        let plugin_root = dir.path().join("plugins/shared");
-        std::fs::create_dir_all(plugin_root.join(".github/plugin")).expect("mkdir");
+        let plugin_root = join_portable_path(dir.path(), "plugins/shared");
+        std::fs::create_dir_all(join_portable_path(&plugin_root, ".github/plugin")).expect("mkdir");
         std::fs::write(
-            plugin_root.join(".github/plugin/plugin.json"),
+            join_portable_path(&plugin_root, ".github/plugin/plugin.json"),
             br#"{"name":"shared"}"#,
         )
         .expect("write");
