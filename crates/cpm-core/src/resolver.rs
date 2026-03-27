@@ -329,7 +329,7 @@ fn check_section(
         };
         if asset.source.url != source.url
             || asset.source.path != source.path
-            || asset.source.group != source.group
+            || asset.source.groups != source.groups
             || asset.source.scope != source.scope
             || asset.source.transport != source.transport
             || asset.source.env != source.env
@@ -384,7 +384,7 @@ mod tests {
                 url: Some("https://example.com".into()),
                 rev: None,
                 path: None,
-                group: "default".into(),
+                groups: "default".into(),
                 scope,
                 transport: None,
                 env: vec![],
@@ -438,7 +438,7 @@ mod tests {
                 url: Some("https://example.com".into()),
                 rev: None,
                 path: None,
-                group: "default".into(),
+                groups: "default".into(),
                 scope: Scope::Local,
                 transport: None,
                 env: vec![],

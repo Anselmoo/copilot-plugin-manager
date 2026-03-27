@@ -1,31 +1,33 @@
 [package]
-name        = "cpm-core"
+name = "cpm-core"
 description = "Core resolver, fetcher, installer and doctor logic for cpm"
-version.workspace     = true
-edition.workspace     = true
-authors.workspace     = true
-license.workspace     = true
-repository.workspace  = true
+version.workspace = true
+edition.workspace = true
+authors.workspace = true
+license.workspace = true
+repository.workspace = true
 
 [dependencies]
 cpm-types = { path = "../cpm-types" }
 
-serde      = { workspace = true }
+serde = { workspace = true }
 serde_json = { workspace = true }
-toml       = { workspace = true }
-toml_edit  = { workspace = true }
-indexmap   = { workspace = true }
-camino     = { workspace = true }
-chrono     = { workspace = true }
-thiserror  = { workspace = true }
-miette     = { workspace = true }
+toml = { workspace = true }
+toml_edit = { workspace = true }
+indexmap = { workspace = true }
+camino = { workspace = true }
+chrono = { workspace = true }
+thiserror = { workspace = true }
+miette = { workspace = true }
 
-tokio   = { workspace = true }
+tokio = { workspace = true }
 reqwest = { workspace = true }
 futures = { workspace = true }
 
 sha2 = { workspace = true }
-hex  = { workspace = true }
+hex = { workspace = true }
+flate2 = { workspace = true }
+tar = { workspace = true }
 
 tracing = { workspace = true }
 keyring = { workspace = true }
@@ -34,4 +36,4 @@ dirs = { workspace = true }
 [dev-dependencies]
 tempfile = { workspace = true }
 wiremock = { workspace = true }
-tokio    = { workspace = true }
+tokio = { workspace = true }

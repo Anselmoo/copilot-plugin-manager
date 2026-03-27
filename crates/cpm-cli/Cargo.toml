@@ -1,34 +1,39 @@
 [package]
-name        = "cpm-cli"
+name = "cpm-cli"
 description = "Command-line interface for cpm — the Copilot Plugin Manager"
-version.workspace     = true
-edition.workspace     = true
-authors.workspace     = true
-license.workspace     = true
-repository.workspace  = true
+version.workspace = true
+edition.workspace = true
+authors.workspace = true
+license.workspace = true
+repository.workspace = true
+default-run = "cpm"
 
 [[bin]]
 name = "cpm"
 path = "src/main.rs"
 
+[[bin]]
+name = "copilot-plugin-manager"
+path = "src/bin/copilot-plugin-manager.rs"
+
 [dependencies]
 cpm-types = { path = "../cpm-types" }
-cpm-core  = { path = "../cpm-core" }
+cpm-core = { path = "../cpm-core" }
 
-serde      = { workspace = true }
+serde = { workspace = true }
 serde_json = { workspace = true }
-toml       = { workspace = true }
-indexmap   = { workspace = true }
+toml = { workspace = true }
+indexmap = { workspace = true }
 
-clap    = { workspace = true }
+clap = { workspace = true }
 rpassword = { workspace = true }
-tokio   = { workspace = true }
+tokio = { workspace = true }
 reqwest = { workspace = true }
-tracing            = { workspace = true }
+tracing = { workspace = true }
 tracing-subscriber = { workspace = true }
 indicatif = { workspace = true }
-miette    = { workspace = true }
-chrono    = { workspace = true }
+miette = { workspace = true }
+chrono = { workspace = true }
 
 [dev-dependencies]
 camino = { workspace = true }

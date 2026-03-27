@@ -9,6 +9,7 @@ type TomlValue = dict[str, "TomlValue"] | list["TomlValue"] | str | int | float 
 
 REPO_ROOT = Path(__file__).resolve().parents[1]
 MANIFESTS = ("cpm.toml", "cpm-reference.toml")
+ASSET_SECTIONS = {"plugins", "skills", "agents", "mcps", "hooks", "workflows", "instructions"}
 
 
 def _find_absolute_paths(value: TomlValue, location: str) -> list[str]:
@@ -26,6 +27,27 @@ def _find_absolute_paths(value: TomlValue, location: str) -> list[str]:
     return errors
 
 
+def _find_legacy_group_usage(value: TomlValue, location: str) -> list[str]:
+    errors: list[str] = []
+    if isinstance(value, dict):
+        for key, item in value.items():
+            child_location = f"{location}.{key}" if location else key
+            if key == "group":
+                errors.append(f'{child_location} uses legacy `group`; prefer `groups = ["..."]`')
+            if location.startswith("groups.") and key in ASSET_SECTIONS:
+                message = (
+                    f"{child_location} is a legacy nested group asset section; "
+                    "keep `[groups.<name>]` for metadata only and move assets "
+                    "inline with `groups = [...]`"
+                )
+                errors.append(message)
+            errors.extend(_find_legacy_group_usage(item, child_location))
+    elif isinstance(value, list):
+        for index, item in enumerate(value):
+            errors.extend(_find_legacy_group_usage(item, f"{location}[{index}]"))
+    return errors
+
+
 def main() -> int:
     errors: list[str] = []
 
@@ -37,9 +59,8 @@ def main() -> int:
             errors.append(f"{manifest_name}: invalid TOML ({exc})")
             continue
 
-        errors.extend(
-            f"{manifest_name}: {error}" for error in _find_absolute_paths(parsed, "")
-        )
+        errors.extend(f"{manifest_name}: {error}" for error in _find_absolute_paths(parsed, ""))
+        errors.extend(f"{manifest_name}: {error}" for error in _find_legacy_group_usage(parsed, ""))
 
     if errors:
         for error in errors:

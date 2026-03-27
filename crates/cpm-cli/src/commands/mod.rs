@@ -453,8 +453,22 @@ pub(super) fn asset_source_path(asset: &ResolvedAsset) -> Option<&str> {
     asset.source.path.as_ref().map(|path| path.as_str())
 }
 
-pub(super) fn json_group(group: &str) -> Option<String> {
-    (group != "default").then(|| group.to_owned())
+pub(super) fn json_group(groups: &cpm_types::Groups) -> Option<String> {
+    let explicit = groups.explicit();
+    if explicit.len() == 1 {
+        explicit.into_iter().next()
+    } else {
+        None
+    }
+}
+
+pub(super) fn json_groups(groups: &cpm_types::Groups) -> Option<Vec<String>> {
+    let explicit = groups.explicit();
+    (!explicit.is_empty()).then_some(explicit)
+}
+
+pub(super) fn display_groups(groups: &cpm_types::Groups) -> Option<String> {
+    json_groups(groups).map(|explicit| explicit.join(", "))
 }
 
 pub(super) fn json_rev(rev: &str) -> Option<String> {
@@ -1246,7 +1260,10 @@ pub(super) fn upsert_plugin_lock_entry(lockfile: &mut Lockfile, asset: ResolvedA
     if plugin_asset_is_delegated(&asset) {
         let mut replaced = false;
         lockfile.plugins.retain_mut(|existing| {
-            let matches_name = existing.name == asset.name && plugin_asset_is_delegated(existing);
+            let matches_name = existing.name == asset.name
+                && plugin_asset_is_delegated(existing)
+                && existing.scope == asset.scope
+                && existing.source.groups == asset.source.groups;
             if !matches_name {
                 return true;
             }
@@ -1263,11 +1280,11 @@ pub(super) fn upsert_plugin_lock_entry(lockfile: &mut Lockfile, asset: ResolvedA
         return;
     }
 
-    if let Some(existing) = lockfile
-        .plugins
-        .iter_mut()
-        .find(|existing| existing.name == asset.name && existing.scope == asset.scope)
-    {
+    if let Some(existing) = lockfile.plugins.iter_mut().find(|existing| {
+        existing.name == asset.name
+            && existing.scope == asset.scope
+            && existing.source.groups == asset.source.groups
+    }) {
         *existing = asset;
     } else {
         lockfile.plugins.push(asset);
@@ -1345,7 +1362,7 @@ mod tests {
                 url: Some("pptx@awesome-copilot".into()),
                 rev: None,
                 path: None,
-                group: "default".into(),
+                groups: "default".into(),
                 scope: Scope::Local,
                 transport: None,
                 env: vec![],
@@ -1383,6 +1400,62 @@ mod tests {
                 .and_then(|meta| meta.plugin_json_hash.clone()),
             Some(asset.hash.clone())
         );
+    }
+
+    #[test]
+    fn upsert_plugin_lock_entry_keeps_distinct_group_entries() {
+        let base_asset = ResolvedAsset {
+            name: "pptx".to_owned(),
+            kind: AssetKind::Plugin,
+            source: AssetSource {
+                url: Some("pptx@awesome-copilot".into()),
+                rev: None,
+                path: None,
+                groups: "default".into(),
+                scope: Scope::Global,
+                transport: None,
+                env: vec![],
+                args: vec![],
+                engine: None,
+            },
+            resolved_rev: "rev-default".to_owned(),
+            resolved_date: Utc::now(),
+            hash: "sha256:default".to_owned(),
+            scope: Scope::Global,
+            ownership: AssetOwnership::Upstream,
+            files: vec![],
+            executable: vec![],
+            file_hashes: Default::default(),
+            git: None,
+            sub_assets: vec![],
+            license: None,
+            bin_path: None,
+            compiled_path: None,
+            plugin_meta: None,
+        };
+        let dev_asset = ResolvedAsset {
+            source: AssetSource {
+                groups: "dev".into(),
+                ..base_asset.source.clone()
+            },
+            resolved_rev: "rev-dev".to_owned(),
+            hash: "sha256:dev".to_owned(),
+            ..base_asset.clone()
+        };
+
+        let mut lockfile = Lockfile::new();
+        upsert_plugin_lock_entry(&mut lockfile, base_asset);
+        upsert_plugin_lock_entry(&mut lockfile, dev_asset);
+
+        assert_eq!(lockfile.plugins.len(), 2);
+        assert!(lockfile
+            .plugins
+            .iter()
+            .any(|asset| asset.source.groups == "default"));
+        assert!(lockfile
+            .plugins
+            .iter()
+            .any(|asset| asset.source.groups == "dev"));
     }
 
     #[test]

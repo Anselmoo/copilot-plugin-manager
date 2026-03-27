@@ -136,7 +136,7 @@ fn check_status_with_installed_plugins(
             // manifest.  We use the same comparisons as check_lock_freshness.
             let source_changed = asset.source.url != source.url
                 || asset.source.path != source.path
-                || asset.source.group != source.group
+                || asset.source.groups != source.groups
                 || asset.source.scope != source.scope
                 || asset.source.transport != source.transport
                 || asset.source.env != source.env
@@ -364,7 +364,7 @@ mod tests {
             url: Some(url.to_owned()),
             rev: rev.map(|r| r.to_owned()),
             path: None,
-            group: "default".to_owned(),
+            groups: "default".into(),
             scope,
             transport: None,
             env: vec![],

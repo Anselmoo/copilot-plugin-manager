@@ -1,15 +1,19 @@
 //! `cpm show` — show full details of a single asset.
 
 use clap::Args;
-use cpm_core::{project::load_lockfile, CpmError};
+use cpm_core::{
+    paths::portable_path_string,
+    project::{load_global_lockfile, load_lockfile},
+    CpmError,
+};
 use cpm_types::{
     EnvSpec, EnvValue, LicenseInfo, LockedFile, McpTransport, ResolvedAsset, SubAsset,
 };
 use serde::Serialize;
 
 use super::{
-    asset_install_target, asset_source_path, asset_source_url, format_sub_asset_summary,
-    json_group, json_rev, style_asset_heading, style_label,
+    asset_install_target, asset_source_path, asset_source_url, display_groups,
+    format_sub_asset_summary, json_group, json_groups, json_rev, style_asset_heading, style_label,
 };
 
 /// Arguments for `cpm show`.
@@ -25,16 +29,45 @@ pub struct ShowArgs {
 
 pub async fn run(args: ShowArgs) -> Result<(), CpmError> {
     let lockfile = load_lockfile(std::path::Path::new("cpm.lock"))?;
+    let global_lockfile = load_global_lockfile()?;
     let mut matches: Vec<_> = lockfile
         .all_assets()
         .filter(|asset| asset.name == args.name)
+        .map(|asset| ShowAssetMatch {
+            asset: asset.clone(),
+            claimed_by: None,
+        })
         .collect();
 
+    for claim in &global_lockfile.claims {
+        if claim.asset.name == args.name
+            && !matches.iter().any(|existing| {
+                existing.asset.kind == claim.asset.kind
+                    && existing.asset.scope == claim.asset.scope
+                    && existing.asset.source.groups == claim.asset.source.groups
+                    && existing.asset.resolved_rev == claim.asset.resolved_rev
+                    && existing.asset.hash == claim.asset.hash
+            })
+        {
+            matches.push(ShowAssetMatch {
+                asset: claim.asset.clone(),
+                claimed_by: Some(portable_path_string(claim.claimed_by.as_std_path())),
+            });
+        }
+    }
+
     matches.sort_by(|left, right| {
-        left.kind
+        left.asset
+            .kind
             .to_string()
-            .cmp(&right.kind.to_string())
-            .then_with(|| left.scope.to_string().cmp(&right.scope.to_string()))
+            .cmp(&right.asset.kind.to_string())
+            .then_with(|| {
+                left.asset
+                    .scope
+                    .to_string()
+                    .cmp(&right.asset.scope.to_string())
+            })
+            .then_with(|| left.claimed_by.cmp(&right.claimed_by))
     });
 
     if matches.is_empty() {
@@ -42,23 +75,28 @@ pub async fn run(args: ShowArgs) -> Result<(), CpmError> {
     }
 
     if args.json {
-        let rows: Vec<_> = matches
-            .iter()
-            .map(|asset| ShowAssetRow::from_asset(asset))
-            .collect();
+        let rows: Vec<_> = matches.iter().map(ShowAssetRow::from_match).collect();
         println!("{}", serde_json::to_string_pretty(&rows)?);
         return Ok(());
     }
 
-    for (index, asset) in matches.iter().enumerate() {
+    for (index, entry) in matches.iter().enumerate() {
         if index > 0 {
             println!();
         }
+        let asset = &entry.asset;
         println!(
             "{}",
             style_asset_heading(asset.kind, asset.scope, &asset.name)
         );
-        println!("{} {}", style_label("group"), asset.source.group);
+        println!(
+            "{} {}",
+            style_label("groups"),
+            display_groups(&asset.source.groups).unwrap_or_else(|| "default".to_owned())
+        );
+        if let Some(claimed_by) = &entry.claimed_by {
+            println!("{} {}", style_label("claimed-by"), claimed_by);
+        }
         println!(
             "{} {}",
             style_label("rev"),
@@ -117,12 +155,20 @@ pub async fn run(args: ShowArgs) -> Result<(), CpmError> {
     Ok(())
 }
 
+#[derive(Debug, Clone)]
+struct ShowAssetMatch {
+    asset: ResolvedAsset,
+    claimed_by: Option<String>,
+}
+
 #[derive(Debug, Serialize)]
 struct ShowAssetRow {
     name: String,
     kind: String,
     scope: String,
     group: Option<String>,
+    groups: Option<Vec<String>>,
+    claimed_by: Option<String>,
     rev: Option<String>,
     hash: String,
     source_url: Option<String>,
@@ -138,12 +184,15 @@ struct ShowAssetRow {
 }
 
 impl ShowAssetRow {
-    fn from_asset(asset: &ResolvedAsset) -> Self {
+    fn from_match(entry: &ShowAssetMatch) -> Self {
+        let asset = &entry.asset;
         Self {
             name: asset.name.clone(),
             kind: asset.kind.to_string(),
             scope: asset.scope.to_string(),
-            group: json_group(&asset.source.group),
+            group: json_group(&asset.source.groups),
+            groups: json_groups(&asset.source.groups),
+            claimed_by: entry.claimed_by.clone(),
             rev: json_rev(&asset.resolved_rev),
             hash: asset.hash.clone(),
             source_url: asset_source_url(asset).map(ToOwned::to_owned),

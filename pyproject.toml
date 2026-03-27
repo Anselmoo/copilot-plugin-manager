@@ -1,10 +1,6 @@
-[build-system]
-requires = ["uv_build>=0.10.9,<0.11.0"]
-build-backend = "uv_build"
-
 [project]
 name = "copilot-plugin-manager"
-version = "0.1.0"
+version = "0.2.0"
 description = "Rust-first GitHub Copilot asset manager with a thin Python wrapper"
 readme = "README.md"
 requires-python = ">=3.12"
@@ -46,10 +42,6 @@ Homepage = "https://github.com/Anselmoo/copilot-plugin-manager"
 Issues = "https://github.com/Anselmoo/copilot-plugin-manager/issues"
 Repository = "https://github.com/Anselmoo/copilot-plugin-manager"
 
-[project.scripts]
-copilot-plugin-manager = "cpm.__main__:main"
-cpm = "cpm.__main__:main"
-
 [dependency-groups]
 dev = [
   "poethepoet>=0.37,<0.38",
@@ -60,24 +52,29 @@ dev = [
   "ty>=0.0.1a18",
 ]
 
-[tool.uv.build-backend]
-module-root = "python"
+[build-system]
+requires = ["maturin>=1.7,<2.0"]
+build-backend = "maturin"
+
+
+[tool.maturin]
+bindings = "bin"
+manifest-path = "crates/cpm-cli/Cargo.toml"
+python-source = "python"
+python-packages = ["cpm"]
 module-name = "cpm"
-source-include = [
-  "Cargo.toml",
-  "Cargo.lock",
-  "README.md",
-  "cpm.toml",
-  "crates/**",
-  "tests/**",
+strip = true
+sdist-generator = "cargo"
+include = [
+  { path = "Cargo.toml", format = "sdist" },
+  { path = "Cargo.lock", format = "sdist" },
+  { path = "README.md", format = "sdist" },
+  { path = "cpm.toml", format = "sdist" },
+  { path = "crates/**", format = "sdist" },
+  { path = "python/**", format = "sdist" },
+  { path = "tests/**", format = "sdist" },
 ]
-source-exclude = [
-  "__pycache__",
-  ".pytest_cache",
-  ".ruff_cache",
-  ".venv",
-  "target",
-]
+exclude = ["__pycache__", ".pytest_cache", ".ruff_cache", ".venv", "target"]
 
 [tool.pytest.ini_options]
 testpaths = ["tests"]
@@ -145,7 +142,7 @@ cmd = "ruff format --check python tests"
 
 [tool.poe.tasks.python-format-check-hook]
 help = "Hook-friendly Python format check with fix guidance"
-shell = "ruff format --check python tests || { echo; echo \"Python formatting issues found in the staged snapshot.\"; echo \"Run: uv run --group dev python -m poethepoet format\"; echo \"Then restage the changes: git add -u python tests\"; exit 1; }"
+shell = "ruff format --check python tests || { echo; echo \"Python formatting issues found in the staged snapshot.\"; echo \"Run: uv run --group dev poe format\"; echo \"Then restage the changes: git add -u python tests\"; exit 1; }"
 
 # ── Linting ────────────────────────────────────────────────────────────────
 [tool.poe.tasks.ruff-check]
@@ -216,7 +213,7 @@ cmd = "cargo fmt --all -- --check"
 
 [tool.poe.tasks.rust-fmt-check-hook]
 help = "Hook-friendly Rust format check with fix guidance"
-shell = "cargo fmt --all -- --check || { echo; echo \"Rust formatting issues found in the staged snapshot.\"; echo \"Run: uv run --group dev python -m poethepoet rust-fmt\"; echo \"Then restage the changes: git add -u crates\"; exit 1; }"
+shell = "cargo fmt --all -- --check || { echo; echo \"Rust formatting issues found in the staged snapshot.\"; echo \"Run: uv run --group dev poe rust-fmt\"; echo \"Then restage the changes: git add -u crates\"; exit 1; }"
 
 [tool.poe.tasks.rust-clippy]
 help = "Run clippy lints on the Rust workspace"
@@ -241,6 +238,79 @@ sequence = [
 [tool.poe.tasks.hooks-check]
 help = "Run the committed lefthook pre-commit pipeline"
 cmd = "lefthook run pre-commit --all-files"
+
+# ── Release helpers ───────────────────────────────────────────────────────
+[tool.poe.tasks.bump_version]
+help = "Bump version metadata, refresh uv.lock, and create a release branch"
+cmd = "python scripts/bump_version.py"
+
+[tool.poe.tasks.bump_patch]
+help = "Create a patch release version bump"
+cmd = "python scripts/bump_version.py patch"
+
+[tool.poe.tasks.bump_minor]
+help = "Create a minor release version bump"
+cmd = "python scripts/bump_version.py minor"
+
+[tool.poe.tasks.bump_major]
+help = "Create a major release version bump"
+cmd = "python scripts/bump_version.py major"
+
+[tool.poe.tasks.bump_no_changelog]
+help = "Create a patch version bump without editing the changelog"
+cmd = "python scripts/bump_version.py patch --no-changelog"
+
+[tool.poe.tasks.changelog_preview]
+help = "Preview the next patch changelog and version bump without writing files"
+cmd = "python scripts/bump_version.py patch --dry-run"
+
+[tool.poe.tasks.branch_new]
+help = "Create a new branch using the project naming workflow"
+cmd = "python scripts/branch.py new"
+
+[tool.poe.tasks.branch_feat]
+help = "Create a feature branch"
+cmd = "python scripts/branch.py new feat"
+
+[tool.poe.tasks.branch_fix]
+help = "Create a bugfix branch"
+cmd = "python scripts/branch.py new fix"
+
+[tool.poe.tasks.branch_chore]
+help = "Create a chore branch"
+cmd = "python scripts/branch.py new chore"
+
+[tool.poe.tasks.branch_docs]
+help = "Create a documentation branch"
+cmd = "python scripts/branch.py new docs"
+
+[tool.poe.tasks.branch_refactor]
+help = "Create a refactor branch"
+cmd = "python scripts/branch.py new refactor"
+
+[tool.poe.tasks.branch_test]
+help = "Create a testing-focused branch"
+cmd = "python scripts/branch.py new test"
+
+[tool.poe.tasks.branch_ci]
+help = "Create a CI branch"
+cmd = "python scripts/branch.py new ci"
+
+[tool.poe.tasks.branch_perf]
+help = "Create a performance branch"
+cmd = "python scripts/branch.py new perf"
+
+[tool.poe.tasks.branch_style]
+help = "Create a style-only branch"
+cmd = "python scripts/branch.py new style"
+
+[tool.poe.tasks.branch_build]
+help = "Create a build-system branch"
+cmd = "python scripts/branch.py new build"
+
+[tool.poe.tasks.branch_rescue]
+help = "Recover or realign the current branch using the rescue workflow"
+cmd = "python scripts/branch.py rescue"
 
 # ── Utilities ──────────────────────────────────────────────────────────────
 [tool.poe.tasks.toml-format]

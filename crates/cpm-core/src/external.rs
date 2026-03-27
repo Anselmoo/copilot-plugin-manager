@@ -433,7 +433,7 @@ mod tests {
             url: Some(format!("https://example.com/{path}")),
             rev: Some("a".repeat(40)),
             path: Some(Utf8PathBuf::from(path)),
-            group: "default".to_owned(),
+            groups: "default".into(),
             scope: Scope::Global,
             transport: None,
             env: vec![],

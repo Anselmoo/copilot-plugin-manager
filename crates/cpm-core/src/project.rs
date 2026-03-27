@@ -1,20 +1,25 @@
 //! Project-level manifest, lockfile, and materialization helpers.
 
-use std::path::{Path, PathBuf};
+use std::{
+    io::{Cursor, Read},
+    path::{Component, Path, PathBuf},
+};
 
 use camino::{Utf8Path, Utf8PathBuf};
 use chrono::Utc;
 use cpm_types::{
-    AssetKind, AssetOwnership, AssetSource, EnvSpec, EnvValue, GitMetadata, GitSourceKind,
-    GlobalClaim, GlobalLockfile, LockedFile, Lockfile, Manifest, ManifestGroup, McpProtocol,
-    McpRunnerKind, McpTransport, PackageMetadata, PartialSettings, PluginMeta, ResolvedAsset,
-    Scope, SourceRule, SubAsset, SubAssetOwnership, WorkflowEngine,
+    canonicalize_groups, AssetKind, AssetOwnership, AssetSource, EnvSpec, EnvValue, GitMetadata,
+    GitSourceKind, GlobalClaim, GlobalLockfile, LockedFile, Lockfile, Manifest, ManifestGroup,
+    McpProtocol, McpRunnerKind, McpTransport, PackageMetadata, PartialSettings, PluginMeta,
+    ResolvedAsset, Scope, SourceRule, SubAsset, SubAssetOwnership, WorkflowEngine,
 };
+use flate2::read::GzDecoder;
 use futures::{stream, StreamExt, TryStreamExt};
 use indexmap::IndexMap;
 use reqwest::Url;
 use serde::{Deserialize, Serialize};
 use sha2::{Digest, Sha256};
+use tar::Archive;
 use tracing::info;
 
 use crate::{
@@ -165,8 +170,12 @@ struct LockfileRecord {
     legacy_date: Option<chrono::DateTime<chrono::Utc>>,
     hash: String,
     scope: Scope,
-    #[serde(default = "default_group")]
-    group: String,
+    #[serde(
+        default = "default_group_values",
+        alias = "group",
+        deserialize_with = "cpm_types::deserialize_groups"
+    )]
+    groups: Vec<String>,
     /// Ownership state for this asset entry.  Omitted from the lockfile when
     /// the value is the default (`upstream`) to keep diffs minimal.
     #[serde(default, skip_serializing_if = "asset_ownership_is_upstream")]
@@ -270,8 +279,16 @@ fn materialize_locked_files(
         .collect()
 }
 
-fn default_group() -> String {
-    "default".to_owned()
+fn default_group_values() -> Vec<String> {
+    Vec::from(cpm_types::default_groups())
+}
+
+fn default_groups_for(default_group_name: &str) -> cpm_types::Groups {
+    canonicalize_groups(vec![default_group_name.to_owned()])
+}
+
+fn groups_match_default_name(groups: &[String], default_group_name: &str) -> bool {
+    groups == [default_group_name]
 }
 
 fn parse_table<'a>(value: &'a toml::Value, context: &str) -> Result<&'a toml::Table, CpmError> {
@@ -839,7 +856,7 @@ fn parse_asset_source(
             url: Some(raw.to_owned()),
             rev: None,
             path: None,
-            group: default_group_name.to_owned(),
+            groups: default_groups_for(default_group_name),
             scope: Scope::Local,
             transport: None,
             env: Vec::new(),
@@ -857,11 +874,17 @@ fn parse_asset_source(
         .get("path")
         .map(|value| parse_string(value, &format!("{context}.path")).map(Into::into))
         .transpose()?;
-    let group = table
-        .get("group")
-        .map(|value| parse_string(value, &format!("{context}.group")))
-        .transpose()?
-        .unwrap_or_else(|| default_group_name.to_owned());
+    let mut group_values = if let Some(value) = table.get("groups") {
+        parse_string_array(value, &format!("{context}.groups"))?
+    } else if let Some(value) = table.get("group") {
+        vec![parse_string(value, &format!("{context}.group"))?]
+    } else {
+        default_groups_for(default_group_name).into()
+    };
+    if default_group_name != "default" {
+        group_values.push(default_group_name.to_owned());
+    }
+    let groups = canonicalize_groups(group_values);
     let scope = parse_scope(
         table.get("scope"),
         Scope::Local,
@@ -930,7 +953,7 @@ fn parse_asset_source(
         url,
         rev,
         path,
-        group,
+        groups,
         scope,
         transport,
         env,
@@ -1041,7 +1064,7 @@ fn is_short_form_asset(source: &AssetSource, default_group_name: &str) -> bool {
     source.url.is_some()
         && source.rev.is_none()
         && source.path.is_none()
-        && source.group == default_group_name
+        && groups_match_default_name(&source.groups, default_group_name)
         && source.scope == Scope::Local
         && source.transport.is_none()
         && source.env.is_empty()
@@ -1086,10 +1109,10 @@ fn render_asset_source_inline(
     if let Some(path) = &source.path {
         parts.push(format!("path = {}", render_toml_value(path.to_string())?));
     }
-    if source.group != default_group_name {
+    if !groups_match_default_name(&source.groups, default_group_name) {
         parts.push(format!(
-            "group = {}",
-            render_toml_value(source.group.clone())?
+            "groups = {}",
+            render_toml_value(source.groups.clone())?
         ));
     }
     if source.scope != Scope::Local {
@@ -1171,10 +1194,10 @@ fn render_mcp_source_parts(
     if let Some(rev) = &source.rev {
         parts.push(format!("rev = {}", render_toml_value(rev.clone())?));
     }
-    if source.group != default_group_name {
+    if !groups_match_default_name(&source.groups, default_group_name) {
         parts.push(format!(
-            "group = {}",
-            render_toml_value(source.group.clone())?
+            "groups = {}",
+            render_toml_value(source.groups.clone())?
         ));
     }
     if source.scope != Scope::Local {
@@ -1460,6 +1483,84 @@ fn write_mcp_sections(
     Ok(())
 }
 
+fn same_asset_except_groups(left: &AssetSource, right: &AssetSource) -> bool {
+    left.url == right.url
+        && left.rev == right.rev
+        && left.path == right.path
+        && left.scope == right.scope
+        && left.transport == right.transport
+        && left.env == right.env
+        && left.args == right.args
+        && left.engine == right.engine
+}
+
+fn flatten_manifest_section(
+    manifest: &Manifest,
+    kind: AssetKind,
+) -> Result<IndexMap<String, AssetSource>, CpmError> {
+    let mut flattened = match kind {
+        AssetKind::Plugin => manifest.plugins.clone(),
+        AssetKind::Skill => manifest.skills.clone(),
+        AssetKind::Agent => manifest.agents.clone(),
+        AssetKind::Mcp => manifest.mcps.clone(),
+        AssetKind::Hook => manifest.hooks.clone(),
+        AssetKind::Workflow => manifest.workflows.clone(),
+        AssetKind::Instruction => manifest.instructions.clone(),
+    };
+
+    for (group_name, group) in &manifest.groups {
+        let grouped = match kind {
+            AssetKind::Plugin => &group.plugins,
+            AssetKind::Skill => &group.skills,
+            AssetKind::Agent => &group.agents,
+            AssetKind::Mcp => &group.mcps,
+            AssetKind::Hook => &group.hooks,
+            AssetKind::Workflow => &group.workflows,
+            AssetKind::Instruction => &group.instructions,
+        };
+
+        for (name, source) in grouped {
+            let mut canonical = source.clone();
+            canonical.merge_groups([group_name.clone()]);
+
+            match flattened.entry(name.clone()) {
+                indexmap::map::Entry::Vacant(entry) => {
+                    entry.insert(canonical);
+                }
+                indexmap::map::Entry::Occupied(mut entry) => {
+                    let existing = entry.get();
+                    if existing == &canonical {
+                        continue;
+                    }
+
+                    if same_asset_except_groups(existing, &canonical) {
+                        let mut updated = existing.clone();
+                        updated.groups = canonicalize_groups(
+                            existing
+                                .groups
+                                .iter()
+                                .cloned()
+                                .chain(canonical.groups.iter().cloned())
+                                .collect::<Vec<_>>(),
+                        );
+                        entry.insert(updated);
+                        continue;
+                    }
+
+                    return Err(CpmError::InvalidConfig {
+                        key: format!("{kind}.{name}"),
+                        reason: format!(
+                            "asset '{name}' is declared more than once with conflicting sources; keep a single canonical entry in cpm.toml"
+                        ),
+                    });
+                }
+            }
+        }
+    }
+
+    Ok(flattened)
+}
+
 /// Load `cpm.toml` from disk.
 pub fn load_manifest(path: &Path) -> Result<Manifest, CpmError> {
     if !path.exists() {
@@ -1527,6 +1628,14 @@ pub fn load_manifest(path: &Path) -> Result<Manifest, CpmError> {
 
 /// Persist `cpm.toml`.
 pub fn write_manifest(path: &Path, manifest: &Manifest) -> Result<(), CpmError> {
+    let plugins = flatten_manifest_section(manifest, AssetKind::Plugin)?;
+    let skills = flatten_manifest_section(manifest, AssetKind::Skill)?;
+    let agents = flatten_manifest_section(manifest, AssetKind::Agent)?;
+    let mcps = flatten_manifest_section(manifest, AssetKind::Mcp)?;
+    let hooks = flatten_manifest_section(manifest, AssetKind::Hook)?;
+    let workflows = flatten_manifest_section(manifest, AssetKind::Workflow)?;
+    let instructions = flatten_manifest_section(manifest, AssetKind::Instruction)?;
+
     let mut serialized = String::new();
     if let Some(package) = &manifest.package {
         write_package(&mut serialized, package)?;
@@ -1536,7 +1645,7 @@ pub fn write_manifest(path: &Path, manifest: &Manifest) -> Result<(), CpmError> 
     write_asset_section(
         &mut serialized,
         "plugins",
-        &manifest.plugins,
+        &plugins,
         AssetKind::Plugin,
         "default",
         true,
@@ -1544,7 +1653,7 @@ pub fn write_manifest(path: &Path, manifest: &Manifest) -> Result<(), CpmError> 
     write_asset_section(
         &mut serialized,
         "skills",
-        &manifest.skills,
+        &skills,
         AssetKind::Skill,
         "default",
         true,
@@ -1552,20 +1661,20 @@ pub fn write_manifest(path: &Path, manifest: &Manifest) -> Result<(), CpmError> 
     write_asset_section(
         &mut serialized,
         "agents",
-        &manifest.agents,
+        &agents,
         AssetKind::Agent,
         "default",
         true,
     )?;
-    if manifest.mcps.is_empty() {
+    if mcps.is_empty() {
         serialized.push_str("[mcps]\n\n");
     } else {
-        write_mcp_sections(&mut serialized, "mcps", &manifest.mcps, "default")?;
+        write_mcp_sections(&mut serialized, "mcps", &mcps, "default")?;
     }
     write_asset_section(
         &mut serialized,
         "hooks",
-        &manifest.hooks,
+        &hooks,
         AssetKind::Hook,
         "default",
         true,
@@ -1573,7 +1682,7 @@ pub fn write_manifest(path: &Path, manifest: &Manifest) -> Result<(), CpmError> 
     write_asset_section(
         &mut serialized,
         "workflows",
-        &manifest.workflows,
+        &workflows,
         AssetKind::Workflow,
         "default",
         true,
@@ -1581,74 +1690,20 @@ pub fn write_manifest(path: &Path, manifest: &Manifest) -> Result<(), CpmError> 
     write_asset_section(
         &mut serialized,
         "instructions",
-        &manifest.instructions,
+        &instructions,
         AssetKind::Instruction,
         "default",
         true,
     )?;
     for (group_name, group) in &manifest.groups {
-        serialized.push_str(&format!("[groups.{group_name}]\n"));
         if let Some(description) = &group.description {
+            serialized.push_str(&format!("[groups.{group_name}]\n"));
             serialized.push_str(&format!(
                 "description = {}\n",
                 render_toml_value(description.clone())?
             ));
+            serialized.push('\n');
         }
-        serialized.push('\n');
-        write_asset_section(
-            &mut serialized,
-            &format!("groups.{group_name}.plugins"),
-            &group.plugins,
-            AssetKind::Plugin,
-            group_name,
-            false,
-        )?;
-        write_asset_section(
-            &mut serialized,
-            &format!("groups.{group_name}.skills"),
-            &group.skills,
-            AssetKind::Skill,
-            group_name,
-            false,
-        )?;
-        write_asset_section(
-            &mut serialized,
-            &format!("groups.{group_name}.agents"),
-            &group.agents,
-            AssetKind::Agent,
-            group_name,
-            false,
-        )?;
-        write_mcp_sections(
-            &mut serialized,
-            &format!("groups.{group_name}.mcps"),
-            &group.mcps,
-            group_name,
-        )?;
-        write_asset_section(
-            &mut serialized,
-            &format!("groups.{group_name}.hooks"),
-            &group.hooks,
-            AssetKind::Hook,
-            group_name,
-            false,
-        )?;
-        write_asset_section(
-            &mut serialized,
-            &format!("groups.{group_name}.workflows"),
-            &group.workflows,
-            AssetKind::Workflow,
-            group_name,
-            false,
-        )?;
-        write_asset_section(
-            &mut serialized,
-            &format!("groups.{group_name}.instructions"),
-            &group.instructions,
-            AssetKind::Instruction,
-            group_name,
-            false,
-        )?;
     }
     if !serialized.ends_with('\n') {
         serialized.push('\n');
@@ -2021,7 +2076,11 @@ pub async fn add_single_asset(
         AssetKind::Workflow => &mut lockfile.workflows,
         AssetKind::Instruction => &mut lockfile.instructions,
     };
-    if let Some(pos) = section.iter().position(|e| e.name == name) {
+    if let Some(pos) = section.iter().position(|entry| {
+        entry.name == name
+            && entry.scope == prepared.lock.scope
+            && entry.source.groups == prepared.lock.source.groups
+    }) {
         section[pos] = prepared.lock.clone();
     } else {
         section.push(prepared.lock.clone());
@@ -2342,9 +2401,9 @@ fn should_install(
     install_group: Option<&str>,
     install_scope: Option<Scope>,
 ) -> bool {
-    let group_matches = source.group == "default"
+    let group_matches = source.groups == "default"
         || install_group
-            .map(|group| source.group == group)
+            .map(|group| source.groups == group)
             .unwrap_or(false);
     let scope_matches = install_scope
         .map(|scope| source.scope == scope)
@@ -3130,6 +3189,18 @@ async fn collect_github_directory_files(
         let response = request.send().await?;
         let status = response.status();
         if status == reqwest::StatusCode::UNAUTHORIZED || status == reqwest::StatusCode::FORBIDDEN {
+            if let Ok(files) = collect_github_directory_files_from_archive(
+                github,
+                resolved_rev,
+                client,
+                token,
+                download_progress,
+                source_rules,
+            )
+            .await
+            {
+                return Ok(files);
+            }
             return Err(CpmError::AuthRequired {
                 url: target.url.clone(),
             });
@@ -3197,6 +3268,111 @@ async fn collect_github_directory_files(
 
     files.sort_by(|left, right| left.relative_path.cmp(&right.relative_path));
     Ok(files)
+}
+
+async fn collect_github_directory_files_from_archive(
+    github: &GitHubSource,
+    resolved_rev: &str,
+    client: &reqwest::Client,
+    token: Option<&str>,
+    download_progress: Option<&dyn DownloadProgress>,
+    source_rules: &IndexMap<String, SourceRule>,
+) -> Result<Vec<SourceFile>, CpmError> {
+    let archive_url = format!(
+        "https://github.com/{owner}/{repo}/archive/{resolved_rev}.tar.gz",
+        owner = github.owner,
+        repo = github.repo,
+    );
+    let bytes =
+        fetch_github_bytes(client, &archive_url, token, download_progress, source_rules).await?;
+
+    extract_github_directory_files_from_archive(&bytes, github, resolved_rev)
+}
+
+fn extract_github_directory_files_from_archive(
+    archive_bytes: &[u8],
+    github: &GitHubSource,
+    resolved_rev: &str,
+) -> Result<Vec<SourceFile>, CpmError> {
+    let cursor = Cursor::new(archive_bytes);
+    let decoder = GzDecoder::new(cursor);
+    let mut archive = Archive::new(decoder);
+    let expected_root: Vec<&str> = github
+        .path
+        .split('/')
+        .filter(|part| !part.is_empty())
+        .collect();
+    let mut files = Vec::new();
+
+    for entry in archive.entries().map_err(|err| CpmError::Parse {
+        file: format!("github archive {}:{}", github.repo, resolved_rev),
+        msg: err.to_string(),
+    })? {
+        let mut entry = entry.map_err(|err| CpmError::Parse {
+            file: format!("github archive {}:{}", github.repo, resolved_rev),
+            msg: err.to_string(),
+        })?;
+        if !entry.header().entry_type().is_file() {
+            continue;
+        }
+
+        let entry_path = entry.path().map_err(|err| CpmError::Parse {
+            file: format!("github archive {}:{}", github.repo, resolved_rev),
+            msg: err.to_string(),
+        })?;
+
+        let Some(relative_path) = strip_github_archive_prefix(entry_path.as_ref(), &expected_root)
+        else {
+            continue;
+        };
+
+        let mut bytes = Vec::new();
+        entry.read_to_end(&mut bytes)?;
+        files.push(SourceFile {
+            relative_path: Utf8PathBuf::from(relative_path),
+            bytes,
+        });
+    }
+
+    if files.is_empty() {
+        return Err(CpmError::InvalidSource {
+            input: format!(
+                "https://github.com/{}/{}/tree/{}/{}",
+                github.owner, github.repo, github.git_ref, github.path
+            ),
+            reason: "GitHub asset directory could not be fetched".to_owned(),
+        });
+    }
+
+    files.sort_by(|left, right| left.relative_path.cmp(&right.relative_path));
+    Ok(files)
+}
+
+fn strip_github_archive_prefix(path: &Path, expected_root: &[&str]) -> Option<String> {
+    let components: Vec<_> = path
+        .components()
+        .filter_map(|component| match component {
+            Component::Normal(segment) => segment.to_str().map(str::to_owned),
+            _ => None,
+        })
+        .collect();
+
+    if components.len() <= expected_root.len() + 1 {
+        return None;
+    }
+
+    let inner = &components[1..];
+    if inner.len() <= expected_root.len()
+        || inner[..expected_root.len()]
+            .iter()
+            .map(String::as_str)
+            .ne(expected_root.iter().copied())
+    {
+        return None;
+    }
+
+    let relative = &inner[expected_root.len()..];
+    (!relative.is_empty()).then(|| relative.join("/"))
 }
 
 fn github_raw_url(owner: &str, repo: &str, rev: &str, path: &str) -> String {
@@ -3374,7 +3550,7 @@ impl From<&ResolvedAsset> for LockfileRecord {
             legacy_date: None,
             hash: asset.hash.clone(),
             scope: asset.scope,
-            group: asset.source.group.clone(),
+            groups: Vec::from(canonicalize_groups(asset.source.groups.clone())),
             ownership: asset.ownership,
             files: asset
                 .files
@@ -3476,7 +3652,7 @@ impl LockfileRecord {
             url: self.url,
             rev: self.rev.clone(),
             path: self.path,
-            group: self.group,
+            groups: canonicalize_groups(self.groups),
             scope: self.scope,
             transport,
             env: self.env,
@@ -3595,7 +3771,7 @@ mod tests {
                 url: None,
                 rev: None,
                 path: Some(Utf8PathBuf::from("skills/pdf")),
-                group: "default".into(),
+                groups: "default".into(),
                 scope: Scope::Local,
                 transport: None,
                 env: vec![],
@@ -3690,7 +3866,7 @@ mod tests {
                 url: None,
                 rev: None,
                 path: Some(Utf8PathBuf::from("plugins/partners")),
-                group: "default".into(),
+                groups: "default".into(),
                 scope: Scope::Local,
                 transport: None,
                 env: vec![],
@@ -3766,7 +3942,7 @@ mod tests {
                 url: None,
                 rev: None,
                 path: Some(Utf8PathBuf::from("skills/gpl-skill")),
-                group: "default".into(),
+                groups: "default".into(),
                 scope: Scope::Local,
                 transport: None,
                 env: vec![],
@@ -3821,7 +3997,7 @@ mod tests {
                 url: None,
                 rev: None,
                 path: Some(Utf8PathBuf::from("skills/research-pdf")),
-                group: "research".into(),
+                groups: "research".into(),
                 scope: Scope::Local,
                 transport: None,
                 env: vec![],
@@ -3852,7 +4028,7 @@ mod tests {
         .expect("apply");
 
         assert_eq!(lock.skills.len(), 1);
-        assert_eq!(lock.skills[0].source.group, "research");
+        assert_eq!(lock.skills[0].source.groups, "research");
         assert!(join_portable_path(repo.path(), ".github/skills/research-pdf/SKILL.md").exists());
     }
 
@@ -3878,7 +4054,7 @@ mod tests {
                 ),
                 rev: Some("abc123deadbeef".to_owned()),
                 path: None,
-                group: "default".to_owned(),
+                groups: "default".into(),
                 scope: Scope::Local,
                 transport: None,
                 env: vec![],
@@ -3905,7 +4081,7 @@ mod tests {
             url: None,
             rev: None,
             path: None,
-            group: "default".to_owned(),
+            groups: "default".into(),
             scope: Scope::Local,
             transport: Some(McpTransport::Uvx {
                 package: "mcp-zen-of-docs".to_owned(),
@@ -3962,7 +4138,7 @@ mod tests {
             url: None,
             rev: Some("1.2.3".to_owned()),
             path: None,
-            group: "default".to_owned(),
+            groups: "default".into(),
             scope: Scope::Local,
             transport: Some(McpTransport::Uvx {
                 package: "mcp-zen-of-docs".to_owned(),
@@ -4008,7 +4184,7 @@ mod tests {
             url: None,
             rev: None,
             path: None,
-            group: "default".to_owned(),
+            groups: "default".into(),
             scope: Scope::Local,
             transport: Some(McpTransport::Docker {
                 image: "ghcr.io/github/github-mcp-server:1.2.3".to_owned(),
@@ -4110,7 +4286,7 @@ mod tests {
             ),
             rev: Some("abc123deadbeef".to_owned()),
             path: None,
-            group: "default".to_owned(),
+            groups: "default".into(),
             scope: Scope::Local,
             transport: None,
             env: vec![],
@@ -4180,7 +4356,7 @@ mod tests {
             url: None,
             rev: None,
             path: None,
-            group: "default".to_owned(),
+            groups: "default".into(),
             scope: Scope::Local,
             transport: Some(McpTransport::Uvx {
                 package: "mcp-zen-of-docs".to_owned(),
@@ -4251,7 +4427,7 @@ mod tests {
                 url: None,
                 rev: None,
                 path: None,
-                group: "default".to_owned(),
+                groups: "default".into(),
                 scope,
                 transport: None,
                 env: vec![],
@@ -4311,7 +4487,7 @@ mod tests {
                 ),
                 rev: None,
                 path: None,
-                group: "default".into(),
+                groups: "default".into(),
                 scope: Scope::Local,
                 transport: None,
                 env: vec![],
@@ -4329,7 +4505,7 @@ mod tests {
                 url: Some("https://github.com/example/arxiv-search".into()),
                 rev: None,
                 path: None,
-                group: "research".into(),
+                groups: "research".into(),
                 scope: Scope::Local,
                 transport: None,
                 env: vec![],
@@ -4350,7 +4526,10 @@ mod tests {
             "partners = \"https://github.com/github/awesome-copilot/tree/main/plugins/partners\""
         ));
         assert!(text.contains("[groups.research]"));
-        assert!(text.contains("[groups.research.skills]"));
+        assert!(text.contains(
+            "arxiv-search = { url = \"https://github.com/example/arxiv-search\", groups = [\"research\"] }"
+        ));
+        assert!(!text.contains("[groups.research.skills]"));
         assert!(!text.contains("[plugins.partners]"));
         assert_eq!(
             loaded.package.as_ref().map(|pkg| pkg.name.as_str()),
@@ -4359,6 +4538,93 @@ mod tests {
         assert!(loaded.sources.contains_key("internal"));
         assert!(loaded.groups.contains_key("research"));
         assert!(loaded.plugins.contains_key("partners"));
+        assert_eq!(loaded.skills["arxiv-search"].groups, "research");
+    }
+
+    #[test]
+    fn write_manifest_canonicalizes_group_assets_into_inline_entries() {
+        let dir = TempDir::new().expect("tempdir");
+        let path = dir.path().join("cpm.toml");
+        let mut manifest = Manifest::default();
+        let mut dev = ManifestGroup::default();
+        dev.mcps.insert(
+            "zen".into(),
+            AssetSource {
+                url: None,
+                rev: None,
+                path: None,
+                groups: "dev".into(),
+                scope: Scope::Global,
+                transport: Some(McpTransport::Uvx {
+                    package: "mcp-zen-of-languages".into(),
+                    entrypoint: None,
+                    args: vec![],
+                }),
+                env: vec![],
+                args: vec![],
+                engine: None,
+            },
+        );
+        manifest.groups.insert("dev".into(), dev);
+
+        write_manifest(&path, &manifest).expect("write manifest");
+        let text = std::fs::read_to_string(&path).expect("read manifest");
+        let loaded = load_manifest(&path).expect("reload manifest");
+
+        assert!(text.contains("[mcps]"));
+        assert!(text.contains(
+            "zen = { groups = [\"dev\"], scope = \"global\", type = \"stdio\", runner = \"uvx\", package = \"mcp-zen-of-languages\" }"
+        ));
+        assert!(!text.contains("[groups.dev.mcps]"));
+        assert!(!text.contains("[groups.dev]"));
+        assert_eq!(loaded.mcps["zen"].groups, "dev");
+    }
+
+    #[test]
+    fn write_manifest_merges_redundant_default_and_named_group_membership() {
+        let dir = TempDir::new().expect("tempdir");
+        let path = dir.path().join("cpm.toml");
+        let mut manifest = Manifest::default();
+
+        let default_entry = AssetSource {
+            url: None,
+            rev: None,
+            path: None,
+            groups: "default".into(),
+            scope: Scope::Global,
+            transport: Some(McpTransport::Uvx {
+                package: "mcp-zen-of-languages".into(),
+                entrypoint: None,
+                args: vec![],
+            }),
+            env: vec![],
+            args: vec![],
+            engine: None,
+        };
+        manifest.mcps.insert("zen".into(), default_entry.clone());
+
+        let mut dev = ManifestGroup::default();
+        dev.mcps.insert(
+            "zen".into(),
+            AssetSource {
+                groups: "dev".into(),
+                ..default_entry
+            },
+        );
+        manifest.groups.insert("dev".into(), dev);
+
+        write_manifest(&path, &manifest).expect("write manifest");
+        let text = std::fs::read_to_string(&path).expect("read manifest");
+        let loaded = load_manifest(&path).expect("reload manifest");
+
+        assert!(text.contains(
+            "zen = { groups = [\"default\", \"dev\"], scope = \"global\", type = \"stdio\", runner = \"uvx\", package = \"mcp-zen-of-languages\" }"
+        ));
+        assert!(!text.contains("[groups.dev.mcps]"));
+        assert_eq!(
+            Vec::from(loaded.mcps["zen"].groups.clone()),
+            vec!["default".to_owned(), "dev".to_owned()]
+        );
     }
 
     #[test]
@@ -4402,7 +4668,7 @@ args = []
                 url: Some("https://mcp.context7.com/mcp".into()),
                 rev: None,
                 path: None,
-                group: "default".into(),
+                groups: "default".into(),
                 scope: Scope::Local,
                 transport: Some(McpTransport::Http {
                     url: "https://mcp.context7.com/mcp".into(),
@@ -4442,7 +4708,7 @@ args = []
                 url: Some("https://example.com/plugin".into()),
                 rev: None,
                 path: None,
-                group: "default".into(),
+                groups: "default".into(),
                 scope: Scope::Local,
                 transport: None,
                 env: vec![],
@@ -4550,6 +4816,27 @@ args = []
     }
 
     #[test]
+    fn load_manifest_accepts_inline_multi_group_membership() {
+        let dir = TempDir::new().expect("tempdir");
+        let path = dir.path().join("cpm.toml");
+        std::fs::write(
+            &path,
+            r#"
+[skills]
+shared = { path = "skills/shared", groups = ["default", "dev"] }
+"#,
+        )
+        .expect("write manifest");
+
+        let manifest = load_manifest(&path).expect("load manifest");
+
+        assert_eq!(
+            Vec::from(manifest.skills["shared"].groups.clone()),
+            vec!["default".to_owned(), "dev".to_owned()]
+        );
+    }
+
+    #[test]
     fn lockfile_writer_emits_canonical_mcp_transport_shape() {
         let dir = TempDir::new().expect("tempdir");
         let path = dir.path().join("cpm.lock");
@@ -4564,7 +4851,7 @@ args = []
                 url: None,
                 rev: None,
                 path: None,
-                group: "default".into(),
+                groups: "default".into(),
                 scope: Scope::Global,
                 transport: Some(McpTransport::Npx {
                     package: "@modelcontextprotocol/server-github".into(),
@@ -4626,7 +4913,7 @@ args = []
                     url: Some("https://example.com/plugin".into()),
                     rev: None,
                     path: None,
-                    group: "default".into(),
+                    groups: "default".into(),
                     scope: Scope::Global,
                     transport: None,
                     env: vec![],
@@ -4698,7 +4985,7 @@ args = []
             url: Some("https://github.com/example/skills/tree/main/skills/pdf".into()),
             rev: Some("feature/refactor".into()),
             path: None,
-            group: "default".into(),
+            groups: "default".into(),
             scope: Scope::Local,
             transport: None,
             env: vec![],
@@ -4732,7 +5019,7 @@ args = []
                 url: None,
                 rev: None,
                 path: None,
-                group: "default".into(),
+                groups: "default".into(),
                 scope: Scope::Local,
                 transport: None,
                 env: vec![],
@@ -4781,7 +5068,7 @@ args = []
                 url: None,
                 rev: None,
                 path: None,
-                group: "default".into(),
+                groups: "default".into(),
                 scope: Scope::Local,
                 transport: None,
                 env: vec![],
@@ -4855,7 +5142,7 @@ args = []
                     url: None,
                     rev: None,
                     path: None,
-                    group: "default".into(),
+                    groups: "default".into(),
                     scope,
                     transport: None,
                     env: vec![],
@@ -4960,7 +5247,7 @@ args = []
                 url: None,
                 rev: None,
                 path: None,
-                group: "default".into(),
+                groups: "default".into(),
                 scope: Scope::Local,
                 transport: None,
                 env: vec![],
@@ -5060,7 +5347,7 @@ args = []
                 url: None,
                 rev: None,
                 path: None,
-                group: "default".into(),
+                groups: "default".into(),
                 scope: Scope::Local,
                 transport: None,
                 env: vec![],
@@ -5156,7 +5443,7 @@ transport = { npx = { package = "@modelcontextprotocol/server-github", args = ["
                 ),
                 rev: Some("c6a75d7e0923ec0a754e5554b1c52ef76f0d75f8".into()),
                 path: None,
-                group: "default".into(),
+                groups: "default".into(),
                 scope: Scope::Local,
                 transport: None,
                 env: vec![],
@@ -5237,7 +5524,7 @@ transport = { npx = { package = "@modelcontextprotocol/server-github", args = ["
                 url: Some("https://example.com/plugin".into()),
                 rev: None,
                 path: None,
-                group: "default".into(),
+                groups: "default".into(),
                 scope: Scope::Local,
                 transport: None,
                 env: vec![],
@@ -5303,7 +5590,7 @@ transport = { npx = { package = "@modelcontextprotocol/server-github", args = ["
                 url: None,
                 rev: None,
                 path: None,
-                group: "default".into(),
+                groups: "default".into(),
                 scope: Scope::Local,
                 transport: None,
                 env: vec![],
@@ -5416,7 +5703,7 @@ url = "https://example.com/legacy"
                 url: None,
                 rev: None,
                 path: None,
-                group: "default".into(),
+                groups: "default".into(),
                 scope: Scope::Local,
                 transport: None,
                 env: vec![],
@@ -5548,7 +5835,7 @@ url = "https://example.com/legacy"
             url: None,
             rev: None,
             path: Some(camino::Utf8PathBuf::from_path_buf(skill_v1).expect("utf8")),
-            group: "default".to_owned(),
+            groups: "default".into(),
             scope: Scope::Local,
             transport: None,
             env: vec![],
@@ -5614,5 +5901,183 @@ url = "https://example.com/legacy"
         );
         // The new lock entry should reference the v2 source path.
         assert_eq!(new_lock.skills[0].source.path, source_v2.path);
+    }
+
+    #[tokio::test]
+    async fn add_single_asset_keeps_distinct_group_entries() {
+        let repo = TempDir::new().expect("tempdir");
+        let skill_dir = join_portable_path(repo.path(), "skills/shared-skill");
+        std::fs::create_dir_all(&skill_dir).expect("mkdir");
+        std::fs::write(skill_dir.join("SKILL.md"), "# shared\n").expect("write");
+
+        let source_path = camino::Utf8PathBuf::from_path_buf(skill_dir).expect("utf8 path");
+        let default_source = AssetSource {
+            url: None,
+            rev: None,
+            path: Some(source_path.clone()),
+            groups: "default".into(),
+            scope: Scope::Local,
+            transport: None,
+            env: vec![],
+            args: vec![],
+            engine: None,
+        };
+        let dev_source = AssetSource {
+            groups: "dev".into(),
+            ..default_source.clone()
+        };
+
+        let client = reqwest::Client::new();
+        let source_rules = IndexMap::new();
+        let settings = crate::config::EffectiveSettings::default();
+
+        let first_lock = add_single_asset(
+            AssetKind::Skill,
+            "shared-skill",
+            &default_source,
+            &client,
+            None,
+            ApplyOptions {
+                repo_root: repo.path(),
+                install: false,
+                install_group: None,
+                install_scope: None,
+                settings: &settings,
+                source_rules: &source_rules,
+                existing_lock: None,
+                download_progress: None,
+            },
+        )
+        .await
+        .expect("first add");
+
+        let second_lock = add_single_asset(
+            AssetKind::Skill,
+            "shared-skill",
+            &dev_source,
+            &client,
+            None,
+            ApplyOptions {
+                repo_root: repo.path(),
+                install: false,
+                install_group: None,
+                install_scope: None,
+                settings: &settings,
+                source_rules: &source_rules,
+                existing_lock: Some(&first_lock),
+                download_progress: None,
+            },
+        )
+        .await
+        .expect("second add");
+
+        assert_eq!(second_lock.skills.len(), 2);
+        assert!(second_lock
+            .skills
+            .iter()
+            .any(|asset| asset.source.groups == "default"));
+        assert!(second_lock
+            .skills
+            .iter()
+            .any(|asset| asset.source.groups == "dev"));
+    }
+
+    #[tokio::test]
+    async fn collect_github_directory_files_falls_back_to_archive_after_api_rate_limit() {
+        use flate2::{write::GzEncoder, Compression};
+        use tar::Builder;
+        use wiremock::{
+            matchers::{method, path},
+            Mock, MockServer, ResponseTemplate,
+        };
+
+        let server = MockServer::start().await;
+
+        Mock::given(method("GET"))
+            .and(path("/api/repos/octo/demo/contents/skills/pdf"))
+            .respond_with(ResponseTemplate::new(403).set_body_string("rate limited"))
+            .mount(&server)
+            .await;
+
+        let mut tar_bytes = Vec::new();
+        {
+            let encoder = GzEncoder::new(&mut tar_bytes, Compression::default());
+            let mut builder = Builder::new(encoder);
+
+            let mut skill_header = tar::Header::new_gnu();
+            let skill_bytes = b"# PDF\n";
+            skill_header.set_mode(0o644);
+            skill_header.set_size(skill_bytes.len() as u64);
+            skill_header.set_cksum();
+            builder
+                .append_data(
+                    &mut skill_header,
+                    "demo-rev123/skills/pdf/SKILL.md",
+                    &skill_bytes[..],
+                )
+                .expect("append skill");
+
+            let mut helper_header = tar::Header::new_gnu();
+            let helper_bytes = b"helper\n";
+            helper_header.set_mode(0o644);
+            helper_header.set_size(helper_bytes.len() as u64);
+            helper_header.set_cksum();
+            builder
+                .append_data(
+                    &mut helper_header,
+                    "demo-rev123/skills/pdf/helper.txt",
+                    &helper_bytes[..],
+                )
+                .expect("append helper");
+
+            builder.finish().expect("finish tar");
+        }
+
+        Mock::given(method("GET"))
+            .and(path("/gh/octo/demo/archive/rev123.tar.gz"))
+            .respond_with(ResponseTemplate::new(200).set_body_bytes(tar_bytes))
+            .mount(&server)
+            .await;
+
+        let github = GitHubSource {
+            owner: "octo".to_owned(),
+            repo: "demo".to_owned(),
+            git_ref: "main".to_owned(),
+            path: "skills/pdf".to_owned(),
+            mode: GitHubSourceMode::Tree,
+        };
+
+        let mut source_rules = IndexMap::new();
+        source_rules.insert(
+            "github-api".to_owned(),
+            SourceRule {
+                url: format!("{}/api", server.uri()),
+                token_env: None,
+                replace: Some("https://api.github.com".to_owned()),
+            },
+        );
+        source_rules.insert(
+            "github-web".to_owned(),
+            SourceRule {
+                url: format!("{}/gh", server.uri()),
+                token_env: None,
+                replace: Some("https://github.com".to_owned()),
+            },
+        );
+
+        let files = collect_github_directory_files(
+            &github,
+            "rev123",
+            &reqwest::Client::new(),
+            None,
+            None,
+            &source_rules,
+        )
+        .await
+        .expect("archive fallback");
+
+        assert_eq!(files.len(), 2);
+        assert_eq!(files[0].relative_path, Utf8PathBuf::from("SKILL.md"));
+        assert_eq!(files[1].relative_path, Utf8PathBuf::from("helper.txt"));
     }
 }

@@ -415,7 +415,7 @@ mod tests {
                 url: Some("https://github.com/example/demo".into()),
                 rev: None,
                 path: None,
-                group: "default".into(),
+                groups: "default".into(),
                 scope: Scope::Local,
                 transport: None,
                 env: vec![],

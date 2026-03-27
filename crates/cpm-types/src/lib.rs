@@ -7,11 +7,175 @@
 
 use std::path::PathBuf;
 use std::str::FromStr;
+use std::{
+    fmt,
+    ops::{Deref, DerefMut},
+};
 
 use camino::Utf8PathBuf;
 use chrono::{DateTime, Utc};
 use indexmap::IndexMap;
-use serde::{Deserialize, Serialize};
+use serde::{Deserialize, Deserializer, Serialize, Serializer};
+/// Canonical dependency-group membership for an asset.
+#[derive(Debug, Clone, PartialEq, Eq, Default)]
+pub struct Groups(Vec<String>);
+
+impl Groups {
+    /// Return the canonical default singleton group list.
+    pub fn default_value() -> Self {
+        Self(vec!["default".to_owned()])
+    }
+
+    /// Build a canonicalized group set from raw values.
+    pub fn canonicalize<I>(groups: I) -> Self
+    where
+        I: IntoIterator<Item = String>,
+    {
+        let mut normalized = Vec::new();
+        for group in groups {
+            let trimmed = group.trim();
+            if trimmed.is_empty() {
+                continue;
+            }
+            let value = trimmed.to_owned();
+            if !normalized.contains(&value) {
+                normalized.push(value);
+            }
+        }
+
+        if normalized.is_empty() {
+            return Self::default_value();
+        }
+
+        let mut ordered = Vec::new();
+        if normalized.iter().any(|group| group == "default") {
+            ordered.push("default".to_owned());
+        }
+
+        let mut non_default: Vec<_> = normalized
+            .into_iter()
+            .filter(|group| group != "default")
+            .collect();
+        non_default.sort();
+        ordered.extend(non_default);
+        Self(ordered)
+    }
+
+    /// Return `true` when the requested group is present.
+    pub fn contains_group(&self, group: &str) -> bool {
+        self.0.iter().any(|existing| existing == group)
+    }
+
+    /// Return the preferred compact display label.
+    pub fn primary(&self) -> &str {
+        self.0
+            .iter()
+            .find(|group| group.as_str() != "default")
+            .or_else(|| self.0.first())
+            .map(String::as_str)
+            .unwrap_or("default")
+    }
+
+    /// Return the explicit non-default groups.
+    pub fn explicit(&self) -> Vec<String> {
+        self.0
+            .iter()
+            .filter(|group| group.as_str() != "default")
+            .cloned()
+            .collect()
+    }
+}
+
+impl Deref for Groups {
+    type Target = [String];
+
+    fn deref(&self) -> &Self::Target {
+        &self.0
+    }
+}
+
+impl DerefMut for Groups {
+    fn deref_mut(&mut self) -> &mut Self::Target {
+        &mut self.0
+    }
+}
+
+impl IntoIterator for Groups {
+    type Item = String;
+    type IntoIter = std::vec::IntoIter<String>;
+
+    fn into_iter(self) -> Self::IntoIter {
+        self.0.into_iter()
+    }
+}
+
+impl<'a> IntoIterator for &'a Groups {
+    type Item = &'a String;
+    type IntoIter = std::slice::Iter<'a, String>;
+
+    fn into_iter(self) -> Self::IntoIter {
+        self.0.iter()
+    }
+}
+
+impl From<&str> for Groups {
+    fn from(value: &str) -> Self {
+        Self::canonicalize(vec![value.to_owned()])
+    }
+}
+
+impl From<String> for Groups {
+    fn from(value: String) -> Self {
+        Self::canonicalize(vec![value])
+    }
+}
+
+impl From<Vec<String>> for Groups {
+    fn from(value: Vec<String>) -> Self {
+        Self::canonicalize(value)
+    }
+}
+
+impl From<Groups> for Vec<String> {
+    fn from(value: Groups) -> Self {
+        value.0
+    }
+}
+
+impl PartialEq<&str> for Groups {
+    fn eq(&self, other: &&str) -> bool {
+        self.0.len() == 1 && self.0[0] == *other
+    }
+}
+
+impl Serialize for Groups {
+    fn serialize<S>(&self, serializer: S) -> Result<S::Ok, S::Error>
+    where
+        S: Serializer,
+    {
+        self.0.serialize(serializer)
+    }
+}
+
+impl<'de> Deserialize<'de> for Groups {
+    fn deserialize<D>(deserializer: D) -> Result<Self, D::Error>
+    where
+        D: Deserializer<'de>,
+    {
+        let raw = Option::<GroupsField>::deserialize(deserializer)?;
+        Ok(match raw {
+            Some(GroupsField::Single(group)) => Groups::canonicalize(vec![group]),
+            Some(GroupsField::Multiple(groups)) => Groups::canonicalize(groups),
+            None => Groups::default_value(),
+        })
+    }
+}
+
+impl fmt::Display for Groups {
+    fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
+        write!(f, "{}", self.primary())
+    }
+}
 
 // ─── Asset kind ─────────────────────────────────────────────────────────────
 
@@ -460,9 +624,9 @@ pub struct AssetSource {
     pub rev: Option<String>,
     /// Local filesystem path (for `path =` entries).
     pub path: Option<Utf8PathBuf>,
-    /// Dependency group (defaults to `"default"`).
-    #[serde(default = "default_group")]
-    pub group: String,
+    /// Dependency groups (defaults to `["default"]`).
+    #[serde(default = "default_groups", alias = "group")]
+    pub groups: Groups,
     /// Install scope.
     #[serde(default)]
     pub scope: Scope,
@@ -479,8 +643,64 @@ pub struct AssetSource {
     pub engine: Option<WorkflowEngine>,
 }
 
-fn default_group() -> String {
-    "default".to_owned()
+/// Return the canonical default group list.
+pub fn default_groups() -> Groups {
+    Groups::default_value()
+}
+
+/// Normalize a raw list of group names into the canonical stored form.
+pub fn canonicalize_groups<I>(groups: I) -> Groups
+where
+    I: IntoIterator<Item = String>,
+{
+    Groups::canonicalize(groups)
+}
+
+/// Return `true` when the group list is the default singleton value.
+pub fn groups_are_default(groups: &[String]) -> bool {
+    groups == ["default"]
+}
+
+#[derive(Debug, Deserialize)]
+#[serde(untagged)]
+enum GroupsField {
+    Single(String),
+    Multiple(Vec<String>),
+}
+
+/// Deserialize either `group = "..."` or `groups = ["...", ...]`.
+pub fn deserialize_groups<'de, D>(deserializer: D) -> Result<Vec<String>, D::Error>
+where
+    D: Deserializer<'de>,
+{
+    Ok(Vec::<String>::from(Groups::deserialize(deserializer)?))
+}
+
+impl AssetSource {
+    /// Return `true` when this asset belongs to the requested group.
+    pub fn has_group(&self, group: &str) -> bool {
+        self.groups.contains_group(group)
+    }
+
+    /// Return the preferred single group label for compact displays.
+    pub fn primary_group(&self) -> &str {
+        self.groups.primary()
+    }
+
+    /// Return the non-default groups for UI and JSON output.
+    pub fn explicit_groups(&self) -> Vec<String> {
+        self.groups.explicit()
+    }
+
+    /// Merge the provided groups into this source, preserving canonical order.
+    pub fn merge_groups<I>(&mut self, groups: I)
+    where
+        I: IntoIterator<Item = String>,
+    {
+        let mut merged = self.groups.clone();
+        merged.0.extend(groups);
+        self.groups = canonicalize_groups(merged);
+    }
 }
 
 /// Supported workflow execution engines.
@@ -812,8 +1032,29 @@ impl Manifest {
 
             for (name, source) in grouped {
                 let mut grouped_source = source.clone();
-                grouped_source.group = group_name.clone();
-                section.insert(name.clone(), grouped_source);
+                grouped_source.merge_groups([group_name.clone()]);
+
+                match section.entry(name.clone()) {
+                    indexmap::map::Entry::Vacant(entry) => {
+                        entry.insert(grouped_source);
+                    }
+                    indexmap::map::Entry::Occupied(mut entry) => {
+                        let existing = entry.get_mut();
+                        if existing.url == grouped_source.url
+                            && existing.rev == grouped_source.rev
+                            && existing.path == grouped_source.path
+                            && existing.scope == grouped_source.scope
+                            && existing.transport == grouped_source.transport
+                            && existing.env == grouped_source.env
+                            && existing.args == grouped_source.args
+                            && existing.engine == grouped_source.engine
+                        {
+                            existing.merge_groups(grouped_source.groups);
+                        } else {
+                            entry.insert(grouped_source);
+                        }
+                    }
+                }
             }
         }
 

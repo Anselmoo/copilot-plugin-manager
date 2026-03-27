@@ -171,10 +171,12 @@ pub enum CpmError {
     Io(#[from] std::io::Error),
 
     /// Authentication is required for a private resource.
-    #[error("auth required for {url} — run `cpm auth login`")]
+    #[error("GitHub authentication required for {url}")]
     #[diagnostic(
         code(cpm::auth_required),
-        help("Run `cpm auth login` to store your token in the system keyring")
+        help(
+            "Public GitHub sources usually work anonymously, but private repositories and higher API limits require a token. Run `cpm auth login`, or set CPM_TOKEN / GITHUB_TOKEN in your shell"
+        )
     )]
     AuthRequired {
         /// The URL that requires authentication.
