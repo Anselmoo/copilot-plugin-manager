@@ -42,7 +42,7 @@ The main asset flow is:
 
 ## Key conventions
 
-- `cpm.toml` is human-edited and project-oriented. Canonical sections are `[package]`, `[settings]`, `[sources]`, `[plugins]`, `[skills]`, `[agents]`, `[mcps.<name>]`, and `[groups.<name>.*]`.
+- `cpm.toml` is human-edited and project-oriented. Canonical sections are `[package]`, `[settings]`, `[sources]`, `[plugins]`, `[skills]`, `[agents]`, `[mcps]`, `[hooks]`, `[workflows]`, `[instructions]`, and optional `[groups.<name>]` metadata. Asset membership should normally be authored inline with `groups = ["<name>"]` (or `groups = ["default", "<name>"]` for multi-membership) rather than nested `[groups.<name>.*]` tables.
 - The manifest loader is backward-compatible with legacy nested tables like `[plugins.partners]`, but the writer should emit the canonical project-style form instead. Do not reintroduce generic `toml::to_string_pretty(manifest)` serialization for `cpm.toml`.
 - Repo-level `[sources]` rules are merged with user config sources; user config overrides same-named repo rules. Settings precedence is CLI flags > environment > repo `[settings]` > user config > built-in defaults.
 - Local asset paths stored in `cpm.toml` should remain repo-relative when possible. Avoid persisting checkout-specific absolute paths.

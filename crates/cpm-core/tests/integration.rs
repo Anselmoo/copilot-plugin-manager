@@ -26,7 +26,7 @@ fn make_source(url: &str) -> AssetSource {
         url: Some(url.to_owned()),
         rev: None,
         path: None,
-        group: "default".to_owned(),
+        groups: "default".into(),
         scope: Scope::Local,
         transport: None,
         env: vec![],

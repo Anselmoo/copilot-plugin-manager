@@ -26,6 +26,12 @@ fn cpm_bin() -> Command {
     cmd
 }
 
+fn set_isolated_home<'a>(cmd: &'a mut Command, home: &Path) -> &'a mut Command {
+    cmd.env("HOME", home)
+        .env("USERPROFILE", home)
+        .env("APPDATA", home.join("AppData").join("Roaming"))
+}
+
 fn normalized_path_string(path: &Path) -> String {
     portable_path_string(path)
 }
@@ -52,7 +58,7 @@ fn make_global_claim(claimed_by: &Path, hash: &str) -> GlobalClaim {
                 url: Some("https://example.com/shared-skill".into()),
                 rev: None,
                 path: None,
-                group: "default".into(),
+                groups: "default".into(),
                 scope: Scope::Global,
                 transport: None,
                 env: vec![],
@@ -82,7 +88,7 @@ fn make_source(path: &str) -> AssetSource {
         url: Some("https://example.com/partners".to_owned()),
         rev: Some("aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa".to_owned()),
         path: Some(Utf8PathBuf::from(path)),
-        group: "default".to_owned(),
+        groups: "default".into(),
         scope: Scope::Local,
         transport: None,
         env: vec![],
@@ -131,7 +137,7 @@ fn make_instruction_source(path: &str) -> AssetSource {
         url: Some("https://example.com/instructions/shell.instructions.md".to_owned()),
         rev: Some("bbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbb".to_owned()),
         path: Some(Utf8PathBuf::from(path)),
-        group: "default".to_owned(),
+        groups: "default".into(),
         scope: Scope::Local,
         transport: None,
         env: vec![],
@@ -170,7 +176,7 @@ fn write_reporting_fixture(dir: &tempfile::TempDir) {
             url: Some("https://example.com/partners".to_owned()),
             rev: Some("aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa".to_owned()),
             path: Some(Utf8PathBuf::from("plugins/partners")),
-            group: "default".to_owned(),
+            groups: "default".into(),
             scope: Scope::Local,
             transport: None,
             env: vec![],
@@ -193,7 +199,7 @@ fn write_plugin_manifest(repo_root: &Path, name: &str, url: &str) {
             url: Some(url.to_owned()),
             rev: None,
             path: None,
-            group: "default".to_owned(),
+            groups: "default".into(),
             scope: Scope::Local,
             transport: None,
             env: vec![],
@@ -212,7 +218,7 @@ fn write_plugin_path_manifest(repo_root: &Path, name: &str, path: &str) {
             url: None,
             rev: None,
             path: Some(Utf8PathBuf::from(path)),
-            group: "default".to_owned(),
+            groups: "default".into(),
             scope: Scope::Local,
             transport: None,
             env: vec![],
@@ -232,7 +238,7 @@ fn seed_plugin_lock(repo_root: &Path, name: &str, url: &str, version: &str, revi
             url: Some(url.to_owned()),
             rev: None,
             path: None,
-            group: "default".to_owned(),
+            groups: "default".into(),
             scope: Scope::Local,
             transport: None,
             env: vec![],
@@ -763,12 +769,16 @@ fn add_local_instruction_normalizes_filename_and_uses_group_section() {
 
     let toml_text = std::fs::read_to_string(dir.path().join("cpm.toml")).expect("read toml");
     assert!(
-        toml_text.contains("[groups.dev.instructions]"),
-        "instruction should be stored in the requested dev group"
+        toml_text.contains("[instructions]"),
+        "instruction should remain in the canonical top-level instructions table"
     );
     assert!(
-        toml_text.contains("shell ="),
+        toml_text.contains("shell = {"),
         "instruction entry should be present in the manifest"
+    );
+    assert!(
+        toml_text.contains("groups = [\"dev\"]"),
+        "instruction should keep the requested dev group inline"
     );
 
     let lockfile = load_lockfile(&dir.path().join("cpm.lock")).expect("load lockfile");
@@ -790,7 +800,7 @@ fn requested_dev_group_examples_round_trip_in_manifest() {
         url: Some(url.to_owned()),
         rev: None,
         path: None,
-        group: "dev".to_owned(),
+        groups: "dev".into(),
         scope,
         transport: None,
         env: vec![],
@@ -818,7 +828,7 @@ fn requested_dev_group_examples_round_trip_in_manifest() {
             url: None,
             rev: None,
             path: None,
-            group: "dev".to_owned(),
+            groups: "dev".into(),
             scope: Scope::Global,
             transport: Some(McpTransport::Npx {
                 package: "mcp-ai-agent-guidelines".to_owned(),
@@ -836,7 +846,7 @@ fn requested_dev_group_examples_round_trip_in_manifest() {
             url: None,
             rev: None,
             path: None,
-            group: "dev".to_owned(),
+            groups: "dev".into(),
             scope: Scope::Global,
             transport: Some(McpTransport::Uvx {
                 package: "mcp-zen-of-languages".to_owned(),
@@ -874,30 +884,35 @@ fn requested_dev_group_examples_round_trip_in_manifest() {
     let manifest_path = dir.path().join("cpm.toml");
     write_manifest(&manifest_path, &manifest).expect("write manifest");
     let loaded = cpm_core::project::load_manifest(&manifest_path).expect("load manifest");
-    let dev = loaded.groups.get("dev").expect("dev group");
 
     assert_eq!(
-        dev.plugins["code-review"].scope,
+        loaded.plugins["code-review"].scope,
         Scope::Global,
         "plugin example should stay global"
     );
-    assert_eq!(dev.skills["theme-factory"].scope, Scope::Global);
+    assert_eq!(loaded.skills["theme-factory"].scope, Scope::Global);
     assert_eq!(
-        dev.agents["gem-researcher"].url.as_deref(),
+        loaded.agents["gem-researcher"].url.as_deref(),
         Some("https://github.com/github/awesome-copilot/blob/main/agents/gem-researcher.agent.md")
     );
     assert_eq!(
-        dev.instructions["shell"].url.as_deref(),
+        loaded.instructions["shell"].url.as_deref(),
         Some("https://github.com/github/awesome-copilot/blob/main/instructions/shell.instructions.md")
     );
+    assert_eq!(loaded.plugins["code-review"].groups, "dev");
+    assert_eq!(loaded.skills["theme-factory"].groups, "dev");
+    assert_eq!(loaded.agents["gem-researcher"].groups, "dev");
+    assert_eq!(loaded.instructions["shell"].groups, "dev");
     assert!(matches!(
-        dev.mcps["mcp-ai-agent-guidelines"].transport.as_ref(),
+        loaded.mcps["mcp-ai-agent-guidelines"].transport.as_ref(),
         Some(McpTransport::Npx { package, .. }) if package == "mcp-ai-agent-guidelines"
     ));
     assert!(matches!(
-        dev.mcps["mcp-zen-of-languages"].transport.as_ref(),
+        loaded.mcps["mcp-zen-of-languages"].transport.as_ref(),
         Some(McpTransport::Uvx { package, .. }) if package == "mcp-zen-of-languages"
     ));
+    assert_eq!(loaded.mcps["mcp-ai-agent-guidelines"].groups, "dev");
+    assert_eq!(loaded.mcps["mcp-zen-of-languages"].groups, "dev");
 }
 
 // ── cpm remove ────────────────────────────────────────────────────────────────
@@ -1651,9 +1666,10 @@ fn reporting_surfaces_show_nested_sub_assets() {
 #[test]
 fn reporting_commands_emit_json_with_install_targets() {
     let dir = tempfile::TempDir::new().expect("tempdir");
+    let home = tempfile::TempDir::new().expect("home tempdir");
     write_reporting_fixture(&dir);
 
-    let list_output = cpm_bin()
+    let list_output = set_isolated_home(&mut cpm_bin(), home.path())
         .args(["list", "--plugin", "--json"])
         .current_dir(dir.path())
         .output()
@@ -1676,7 +1692,7 @@ fn reporting_commands_emit_json_with_install_targets() {
     assert_eq!(list_json[0]["source_url"], "https://example.com/partners");
     assert_eq!(list_json[0]["source_path"], "plugins/partners");
 
-    let tree_output = cpm_bin()
+    let tree_output = set_isolated_home(&mut cpm_bin(), home.path())
         .args(["tree", "--json"])
         .current_dir(dir.path())
         .output()
@@ -1693,7 +1709,7 @@ fn reporting_commands_emit_json_with_install_targets() {
         "tree json should include install target\n{tree_json}"
     );
 
-    let overview_output = cpm_bin()
+    let overview_output = set_isolated_home(&mut cpm_bin(), home.path())
         .args(["overview", "--json"])
         .current_dir(dir.path())
         .output()
@@ -1718,7 +1734,7 @@ fn reporting_commands_emit_json_with_install_targets() {
         "plugins/partners"
     );
 
-    let show_output = cpm_bin()
+    let show_output = set_isolated_home(&mut cpm_bin(), home.path())
         .args(["show", "partners", "--json"])
         .current_dir(dir.path())
         .output()
@@ -1734,6 +1750,64 @@ fn reporting_commands_emit_json_with_install_targets() {
     assert_eq!(show_json[0]["source_path"], "plugins/partners");
     assert_eq!(show_json[0]["hash"], "sha256:partners");
     assert_eq!(show_json[0]["sub_assets"][0]["ownership"], "parent");
+}
+
+#[test]
+fn tree_surfaces_global_claimed_assets_in_text_and_json() {
+    let home = tempfile::TempDir::new().expect("home tempdir");
+    let repo = tempfile::TempDir::new().expect("repo tempdir");
+
+    write_lockfile(&repo.path().join("cpm.lock"), &Lockfile::new()).expect("write lock");
+
+    let mut global_lock = GlobalLockfile::new();
+    global_lock.claims.push(make_global_claim(
+        Path::new("/tmp/other-repo"),
+        "sha256:shared",
+    ));
+    write_global_lockfile_to(
+        &join_portable_path(home.path(), ".copilot/cpm.lock"),
+        &global_lock,
+    )
+    .expect("write global lock");
+
+    let tree_output = cpm_bin()
+        .args(["tree"])
+        .env("HOME", home.path())
+        .env("USERPROFILE", home.path())
+        .env("APPDATA", home.path().join("AppData").join("Roaming"))
+        .current_dir(repo.path())
+        .output()
+        .expect("tree");
+    assert!(tree_output.status.success());
+    let tree_stdout = String::from_utf8_lossy(&tree_output.stdout);
+    assert!(
+        tree_stdout.contains("shared"),
+        "tree should include global claim\n{tree_stdout}"
+    );
+    assert!(
+        tree_stdout.contains("claimed-by: /tmp/other-repo"),
+        "tree should surface the claim owner\n{tree_stdout}"
+    );
+    assert!(
+        tree_stdout.contains(".copilot/skills/shared"),
+        "tree should surface the global install target\n{tree_stdout}"
+    );
+
+    let tree_json_output = cpm_bin()
+        .args(["tree", "--json"])
+        .env("HOME", home.path())
+        .env("USERPROFILE", home.path())
+        .env("APPDATA", home.path().join("AppData").join("Roaming"))
+        .current_dir(repo.path())
+        .output()
+        .expect("tree json");
+    assert!(tree_json_output.status.success());
+    let tree_json: Value =
+        serde_json::from_slice(&tree_json_output.stdout).expect("parse tree json");
+    assert_eq!(tree_json[0]["kind"], "Skills");
+    assert_eq!(tree_json[0]["assets"][0]["name"], "shared");
+    assert_eq!(tree_json[0]["assets"][0]["claimed_by"], "/tmp/other-repo");
+    assert_eq!(tree_json[0]["assets"][0]["scope"], "global");
 }
 
 #[test]
@@ -1753,7 +1827,7 @@ fn status_json_reports_unlocked_assets() {
             url: None,
             rev: None,
             path: Some(Utf8PathBuf::from("skills/unlocked")),
-            group: "default".to_owned(),
+            groups: "default".into(),
             scope: Scope::Local,
             transport: None,
             env: vec![],
@@ -1779,6 +1853,7 @@ fn status_json_reports_unlocked_assets() {
 #[test]
 fn status_and_tree_include_instruction_assets() {
     let dir = tempfile::TempDir::new().expect("tempdir");
+    let home = tempfile::TempDir::new().expect("home tempdir");
 
     let mut manifest = Manifest::default();
     manifest.instructions.insert(
@@ -1793,7 +1868,7 @@ fn status_and_tree_include_instruction_assets() {
         .push(make_instruction_resolved("shell"));
     write_lockfile(&dir.path().join("cpm.lock"), &lockfile).expect("write lock");
 
-    let status_output = cpm_bin()
+    let status_output = set_isolated_home(&mut cpm_bin(), home.path())
         .args(["status", "--json"])
         .current_dir(dir.path())
         .output()
@@ -1811,7 +1886,7 @@ fn status_and_tree_include_instruction_assets() {
         "status json should report instruction drift\n{status_json}"
     );
 
-    let tree_output = cpm_bin()
+    let tree_output = set_isolated_home(&mut cpm_bin(), home.path())
         .args(["tree"])
         .current_dir(dir.path())
         .output()
@@ -1831,7 +1906,7 @@ fn status_and_tree_include_instruction_assets() {
         "tree output should include the instruction install target\n{tree_stdout}"
     );
 
-    let tree_json_output = cpm_bin()
+    let tree_json_output = set_isolated_home(&mut cpm_bin(), home.path())
         .args(["tree", "--json"])
         .current_dir(dir.path())
         .output()
@@ -1853,10 +1928,11 @@ fn status_and_tree_include_instruction_assets() {
 #[test]
 fn list_and_tree_json_empty_results_emit_arrays() {
     let dir = tempfile::TempDir::new().expect("tempdir");
+    let home = tempfile::TempDir::new().expect("home tempdir");
     write_manifest(&dir.path().join("cpm.toml"), &Manifest::default()).expect("write manifest");
     write_lockfile(&dir.path().join("cpm.lock"), &Lockfile::new()).expect("write lock");
 
-    let list_output = cpm_bin()
+    let list_output = set_isolated_home(&mut cpm_bin(), home.path())
         .args(["list", "--json"])
         .current_dir(dir.path())
         .output()
@@ -1865,7 +1941,7 @@ fn list_and_tree_json_empty_results_emit_arrays() {
     let list_json: Value = serde_json::from_slice(&list_output.stdout).expect("parse list json");
     assert_eq!(list_json, Value::Array(vec![]));
 
-    let tree_output = cpm_bin()
+    let tree_output = set_isolated_home(&mut cpm_bin(), home.path())
         .args(["tree", "--json"])
         .current_dir(dir.path())
         .output()
@@ -1910,7 +1986,7 @@ fn reset_drops_global_claim_via_canonicalized_repo_path() {
                 url: None,
                 rev: None,
                 path: Some(Utf8PathBuf::from("skills/shared")),
-                group: "default".to_owned(),
+                groups: "default".into(),
                 scope: Scope::Global,
                 transport: None,
                 env: vec![],
@@ -2460,8 +2536,10 @@ fn auth_login_without_token_prints_clear_guidance() {
     );
     let stderr = String::from_utf8_lossy(&output.stderr);
     assert!(stderr.contains("No GitHub token found"));
+    assert!(stderr.contains("Public GitHub installs usually work without a token"));
     assert!(stderr.contains("https://github.com/settings/personal-access-tokens/new"));
     assert!(stderr.contains("CPM_TOKEN=ghp_your_token uv run cpm auth login"));
+    assert!(stderr.contains("GITHUB_TOKEN=ghp_your_token uv run cpm auth login"));
     assert!(stderr.contains("--open"));
 }
 

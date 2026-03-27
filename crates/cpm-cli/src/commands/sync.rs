@@ -63,7 +63,7 @@ pub async fn run(args: SyncArgs) -> Result<(), CpmError> {
         .into_iter()
         .filter(|(_, source)| {
             should_install(
-                source.group.as_str(),
+                &source.groups,
                 args.group.as_deref(),
                 &runtime.settings.auto_groups,
                 scope_filter,
@@ -87,7 +87,7 @@ pub async fn run(args: SyncArgs) -> Result<(), CpmError> {
         .filter(|asset| plugin_asset_is_delegated(asset))
         .filter(|asset| {
             should_install(
-                asset.source.group.as_str(),
+                &asset.source.groups,
                 args.group.as_deref(),
                 &runtime.settings.auto_groups,
                 scope_filter,
@@ -111,7 +111,7 @@ pub async fn run(args: SyncArgs) -> Result<(), CpmError> {
         for asset in lockfile.all_assets().filter(|asset| {
             asset.kind != AssetKind::Plugin
                 && should_install(
-                    asset.source.group.as_str(),
+                    &asset.source.groups,
                     args.group.as_deref(),
                     &runtime.settings.auto_groups,
                     scope_filter,
@@ -152,7 +152,7 @@ pub async fn run(args: SyncArgs) -> Result<(), CpmError> {
             .filter(|asset| {
                 plugin_asset_is_delegated(asset)
                     && should_install(
-                        asset.source.group.as_str(),
+                        &asset.source.groups,
                         args.group.as_deref(),
                         &runtime.settings.auto_groups,
                         scope_filter,
@@ -217,7 +217,7 @@ pub async fn run(args: SyncArgs) -> Result<(), CpmError> {
     for asset in lockfile.all_assets().filter(|asset| {
         !plugin_asset_is_delegated(asset)
             && should_install(
-                asset.source.group.as_str(),
+                &asset.source.groups,
                 args.group.as_deref(),
                 &runtime.settings.auto_groups,
                 scope_filter,
@@ -296,16 +296,18 @@ pub async fn run(args: SyncArgs) -> Result<(), CpmError> {
 }
 
 fn should_install(
-    group: &str,
+    groups: &cpm_types::Groups,
     install_group: Option<&str>,
     auto_groups: &[String],
     install_scope: Option<Scope>,
     scope: Scope,
 ) -> bool {
-    let group_matches = group == "default"
-        || auto_groups.iter().any(|configured| configured == group)
+    let group_matches = groups.contains_group("default")
+        || auto_groups
+            .iter()
+            .any(|configured| groups.contains_group(configured))
         || install_group
-            .map(|requested| requested == group)
+            .map(|requested| groups.contains_group(requested))
             .unwrap_or(false);
     let scope_matches = install_scope
         .map(|requested| requested == scope)
@@ -339,7 +341,7 @@ fn stale_natively_managed_assets(
         .filter(|asset| !plugin_asset_is_delegated(asset))
         .filter(|a| {
             should_install(
-                a.source.group.as_str(),
+                &a.source.groups,
                 install_group,
                 auto_groups,
                 scope_filter,
@@ -394,7 +396,7 @@ mod tests {
                 url: None,
                 rev: None,
                 path: None,
-                group: "default".to_owned(),
+                groups: "default".into(),
                 scope,
                 transport: None,
                 env: vec![],
@@ -422,7 +424,7 @@ mod tests {
     fn auto_groups_are_installed_without_explicit_flag() {
         let auto_groups = vec!["research".to_owned()];
         assert!(should_install(
-            "research",
+            &"research".into(),
             None,
             &auto_groups,
             None,
@@ -433,7 +435,7 @@ mod tests {
     #[test]
     fn explicit_scope_filter_still_applies() {
         assert!(!should_install(
-            "default",
+            &"default".into(),
             None,
             &[],
             Some(Scope::Global),

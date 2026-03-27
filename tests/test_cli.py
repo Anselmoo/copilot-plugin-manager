@@ -121,6 +121,8 @@ def test_resolve_delegate_prefers_cargo_in_source_checkout(tmp_path: Path) -> No
         str(repo_root / "Cargo.toml"),
         "-p",
         "cpm-cli",
+        "--bin",
+        "cpm",
         "--",
         "--help",
     ]
@@ -146,6 +148,8 @@ def test_resolve_delegate_falls_back_to_cargo(tmp_path: Path) -> None:
         str(repo_root / "Cargo.toml"),
         "-p",
         "cpm-cli",
+        "--bin",
+        "cpm",
         "--",
         "status",
     ]
@@ -179,6 +183,8 @@ def test_resolve_delegate_honors_force_cargo_over_configured_binary(
         str(repo_root / "Cargo.toml"),
         "-p",
         "cpm-cli",
+        "--bin",
+        "cpm",
         "--",
         "--help",
     ]
@@ -244,6 +250,13 @@ def test_python_module_help_exits_zero(tmp_path: Path) -> None:
 def test_python_module_version_exits_zero(tmp_path: Path) -> None:
     result = _run_cpm("--version", cwd=tmp_path)
     assert result.returncode == 0
+
+
+def test_python_package_version_matches_pyproject() -> None:
+    project = tomllib.loads((REPO_ROOT / "pyproject.toml").read_text(encoding="utf-8"))
+    import cpm as cpm_package
+
+    assert cpm_package.__version__ == project["project"]["version"]
 
 
 def test_uv_run_legacy_console_script_exits_zero(tmp_path: Path) -> None:

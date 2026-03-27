@@ -24,9 +24,9 @@ use reqwest::Url;
 use crate::progress::{OperationKind, OperationStatus, ProgressReporter};
 
 use super::{
-    build_locked_plugin_asset, derive_plugin_name, plugin_request_is_native, print_plugin_summary,
-    report_skipped_plugin, run_plugin_operations, style_success, upsert_plugin_lock_entry,
-    PluginAction, PluginOperation,
+    build_locked_plugin_asset, derive_plugin_name, find_manifest_asset_mut,
+    plugin_request_is_native, print_plugin_summary, remove_manifest_asset, report_skipped_plugin,
+    run_plugin_operations, style_success, upsert_plugin_lock_entry, PluginAction, PluginOperation,
 };
 
 /// Arguments for `cpm add`.
@@ -155,7 +155,7 @@ pub async fn run(args: AddArgs) -> Result<(), CpmError> {
             url: Some(requested.clone()),
             rev: None,
             path: None,
-            group: args.group.clone(),
+            groups: args.group.clone().into(),
             scope: Scope::Global,
             transport: None,
             env: vec![],
@@ -188,10 +188,18 @@ pub async fn run(args: AddArgs) -> Result<(), CpmError> {
                     ),
                 }
             })?;
+        let plugin_groups = asset_source.groups.clone();
         let mut lockfile = load_lockfile(lockfile_path).unwrap_or_default();
         upsert_plugin_lock_entry(
             &mut lockfile,
             build_locked_plugin_asset(&name, asset_source, installed)?,
+        );
+        prune_conflicting_lock_entries(
+            &mut lockfile,
+            AssetKind::Plugin,
+            &name,
+            Scope::Global,
+            &plugin_groups,
         );
 
         write_manifest(manifest_path, &manifest)?;
@@ -253,7 +261,7 @@ pub async fn run(args: AddArgs) -> Result<(), CpmError> {
                     url: normalized.url,
                     rev,
                     path: normalized.path,
-                    group: args.group.clone(),
+                    groups: args.group.clone().into(),
                     scope: resolved_scope,
                     transport: None,
                     env: vec![],
@@ -295,7 +303,14 @@ pub async fn run(args: AddArgs) -> Result<(), CpmError> {
     } else {
         OperationStatus::Failed
     });
-    let lockfile = lockfile?;
+    let mut lockfile = lockfile?;
+    prune_conflicting_lock_entries(
+        &mut lockfile,
+        kind,
+        &name,
+        resolved_scope,
+        &asset_source.groups,
+    );
 
     write_manifest(manifest_path, &manifest)?;
     write_lockfile(lockfile_path, &lockfile)?;
@@ -606,7 +621,7 @@ fn normalize_mcp_source(
             },
             rev: pypi_version.or(docker_pin).or_else(|| args.rev.clone()),
             path,
-            group: args.group.clone(),
+            groups: args.group.clone().into(),
             scope,
             transport,
             env,
@@ -807,29 +822,69 @@ fn insert_asset(
     name: String,
     source: AssetSource,
 ) -> Option<AssetSource> {
-    if source.group == "default" {
-        return match kind {
-            AssetKind::Plugin => manifest.plugins.insert(name, source),
-            AssetKind::Skill => manifest.skills.insert(name, source),
-            AssetKind::Agent => manifest.agents.insert(name, source),
-            AssetKind::Mcp => manifest.mcps.insert(name, source),
-            AssetKind::Hook => manifest.hooks.insert(name, source),
-            AssetKind::Workflow => manifest.workflows.insert(name, source),
-            AssetKind::Instruction => manifest.instructions.insert(name, source),
-        };
+    if let Some(existing) = find_manifest_asset_mut(manifest, kind, &name, None) {
+        let previous = existing.clone();
+        if existing.url == source.url
+            && existing.rev == source.rev
+            && existing.path == source.path
+            && existing.scope == source.scope
+            && existing.transport == source.transport
+            && existing.env == source.env
+            && existing.args == source.args
+            && existing.engine == source.engine
+        {
+            existing.merge_groups(Vec::from(source.groups.clone()));
+            return Some(previous);
+        }
     }
 
-    let group = manifest.groups.entry(source.group.clone()).or_default();
-
+    let previous = remove_manifest_asset(manifest, kind, &name, None);
     match kind {
-        AssetKind::Plugin => group.plugins.insert(name, source),
-        AssetKind::Skill => group.skills.insert(name, source),
-        AssetKind::Agent => group.agents.insert(name, source),
-        AssetKind::Mcp => group.mcps.insert(name, source),
-        AssetKind::Hook => group.hooks.insert(name, source),
-        AssetKind::Workflow => group.workflows.insert(name, source),
-        AssetKind::Instruction => group.instructions.insert(name, source),
-    }
+        AssetKind::Plugin => {
+            manifest.plugins.insert(name, source);
+        }
+        AssetKind::Skill => {
+            manifest.skills.insert(name, source);
+        }
+        AssetKind::Agent => {
+            manifest.agents.insert(name, source);
+        }
+        AssetKind::Mcp => {
+            manifest.mcps.insert(name, source);
+        }
+        AssetKind::Hook => {
+            manifest.hooks.insert(name, source);
+        }
+        AssetKind::Workflow => {
+            manifest.workflows.insert(name, source);
+        }
+        AssetKind::Instruction => {
+            manifest.instructions.insert(name, source);
+        }
+    };
+    previous
+}
+
+fn prune_conflicting_lock_entries(
+    lockfile: &mut cpm_types::Lockfile,
+    kind: AssetKind,
+    name: &str,
+    scope: Scope,
+    groups: &cpm_types::Groups,
+) {
+    let section = match kind {
+        AssetKind::Plugin => &mut lockfile.plugins,
+        AssetKind::Skill => &mut lockfile.skills,
+        AssetKind::Agent => &mut lockfile.agents,
+        AssetKind::Mcp => &mut lockfile.mcps,
+        AssetKind::Hook => &mut lockfile.hooks,
+        AssetKind::Workflow => &mut lockfile.workflows,
+        AssetKind::Instruction => &mut lockfile.instructions,
+    };
+
+    section.retain(|asset| {
+        asset.name != name || (asset.scope == scope && asset.source.groups == *groups)
+    });
 }
 
 fn resolve_scope(scope: Option<ScopeArg>, default_scope: Scope) -> Scope {
@@ -918,7 +973,7 @@ mod tests {
             url: Some("https://github.com/anthropics/skills/blob/main/skills/pdf/SKILL.md".into()),
             rev: None,
             path: None,
-            group: "default".into(),
+            groups: "default".into(),
             scope: Scope::Local,
             transport: None,
             env: vec![],
@@ -932,7 +987,7 @@ mod tests {
     }
 
     #[test]
-    fn writes_non_default_group_entries_into_group_table() {
+    fn writes_non_default_group_entries_inline_with_group_metadata() {
         let mut manifest = Manifest::default();
         let source = AssetSource {
             url: Some(
@@ -941,7 +996,7 @@ mod tests {
             ),
             rev: None,
             path: None,
-            group: "dev".into(),
+            groups: "dev".into(),
             scope: Scope::Local,
             transport: None,
             env: vec![],
@@ -956,9 +1011,51 @@ mod tests {
             source,
         );
 
-        assert!(manifest.instructions.is_empty());
-        assert!(manifest.groups.contains_key("dev"));
-        assert!(manifest.groups["dev"].instructions.contains_key("shell"));
+        assert_eq!(manifest.instructions["shell"].groups, "dev");
+        assert!(!manifest.groups.contains_key("dev"));
+    }
+
+    #[test]
+    fn adding_same_asset_merges_group_membership() {
+        let mut manifest = Manifest::default();
+        let default_source = AssetSource {
+            url: Some("https://github.com/example/server".into()),
+            rev: None,
+            path: None,
+            groups: "default".into(),
+            scope: Scope::Global,
+            transport: Some(McpTransport::Uvx {
+                package: "example-server".into(),
+                entrypoint: None,
+                args: vec![],
+            }),
+            env: vec![],
+            args: vec![],
+            engine: None,
+        };
+
+        insert_asset(
+            &mut manifest,
+            AssetKind::Mcp,
+            "example-server".into(),
+            default_source,
+        );
+        let existing = manifest.mcps["example-server"].clone();
+        insert_asset(
+            &mut manifest,
+            AssetKind::Mcp,
+            "example-server".into(),
+            AssetSource {
+                groups: "dev".into(),
+                ..existing
+            },
+        );
+
+        assert_eq!(manifest.mcps.len(), 1);
+        assert_eq!(
+            Vec::from(manifest.mcps["example-server"].groups.clone()),
+            vec!["default".to_owned(), "dev".to_owned()]
+        );
     }
 
     #[test]

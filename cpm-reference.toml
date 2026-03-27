@@ -175,9 +175,11 @@ internal-tools   = { url   = "https://github.com/example-org/internal-copilot-pl
 [skills]
 python-best-practices = "https://github.com/example-org/python-skills"
 code-review-guide     = "https://github.com/example-org/review-skills"
-quantum-chemistry     = { url   = "https://github.com/example-org/qchem-skills", rev   = "a3f1c9d8b2e4f6a1c3d5e7f9b1a3c5e7f9b1a3c5", group = "research" }
-paper-writing         = { url   = "https://github.com/example-org/paper-skills", rev   = "v2.0.1", scope = "global", group = "research" }
-draft-spectroscopy    = { path  = "./skills/spectroscopy-draft.md", group = "research" }
+quantum-chemistry     = { url   = "https://github.com/example-org/qchem-skills", rev   = "a3f1c9d8b2e4f6a1c3d5e7f9b1a3c5e7f9b1a3c5", groups = ["research"] }
+paper-writing         = { url   = "https://github.com/example-org/paper-skills", rev   = "v2.0.1", scope = "global", groups = ["default", "research"] }
+draft-spectroscopy    = { path  = "./skills/spectroscopy-draft.md", groups = ["research"] }
+spectroscopy-prompts  = { url   = "https://github.com/example-org/spectroscopy-skills", groups = ["research"] }
+ci-prompts            = { url   = "https://github.com/example-org/ci-skills", rev   = "v1.2.0", groups = ["ci"] }
 
 
 # ─────────────────────────────────────────────────────────────────────────────
@@ -188,6 +190,8 @@ draft-spectroscopy    = { path  = "./skills/spectroscopy-draft.md", group = "res
 code-reviewer    = { url   = "https://github.com/example-org/review-agent", rev   = "v1.1.0", scope = "global" }
 molecule-drafter = { path  = "./agents/molecule-drafter.agent.md" }
 ci-triage        = "https://github.com/example-org/ci-triage-agent"
+paper-reviewer   = { url   = "https://github.com/example-org/paper-review-agent", rev   = "v1.0.0", scope = "global", groups = ["research"] }
+ci-fixer         = { url   = "https://github.com/example-org/ci-fix-agent", groups = ["ci"] }
 
 
 # ─────────────────────────────────────────────────────────────────────────────
@@ -213,7 +217,7 @@ session-logger    = { url   = "https://github.com/github/awesome-copilot", path 
 
 # Auto-commit all changes when a CCA session ends cleanly.
 # Events: sessionEnd
-session-auto-commit = { url   = "https://github.com/github/awesome-copilot", path  = "hooks/session-auto-commit", scope = "local", group = "dev" }
+session-auto-commit = { url   = "https://github.com/github/awesome-copilot", path  = "hooks/session-auto-commit", scope = "local", groups = ["dev"] }
 
 # Secret scanner — scans modified files before they are written.
 # Uses preToolUse to BLOCK writes if credentials or API keys are detected.
@@ -226,11 +230,15 @@ secret-scanner    = { url   = "https://github.com/example-org/copilot-hooks", re
 # Events: sessionStart (informational), preToolUse (blocking)
 corp-policy       = { url   = "https://github.com/example-org/corp-copilot-policy", rev   = "v2.0.0", scope = "global" }
 
+# Hook that logs every tool call to a research audit trail.
+# Events: preToolUse (logging only, always exits 0), postToolUse
+research-audit    = { url   = "https://github.com/example-org/research-hooks", path  = "hooks/research-audit", rev   = "v1.1.0", scope = "local", groups = ["research"] }
+
 # Local dev hook — Slack notification on session end (dev group only).
 # Events: sessionEnd
 [hooks.slack-notify]
 path  = "./hooks/slack-notify"
-group = "dev"
+groups = ["dev"]
 scope = "local"
 
 [hooks.slack-notify.env]
@@ -275,16 +283,19 @@ weekly-health     = { url   = "https://github.com/github/awesome-copilot", path 
 # analysis as a PR comment. Dispatches automatically on workflow_run failure.
 # Trigger: workflow_run (on failure)
 # Engine: copilot
-ci-investigator   = { url   = "https://github.com/example-org/copilot-workflows", path  = "workflows/ci-failure-analysis.md", rev   = "v1.0.0", group = "dev" }
+ci-investigator   = { url   = "https://github.com/example-org/copilot-workflows", path  = "workflows/ci-failure-analysis.md", rev   = "v1.0.0", groups = ["dev"] }
 
 # Release compliance checker — audits a repo against open-source release
 # requirements and posts a report as an issue comment.
 # Trigger: workflow_dispatch (manual)
-release-checker   = { url   = "https://github.com/github/awesome-copilot", path  = "workflows/ospo-release-compliance-checker.md", rev   = "main", group = "ci" }
+release-checker   = { url   = "https://github.com/github/awesome-copilot", path  = "workflows/ospo-release-compliance-checker.md", rev   = "main", groups = ["ci"] }
+
+# Monthly contributor metrics workflow scoped to research group.
+contributor-metrics = { url = "https://github.com/github/awesome-copilot", path = "workflows/contributor-metrics.md", rev = "main", groups = ["research"] }
 
 # Local draft workflow under active development — not yet published.
 # Install the .md source; compile manually with `gh aw compile`.
-molecule-reporter = { path   = "./workflows/molecule-reporter.md", engine = "claude", group  = "research" }
+molecule-reporter = { path   = "./workflows/molecule-reporter.md", engine = "claude", groups  = ["research"] }
 
 
 # ─────────────────────────────────────────────────────────────────────────────
@@ -340,7 +351,7 @@ transport = "uvx"
 package   = "arxiv-mcp-server"
 rev       = ">=0.3.0"
 scope     = "local"
-group     = "research"
+groups    = ["research"]
 
 [mcps.arxiv-mcp.env]
 ARXIV_MAX_RESULTS = "25"
@@ -360,7 +371,7 @@ transport = "docker"
 image     = "ghcr.io/example-org/mcp-rdkit:v2024.09"
 args      = ["--log-level", "info"]
 scope     = "local"
-group     = "research"
+groups    = ["research"]
 
 [mcps.rdkit-chem.env]
 RDKIT_TIMEOUT = "60"
@@ -372,7 +383,7 @@ url       = "https://github.com/example-org/quantum-mcp/releases/latest"
 bin       = "quantum-mcp"
 args      = ["--threads", "8"]
 scope     = "local"
-group     = "research"
+groups    = ["research"]
 
 [mcps.go-literature]
 transport = "binary"
@@ -380,7 +391,7 @@ url       = "https://github.com/example-org/literature-mcp/releases/tag/v0.4.1"
 bin       = "literature-mcp"
 checksum  = "sha256:a1b2c3d4e5f6..."
 scope     = "global"
-group     = "research"
+groups    = ["research"]
 
 # ── path ─────────────────────────────────────────────────────────────────────
 [mcps.new-spectroscopy-mcp]
@@ -388,7 +399,7 @@ transport = "path"
 path      = "./mcp/spectroscopy/target/release/spectroscopy-mcp"
 args      = ["--dev", "--port", "9000"]
 scope     = "local"
-group     = "dev"
+groups    = ["dev"]
 
 [mcps.new-spectroscopy-mcp.env]
 LOG_LEVEL     = "debug"
@@ -400,48 +411,24 @@ transport = "script"
 command   = "python"
 args      = ["-m", "legacy_mcp_server", "--host", "127.0.0.1", "--port", "8080"]
 scope     = "local"
-group     = "dev"
+groups    = ["dev"]
 
 [mcps.legacy-wrapper.env]
 LEGACY_API_KEY = "$LEGACY_API_KEY"
 
 
 # ─────────────────────────────────────────────────────────────────────────────
-# [groups.*]
+# [groups.*] metadata
 # ─────────────────────────────────────────────────────────────────────────────
 
 [groups.research]
 description = "Quantum chemistry, literature, and spectroscopy tooling (auto-installed)"
 
-[groups.research.skills]
-spectroscopy-prompts = "https://github.com/example-org/spectroscopy-skills"
-
-[groups.research.agents]
-paper-reviewer       = { url   = "https://github.com/example-org/paper-review-agent", rev   = "v1.0.0", scope = "global" }
-
-[groups.research.hooks]
-# Hook that logs every tool call to a research audit trail.
-# Events: preToolUse (logging only, always exits 0), postToolUse
-research-audit       = { url   = "https://github.com/example-org/research-hooks", path  = "hooks/research-audit", rev   = "v1.1.0", scope = "local" }
-
-[groups.research.workflows]
-# Monthly contributor metrics workflow scoped to research group.
-contributor-metrics  = { url   = "https://github.com/github/awesome-copilot", path  = "workflows/contributor-metrics.md", rev   = "main" }
-
 
 [groups.dev]
 description = "Local dev hooks, MCPs, and workflows — not for CI or other repos"
-# Members declared inline above via group = "dev".
+# Members declared inline above via groups = ["dev"].
 
 
 [groups.ci]
 description = "Minimal set for CI pipelines — no heavy MCPs or research tools"
-
-[groups.ci.skills]
-ci-prompts   = { url   = "https://github.com/example-org/ci-skills", rev   = "v1.2.0" }
-
-[groups.ci.agents]
-ci-fixer     = { url   = "https://github.com/example-org/ci-fix-agent" }
-
-[groups.ci.workflows]
-release-checker = { url   = "https://github.com/github/awesome-copilot", path  = "workflows/ospo-release-compliance-checker.md", rev   = "main" }

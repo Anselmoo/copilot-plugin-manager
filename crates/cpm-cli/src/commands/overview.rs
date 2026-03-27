@@ -22,9 +22,9 @@ use cpm_types::{
 use serde::{Serialize, Serializer};
 
 use super::{
-    asset_install_target, asset_source_path, asset_source_url, effective_asset_scope,
-    effective_plugin_scope, json_group, json_rev, style_asset_heading, style_count, style_heading,
-    style_label,
+    asset_install_target, asset_source_path, asset_source_url, display_groups,
+    effective_asset_scope, effective_plugin_scope, json_group, json_groups, json_rev,
+    style_asset_heading, style_count, style_heading, style_label,
 };
 
 #[derive(Debug, Args)]
@@ -103,6 +103,7 @@ struct LockedAssetRow {
     kind: String,
     scope: String,
     group: Option<String>,
+    groups: Option<Vec<String>>,
     rev: Option<String>,
     sub_asset_count: usize,
     install_target: String,
@@ -273,7 +274,9 @@ pub async fn run(args: OverviewArgs) -> Result<(), CpmError> {
             if let Some(path) = &asset.source_path {
                 println!("    {} {path}", style_label("source-path"));
             }
-            if let Some(group) = &asset.group {
+            if let Some(groups) = &asset.groups {
+                println!("    {} {}", style_label("groups"), groups.join(", "));
+            } else if let Some(group) = &asset.group {
                 println!("    {} {}", style_label("group"), group);
             }
             if let Some(rev) = &asset.rev {
@@ -469,7 +472,8 @@ fn build_summary(
             name: asset.name.clone(),
             kind: asset.kind.to_string(),
             scope: effective_asset_scope(asset).to_string(),
-            group: json_group(&asset.source.group),
+            group: json_group(&asset.source.groups),
+            groups: json_groups(&asset.source.groups),
             rev: json_rev(&asset.resolved_rev),
             sub_asset_count: asset.sub_assets.len(),
             install_target: asset_install_target(asset),
@@ -507,7 +511,12 @@ fn build_summary(
     {
         *by_kind.entry(asset.kind.to_string()).or_insert(0) += 1;
         *by_scope.entry(asset.scope.to_string()).or_insert(0) += 1;
-        *groups.entry(asset.source.group.clone()).or_insert(0) += 1;
+        let labels = display_groups(&asset.source.groups)
+            .map(|value| value.split(", ").map(str::to_owned).collect::<Vec<_>>())
+            .unwrap_or_else(|| vec!["default".to_owned()]);
+        for group in labels {
+            *groups.entry(group).or_insert(0) += 1;
+        }
     }
 
     let mut status_counts = StatusCounts::default();
@@ -949,7 +958,7 @@ mod tests {
             url: Some("https://example.com/partners".to_owned()),
             rev: Some("aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa".to_owned()),
             path: Some(Utf8PathBuf::from("plugins/partners")),
-            group: "default".to_owned(),
+            groups: "default".into(),
             scope: Scope::Local,
             transport: None,
             env: vec![],
@@ -1278,7 +1287,7 @@ path = "skills/tracked-skill"
                 url: Some("https://example.com/orphan-plugin".to_owned()),
                 rev: None,
                 path: None,
-                group: "default".to_owned(),
+                groups: "default".into(),
                 scope: Scope::Global,
                 transport: None,
                 env: vec![],

@@ -1,14 +1,21 @@
 //! `cpm list` — list installed assets.
 
 use clap::Args;
-use cpm_core::{project::load_lockfile, CpmError};
-use cpm_types::{AssetKind, ResolvedAsset, Scope, SubAsset, SubAssetOwnership};
+use cpm_core::{
+    paths::portable_path_string,
+    project::{load_global_lockfile, load_lockfile},
+    CpmError,
+};
+use cpm_types::{
+    AssetKind, GlobalLockfile, Lockfile, ResolvedAsset, Scope, SubAsset, SubAssetOwnership,
+};
 use serde::Serialize;
+use std::collections::HashSet;
 
 use super::{
-    asset_install_target, asset_source_path, asset_source_url, effective_asset_scope,
-    format_sub_asset_summary, json_group, json_rev, kind_selected, style_asset_heading,
-    style_label, KindSelection,
+    asset_install_target, asset_source_path, asset_source_url, display_groups,
+    effective_asset_scope, format_sub_asset_summary, json_group, json_groups, json_rev,
+    kind_selected, style_asset_heading, style_label, KindSelection,
 };
 
 /// Arguments for `cpm list`.
@@ -47,6 +54,7 @@ pub enum ScopeArg {
 
 pub async fn run(args: ListArgs) -> Result<(), CpmError> {
     let lockfile = load_lockfile(std::path::Path::new("cpm.lock"))?;
+    let global_lockfile = load_global_lockfile()?;
     let selection = KindSelection {
         plugin: args.plugin,
         skill: args.skill,
@@ -56,25 +64,18 @@ pub async fn run(args: ListArgs) -> Result<(), CpmError> {
         workflow: args.workflow,
         instruction: args.instruction,
     };
-    let mut assets: Vec<_> = lockfile
-        .all_assets()
-        .filter(|asset| kind_selected(asset.kind, selection))
-        .filter(|asset| {
-            args.scope
-                .map(|scope| effective_asset_scope(asset) == Scope::from(scope))
-                .unwrap_or(true)
-        })
-        .collect();
+    let mut assets = collect_visible_assets(&lockfile, &global_lockfile, selection, args.scope);
 
     assets.sort_by(|left, right| {
-        asset_kind_rank(left.kind)
-            .cmp(&asset_kind_rank(right.kind))
-            .then_with(|| left.name.cmp(&right.name))
+        asset_kind_rank(left.asset.kind)
+            .cmp(&asset_kind_rank(right.asset.kind))
+            .then_with(|| left.asset.name.cmp(&right.asset.name))
             .then_with(|| {
-                effective_asset_scope(left)
+                effective_asset_scope(&left.asset)
                     .to_string()
-                    .cmp(&effective_asset_scope(right).to_string())
+                    .cmp(&effective_asset_scope(&right.asset).to_string())
             })
+            .then_with(|| left.claimed_by.cmp(&right.claimed_by))
     });
 
     if args.json {
@@ -82,10 +83,7 @@ pub async fn run(args: ListArgs) -> Result<(), CpmError> {
             println!("[]");
             return Ok(());
         }
-        let rows: Vec<_> = assets
-            .iter()
-            .map(|asset| ListAssetRow::from_asset(asset))
-            .collect();
+        let rows: Vec<_> = assets.iter().map(ListAssetRow::from_entry).collect();
         println!("{}", serde_json::to_string_pretty(&rows)?);
         return Ok(());
     }
@@ -99,13 +97,76 @@ pub async fn run(args: ListArgs) -> Result<(), CpmError> {
         if index > 0 {
             println!();
         }
-        print_asset(asset);
+        print_asset(&asset);
     }
 
     Ok(())
 }
 
-fn print_asset(asset: &ResolvedAsset) {
+#[derive(Debug, Clone)]
+struct ListedAsset {
+    asset: ResolvedAsset,
+    claimed_by: Option<String>,
+}
+
+fn collect_visible_assets(
+    lockfile: &Lockfile,
+    global_lockfile: &GlobalLockfile,
+    selection: KindSelection,
+    scope: Option<ScopeArg>,
+) -> Vec<ListedAsset> {
+    let matches_scope = |asset: &ResolvedAsset| {
+        scope
+            .map(|requested| effective_asset_scope(asset) == Scope::from(requested))
+            .unwrap_or(true)
+    };
+
+    let mut seen = HashSet::new();
+    let mut assets = Vec::new();
+
+    for asset in lockfile
+        .all_assets()
+        .filter(|asset| kind_selected(asset.kind, selection))
+        .filter(|asset| matches_scope(asset))
+    {
+        seen.insert(asset_identity_key(asset));
+        assets.push(ListedAsset {
+            asset: asset.clone(),
+            claimed_by: None,
+        });
+    }
+
+    for claim in &global_lockfile.claims {
+        let asset = &claim.asset;
+        if !kind_selected(asset.kind, selection) || !matches_scope(asset) {
+            continue;
+        }
+        let key = asset_identity_key(asset);
+        if seen.insert(key) {
+            assets.push(ListedAsset {
+                asset: asset.clone(),
+                claimed_by: Some(portable_path_string(claim.claimed_by.as_std_path())),
+            });
+        }
+    }
+
+    assets
+}
+
+fn asset_identity_key(asset: &ResolvedAsset) -> String {
+    format!(
+        "{}|{}|{}|{}|{}|{}",
+        asset.kind,
+        asset.name,
+        effective_asset_scope(asset),
+        asset.source.groups.join(","),
+        asset.resolved_rev,
+        asset.hash,
+    )
+}
+
+fn print_asset(entry: &ListedAsset) {
+    let asset = &entry.asset;
     println!(
         "{}",
         style_asset_heading(asset.kind, effective_asset_scope(asset), &asset.name)
@@ -118,8 +179,11 @@ fn print_asset(asset: &ResolvedAsset) {
     for line in source_lines(asset) {
         println!("  {line}");
     }
-    if asset.source.group != "default" {
-        println!("  {} {}", style_label("group"), asset.source.group);
+    if let Some(groups) = display_groups(&asset.source.groups) {
+        println!("  {} {}", style_label("groups"), groups);
+    }
+    if let Some(claimed_by) = &entry.claimed_by {
+        println!("  {} {}", style_label("claimed-by"), claimed_by);
     }
     if !asset.resolved_rev.is_empty() {
         println!("  {} {}", style_label("rev"), asset.resolved_rev);
@@ -152,6 +216,8 @@ struct ListAssetRow {
     kind: String,
     scope: String,
     group: Option<String>,
+    groups: Option<Vec<String>>,
+    claimed_by: Option<String>,
     rev: Option<String>,
     install_target: String,
     source_url: Option<String>,
@@ -160,12 +226,15 @@ struct ListAssetRow {
 }
 
 impl ListAssetRow {
-    fn from_asset(asset: &ResolvedAsset) -> Self {
+    fn from_entry(entry: &ListedAsset) -> Self {
+        let asset = &entry.asset;
         Self {
             name: asset.name.clone(),
             kind: asset.kind.to_string(),
             scope: effective_asset_scope(asset).to_string(),
-            group: json_group(&asset.source.group),
+            group: json_group(&asset.source.groups),
+            groups: json_groups(&asset.source.groups),
+            claimed_by: entry.claimed_by.clone(),
             rev: json_rev(&asset.resolved_rev),
             install_target: asset_install_target(asset),
             source_url: asset_source_url(asset).map(ToOwned::to_owned),
@@ -238,5 +307,83 @@ fn format_ownership(ownership: SubAssetOwnership) -> &'static str {
     match ownership {
         SubAssetOwnership::Parent => "parent",
         SubAssetOwnership::Standalone => "standalone",
+    }
+}
+
+#[cfg(test)]
+mod tests {
+    use camino::Utf8PathBuf;
+    use chrono::Utc;
+    use cpm_types::{AssetOwnership, AssetSource, GlobalClaim, GlobalLockfile, Lockfile};
+
+    use super::*;
+
+    fn selection_all() -> KindSelection {
+        KindSelection {
+            plugin: false,
+            skill: false,
+            agent: false,
+            mcp: false,
+            hook: false,
+            workflow: false,
+            instruction: false,
+        }
+    }
+
+    fn make_asset(name: &str, scope: Scope) -> ResolvedAsset {
+        ResolvedAsset {
+            name: name.to_owned(),
+            kind: AssetKind::Skill,
+            source: AssetSource {
+                url: Some(format!("https://example.com/{name}")),
+                rev: None,
+                path: Some(Utf8PathBuf::from(format!("skills/{name}"))),
+                groups: if scope == Scope::Global {
+                    vec!["default".to_owned(), "dev".to_owned()].into()
+                } else {
+                    "default".into()
+                },
+                scope,
+                transport: None,
+                env: vec![],
+                args: vec![],
+                engine: None,
+            },
+            resolved_rev: format!("rev-{name}"),
+            resolved_date: Utc::now(),
+            hash: format!("sha256:{name}"),
+            scope,
+            ownership: AssetOwnership::Upstream,
+            files: vec![Utf8PathBuf::from(format!("{name}/SKILL.md")).into()],
+            executable: vec![],
+            file_hashes: Default::default(),
+            git: None,
+            sub_assets: vec![],
+            license: None,
+            bin_path: None,
+            compiled_path: None,
+            plugin_meta: None,
+        }
+    }
+
+    #[test]
+    fn collect_visible_assets_includes_global_claims_not_in_local_lockfile() {
+        let mut lockfile = Lockfile::new();
+        lockfile.skills.push(make_asset("local-only", Scope::Local));
+
+        let global_asset = make_asset("shared-global", Scope::Global);
+        let mut global_lockfile = GlobalLockfile::new();
+        global_lockfile.claims.push(GlobalClaim::new(
+            Utf8PathBuf::from("/repos/other"),
+            global_asset,
+        ));
+
+        let assets = collect_visible_assets(&lockfile, &global_lockfile, selection_all(), None);
+
+        assert_eq!(assets.len(), 2);
+        assert!(assets.iter().any(|entry| {
+            entry.asset.name == "shared-global"
+                && entry.claimed_by.as_deref() == Some("/repos/other")
+        }));
     }
 }

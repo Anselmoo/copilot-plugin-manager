@@ -54,7 +54,7 @@ pub async fn run(cmd: AuthCommand) -> Result<(), CpmError> {
                 return Err(CpmError::InvalidConfig {
                     key: "token".to_owned(),
                     reason: format!(
-                        "no token provided in CPM_TOKEN or GITHUB_TOKEN, and stdin is not interactive. Visit {GITHUB_TOKEN_URL} and re-run with `CPM_TOKEN=... uv run cpm auth login` or use a terminal prompt"
+                        "no token found in CPM_TOKEN or GITHUB_TOKEN, and stdin is not interactive. Public GitHub sources often work anonymously, but private repositories and better API limits require a token. Visit {GITHUB_TOKEN_URL} and re-run with `CPM_TOKEN=... uv run cpm auth login` or `GITHUB_TOKEN=... uv run cpm auth login`, or use `uv run cpm auth login --open` from an interactive terminal"
                     ),
                 });
             }
@@ -83,7 +83,9 @@ pub async fn run(cmd: AuthCommand) -> Result<(), CpmError> {
         AuthCommand::Status => match auth::status() {
             AuthStatus::Authenticated => println!("✓ Authenticated (token available)."),
             AuthStatus::Unauthenticated => {
-                println!("✗ No token found (unauthenticated — 60 req/h limit applies).")
+                println!(
+                    "✗ No token found (public GitHub may still work, but private repos and higher API limits require a token)."
+                )
             }
         },
     }
@@ -103,12 +105,16 @@ fn token_from_environment() -> Option<(String, &'static str)> {
 
 fn print_login_help() {
     eprintln!("No GitHub token found in CPM_TOKEN or GITHUB_TOKEN.");
+    eprintln!(
+        "Public GitHub installs usually work without a token, but private repositories and better API limits need one."
+    );
     eprintln!("Create one here:");
     eprintln!("  {GITHUB_TOKEN_URL}");
     eprintln!("Use `uv run cpm auth login --open` to open that page automatically.");
     eprintln!("For private repositories, grant read access to the repos you need.");
-    eprintln!("You can either paste the token below or re-run with:");
+    eprintln!("You can paste the token below, or re-run with either of these:");
     eprintln!("  CPM_TOKEN=ghp_your_token uv run cpm auth login");
+    eprintln!("  GITHUB_TOKEN=ghp_your_token uv run cpm auth login");
 }
 
 fn open_browser(url: &str) -> std::io::Result<()> {

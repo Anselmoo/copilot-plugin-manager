@@ -27,6 +27,8 @@ def _cargo_delegate(repo_root: Path, args: Sequence[str]) -> DelegateSpec:
             str(repo_root / "Cargo.toml"),
             "-p",
             "cpm-cli",
+            "--bin",
+            "cpm",
             "--",
             *args,
         ]

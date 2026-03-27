@@ -112,6 +112,8 @@ uv run cpm auth login
 uv run cpm auth login --open
 ```
 
+Public GitHub sources usually work without authentication. Use a token when you need private repository access or want to avoid GitHub API rate-limit surprises.
+
 ## Working with workflows and hooks
 
 Hooks install as bundles containing `hooks.json` and executable scripts. `cpm` ensures bundled shell scripts are installed with executable permissions.

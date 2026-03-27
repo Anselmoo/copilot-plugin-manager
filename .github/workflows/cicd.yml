@@ -105,7 +105,7 @@ jobs:
         run: cargo test --workspace
 
       - name: Run lint, Python tests, and build
-        run: uv run --group dev python -m poethepoet ci-full
+        run: uv run --group dev poe ci-full
 
 # ── Verify cpm tooling in an isolated repo ───────────────────────────────────
   verify-overview:
@@ -180,10 +180,10 @@ jobs:
         run: cargo test --workspace
 
       - name: Smoke — cpm --help
-        run: uv run --group dev python -m poethepoet smoke
+        run: uv run --group dev poe smoke
 
 # ── Multi-platform wheel + sdist build ───────────────────────────────────────
-  build-wheels:
+  build-distributions:
     name: Build distributions (${{ matrix.os }})
     needs: [test, verify-overview, smoke]
     if: github.event_name != 'pull_request'
@@ -220,12 +220,31 @@ jobs:
       - name: Sync dependencies
         run: uv sync --group dev --python ${{ env.PYTHON_VERSION }}
 
+      - name: Compute published package version
+        shell: bash
+        run: |
+          version="$(python scripts/ci_version.py compute)"
+          echo "PUBLISHED_VERSION=$version" >> "$GITHUB_ENV"
+          echo "Using published package version: $version"
+
+      - name: Apply CI candidate version metadata
+        if: github.ref == 'refs/heads/main'
+        shell: bash
+        run: python scripts/ci_version.py apply "$PUBLISHED_VERSION"
+
       - name: Build source distribution (Linux only)
         if: matrix.os == 'ubuntu-latest'
-        run: uv build --sdist
+        uses: PyO3/maturin-action@v1
+        with:
+          command: sdist
+          args: --manifest-path crates/cpm-cli/Cargo.toml --out dist
 
       - name: Build wheel
-        run: uv build --wheel
+        uses: PyO3/maturin-action@v1
+        with:
+          command: build
+          args: --release --manifest-path crates/cpm-cli/Cargo.toml --out dist
+          manylinux: auto
 
       - name: Upload distribution artifacts
         uses: actions/upload-artifact@v7
@@ -236,7 +255,7 @@ jobs:
 # ── Validate all wheels with twine ───────────────────────────────────────────
   check-distributions:
     name: Check distributions
-    needs: build-wheels
+    needs: build-distributions
     if: github.event_name != 'pull_request'
     runs-on: ubuntu-latest
     steps:
@@ -266,16 +285,12 @@ jobs:
           name: python-package-distributions
           path: dist/
 
-# ── Publish to TestPyPI (every push to main) ─────────────────────────────────
-  publish-testpypi:
-    name: Publish to TestPyPI
+# ── Generate an SBOM for release artifacts ──────────────────────────────────
+  sbom:
+    name: Generate SBOM
     needs: check-distributions
-    if: github.event_name == 'push' && github.ref == 'refs/heads/main'
+    if: github.event_name != 'pull_request'
     runs-on: ubuntu-latest
-    permissions:
-      id-token: write
-    environment:
-      name: testpypi
     steps:
       - name: Download distribution artifacts
         uses: actions/download-artifact@v8
@@ -283,22 +298,153 @@ jobs:
           name: python-package-distributions
           path: dist/
 
+      - name: Generate SPDX SBOM
+        uses: anchore/sbom-action@v0
+        with:
+          path: dist/
+          format: spdx-json
+          output-file: sbom.spdx.json
+
+      - name: Upload SBOM artifact
+        uses: actions/upload-artifact@v7
+        with:
+          name: release-sbom
+          path: sbom.spdx.json
+
+# ── Publish to TestPyPI (unique dev candidates on main, finals on tags) ─────
+  publish-testpypi:
+    name: Publish to TestPyPI
+    needs: check-distributions
+    if: github.event_name == 'push' && (github.ref == 'refs/heads/main' || startsWith(github.ref, 'refs/tags/v'))
+    runs-on: ubuntu-latest
+    permissions:
+      id-token: write
+    environment:
+      name: testpypi
+      url: https://test.pypi.org/p/copilot-plugin-manager
+    steps:
+      - name: Download distribution artifacts
+        uses: actions/download-artifact@v8
+        with:
+          name: python-package-distributions
+          path: dist/
+
+      - name: Detect distribution version
+        id: dist_version
+        shell: bash
+        run: |
+          shopt -s nullglob
+          files=(dist/*.whl)
+          if [ "${#files[@]}" -eq 0 ]; then
+            files=(dist/*.tar.gz)
+          fi
+          if [ "${#files[@]}" -eq 0 ]; then
+            echo "No distribution files found in dist/."
+            exit 1
+          fi
+          name="$(basename "${files[0]}")"
+          version="${name#copilot_plugin_manager-}"
+          version="${version#copilot-plugin-manager-}"
+          if [[ "$name" == *.whl ]]; then
+            version="${version%%-*}"
+          else
+            version="${version%.tar.gz}"
+          fi
+          echo "PUBLISHED_VERSION=$version" >> "$GITHUB_ENV"
+          echo "version=$version" >> "$GITHUB_OUTPUT"
+          echo "Publishing distribution version: $version"
+
+      - name: Check whether version already exists on TestPyPI
+        id: testpypi_check
+        shell: bash
+        run: |
+          status="$(curl -s -o /dev/null -w "%{http_code}" "https://test.pypi.org/pypi/copilot-plugin-manager/${PUBLISHED_VERSION}/json")"
+          if [ "$status" = "200" ]; then
+            echo "Version ${PUBLISHED_VERSION} already exists on TestPyPI."
+            echo "skip=true" >> "$GITHUB_OUTPUT"
+            exit 0
+          fi
+          echo "skip=false" >> "$GITHUB_OUTPUT"
+
       - name: Publish to TestPyPI
+        if: steps.testpypi_check.outputs.skip != 'true'
         uses: pypa/gh-action-pypi-publish@release/v1
         with:
           repository-url: https://test.pypi.org/legacy/
           skip-existing: true
 
+  verify-testpypi:
+    name: Verify TestPyPI package
+    needs: publish-testpypi
+    if: github.event_name == 'push' && (github.ref == 'refs/heads/main' || startsWith(github.ref, 'refs/tags/v'))
+    runs-on: ubuntu-latest
+    steps:
+      - name: Download distribution artifacts
+        uses: actions/download-artifact@v8
+        with:
+          name: python-package-distributions
+          path: dist/
+
+      - name: Detect distribution version
+        shell: bash
+        run: |
+          shopt -s nullglob
+          files=(dist/*.whl)
+          if [ "${#files[@]}" -eq 0 ]; then
+            files=(dist/*.tar.gz)
+          fi
+          if [ "${#files[@]}" -eq 0 ]; then
+            echo "No distribution files found in dist/."
+            exit 1
+          fi
+          name="$(basename "${files[0]}")"
+          version="${name#copilot_plugin_manager-}"
+          version="${version#copilot-plugin-manager-}"
+          if [[ "$name" == *.whl ]]; then
+            version="${version%%-*}"
+          else
+            version="${version%.tar.gz}"
+          fi
+          echo "PUBLISHED_VERSION=$version" >> "$GITHUB_ENV"
+          echo "Verifying published package version: $version"
+
+      - name: Set up Python
+        uses: actions/setup-python@v6
+        with:
+          python-version: ${{ env.PYTHON_VERSION }}
+
+      - name: Install release from TestPyPI
+        run: |
+          python -m pip install --upgrade pip
+          for attempt in $(seq 1 8); do
+            if python -m pip install --index-url https://test.pypi.org/simple/ --extra-index-url https://pypi.org/simple/ "copilot-plugin-manager==${PUBLISHED_VERSION}"; then
+              break
+            fi
+            if [ "$attempt" -eq 8 ]; then
+              echo "Package was not installable from TestPyPI after retries."
+              exit 1
+            fi
+            echo "Retrying TestPyPI install in 20s (attempt ${attempt}/8)..."
+            sleep 20
+          done
+
+      - name: Smoke test installed commands
+        run: |
+          cpm --help
+          copilot-plugin-manager --help
+          python -m cpm --help
+
 # ── Publish to PyPI (tagged releases only) ───────────────────────────────────
   publish-pypi:
     name: Publish to PyPI
-    needs: check-distributions
+    needs: [check-distributions, sbom, publish-testpypi, verify-testpypi]
     if: github.event_name == 'push' && startsWith(github.ref, 'refs/tags/v')
     runs-on: ubuntu-latest
     permissions:
       id-token: write
     environment:
       name: pypi
+      url: https://pypi.org/p/copilot-plugin-manager
     steps:
       - name: Download distribution artifacts
         uses: actions/download-artifact@v8
@@ -308,3 +454,30 @@ jobs:
 
       - name: Publish to PyPI
         uses: pypa/gh-action-pypi-publish@release/v1
+
+  github-release:
+    name: Publish GitHub release assets
+    needs: [publish-pypi, sbom]
+    if: github.event_name == 'push' && startsWith(github.ref, 'refs/tags/v')
+    runs-on: ubuntu-latest
+    permissions:
+      contents: write
+    steps:
+      - name: Download distribution artifacts
+        uses: actions/download-artifact@v8
+        with:
+          name: python-package-distributions
+          path: dist/
+
+      - name: Download SBOM artifact
+        uses: actions/download-artifact@v8
+        with:
+          name: release-sbom
+          path: release-artifacts/
+
+      - name: Publish GitHub release
+        uses: softprops/action-gh-release@v2
+        with:
+          files: |
+            dist/*
+            release-artifacts/sbom.spdx.json
