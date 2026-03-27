@@ -1,110 +1,256 @@
-[project]
-name = "copilot-plugin-manager"
-version = "0.1.5"
-description = "Python-first GitHub Copilot plugin, skill, and agent manager"
-readme = "README.md"
-authors = [{ name = "Anselm Hahn", email = "Anselm.Hahn@gmail.com" }]
-license = "MIT"
-license-files = ["LICENSE"]
-requires-python = ">=3.12"
-keywords = [
-    "github-copilot",
-    "copilot",
-    "cli",
-    "plugin-manager",
-    "skills",
-    "agents",
-]
-classifiers = [
-    "Development Status :: 3 - Alpha",
-    "Environment :: Console",
-    "Intended Audience :: Developers",
-    "License :: OSI Approved :: MIT License",
-    "Operating System :: OS Independent",
-    "Programming Language :: Python",
-    "Programming Language :: Python :: 3",
-    "Programming Language :: Python :: 3 :: Only",
-    "Programming Language :: Python :: 3.12",
-    "Programming Language :: Python :: 3.13",
-    "Programming Language :: Python :: 3.14",
-    "Topic :: Software Development :: Libraries :: Python Modules",
-    "Topic :: Software Development :: Version Control",
-    "Topic :: Software Development :: Build Tools",
-    "Topic :: Utilities",
-]
-dependencies = ["pydantic>=2,<3", "rich>=14.3.3", "typer>=0.24.1"]
-
-[project.urls]
-Homepage = "https://github.com/Anselmoo/copilot-plugin-manager"
-Repository = "https://github.com/Anselmoo/copilot-plugin-manager"
-Issues = "https://github.com/Anselmoo/copilot-plugin-manager/issues"
-
-[project.scripts]
-copilot-plugin-manager = "copilot_plugin_manager.cli:main"
-
 [build-system]
 requires = ["uv_build>=0.10.9,<0.11.0"]
 build-backend = "uv_build"
 
+[project]
+name = "copilot-plugin-manager"
+version = "0.1.0"
+description = "Rust-first GitHub Copilot asset manager with a thin Python wrapper"
+readme = "README.md"
+requires-python = ">=3.12"
+license = "MIT OR Apache-2.0"
+license-files = ["LICENSE-APACHE", "LICENSE-MIT"]
+keywords = [
+  "agent",
+  "agentic-workflow",
+  "cli",
+  "copilot",
+  "github-copilot",
+  "mcp",
+  "package",
+  "plugin",
+  "python",
+  "rust",
+  "skill",
+]
+classifiers = [
+  "Development Status :: 3 - Alpha",
+  "Environment :: Console",
+  "Intended Audience :: Developers",
+  "Programming Language :: Python :: 3",
+  "Programming Language :: Python :: 3 :: Only",
+  "Programming Language :: Python :: 3.12",
+  "Programming Language :: Python :: 3.13",
+  "Programming Language :: Python :: 3.14",
+  "Programming Language :: Rust",
+  "Topic :: Software Development :: Build Tools",
+  "Topic :: Software Development :: Libraries :: Python Modules",
+  "Topic :: Software Development :: Version Control",
+  "Topic :: Utilities",
+  "Typing :: Typed",
+]
+
+[project.urls]
+Documentation = "https://github.com/Anselmoo/copilot-plugin-manager/blob/main/README.md"
+Homepage = "https://github.com/Anselmoo/copilot-plugin-manager"
+Issues = "https://github.com/Anselmoo/copilot-plugin-manager/issues"
+Repository = "https://github.com/Anselmoo/copilot-plugin-manager"
+
+[project.scripts]
+copilot-plugin-manager = "cpm.__main__:main"
+cpm = "cpm.__main__:main"
+
 [dependency-groups]
 dev = [
-    "pre-commit>=4.3.0",
-    "poethepoet>=0.34.0",
-    "pytest>=9.0.2",
-    "pytest-cov>=7.0.0",
-    "ruff>=0.15.0",
-    "twine>=6.2.0",
-    "ty>=0.0.23",
+  "poethepoet>=0.37,<0.38",
+  "pytest>=8.3,<9",
+  "pytest-cov>=7.1.0",
+  "ruff>=0.15,<0.16",
+  "tombi>=0.9.9",
+  "ty>=0.0.1a18",
+]
+
+[tool.uv.build-backend]
+module-root = "python"
+module-name = "cpm"
+source-include = [
+  "Cargo.toml",
+  "Cargo.lock",
+  "README.md",
+  "cpm.toml",
+  "crates/**",
+  "tests/**",
+]
+source-exclude = [
+  "__pycache__",
+  ".pytest_cache",
+  ".ruff_cache",
+  ".venv",
+  "target",
 ]
 
 [tool.pytest.ini_options]
+testpaths = ["tests"]
 addopts = ["-ra"]
-testpaths = ["test"]
-
-[tool.coverage.run]
-branch = true
-source = ["copilot_plugin_manager"]
-
-[tool.coverage.report]
-show_missing = true
-skip_covered = true
+xfail_strict = true
+filterwarnings = ["error"]
 
 [tool.ruff]
-line-length = 180
 target-version = "py312"
-extend-exclude = ["dist", "external", "legacy"]
+line-length = 100
 
 [tool.ruff.lint]
-select = ["E", "F", "I", "W"]
+select = [
+  "E",   # pycodestyle errors
+  "W",   # pycodestyle warnings
+  "F",   # pyflakes
+  "I",   # isort
+  "UP",  # pyupgrade
+  "B",   # flake8-bugbear
+  "C4",  # flake8-comprehensions
+  "SIM", # flake8-simplify
+  "TID", # flake8-tidy-imports
+  "ANN", # flake8-annotations
+  "S",   # flake8-bandit (security)
+  "N",   # pep8-naming
+  "PT",  # flake8-pytest-style
+  "RUF", # Ruff-specific rules
+]
+ignore = [
+  "S603", # subprocess call — accepted pattern in this project
+  "S607", # start process with partial path — accepted pattern
+]
+
+[tool.ruff.lint.per-file-ignores]
+"tests/**/*.py" = [
+  "S101", # assert is expected in tests
+  "ANN",  # type annotations not required for tests
+]
+
+[tool.ruff.lint.isort]
+force-single-line = false
+known-first-party = ["cpm"]
+
+[tool.ruff.format]
+quote-style = "double"
+indent-style = "space"
+line-ending = "auto"
+
+[tool.ty.environment]
+python-version = "3.12"
 
 [tool.ty.src]
-include = ["src", "test"]
-exclude = ["dist", "external", "legacy"]
-
-[tool.ty.terminal]
-output-format = "full"
+include = ["python/**/*.py", "tests/**/*.py"]
+exclude = [".venv/**", "target/**"]
 
 [tool.poe.tasks]
- pre-commit = { cmd = "pre-commit run --all-files", help = "Run pre-commit hooks across the repository." }
- test = { cmd = "pytest -q", help = "Run the test suite." }
- test-cov = { cmd = "pytest --cov=copilot_plugin_manager --cov-report=term-missing --cov-report=xml", help = "Run tests with coverage." }
- lint = { cmd = "ruff check .", help = "Run Ruff lint checks." }
- typecheck = { cmd = "ty check", help = "Run ty type checks." }
- broken-links = { cmd = "python scripts/check_broken_links.py", help = "Detect dangling symlinks in tracked repository and submodule content." }
- generate-docs = { cmd = "python scripts/generate_docs.py", help = "Regenerate markdown docs for credits, theme compositions, and the README catalog overview." }
- _refresh-catalog = { cmd = "python scripts/refresh_catalog.py", help = "Regenerate plugin and entrypoint metadata from upstream submodules without legacy bootstrap files." }
- _refresh-catalog-reset = { cmd = "python scripts/refresh_catalog.py --hard-reset", help = "Hard-reset entrypoint provenance history and rebuild provider metadata from upstream source files." }
- _validate-catalog = { cmd = "python scripts/refresh_catalog.py --validate-only", help = "Validate catalog source discovery and compiled output metadata without rewriting catalog files." }
- refresh-catalog = { sequence = ["_refresh-catalog", "_validate-catalog", "generate-docs"], help = "Regenerate catalog metadata, validate compiled outputs, and refresh generated markdown docs." }
- refresh-catalog-reset = { sequence = ["_refresh-catalog-reset", "_validate-catalog", "generate-docs"], help = "Hard-reset catalog provenance data, validate compiled outputs, and refresh generated markdown docs." }
-_build-dist = { cmd = "uv build", help = "Build source and wheel distributions." }
-_check-dist = { shell = "twine check dist/*", help = "Validate built distributions." }
-build = { sequence = [
-    "_build-dist",
-    "_check-dist",
-], help = "Build and validate distributions." }
-check = { sequence = [
-    "lint",
-    "typecheck",
-    "test",
-], help = "Run lint, type checks, and tests." }
+# ── Formatting ─────────────────────────────────────────────────────────────
+[tool.poe.tasks.format]
+help = "Auto-format Python sources with ruff"
+cmd = "ruff format python tests"
+
+[tool.poe.tasks.format-check]
+help = "Check Python formatting without making changes"
+cmd = "ruff format --check python tests"
+
+[tool.poe.tasks.python-format-check-hook]
+help = "Hook-friendly Python format check with fix guidance"
+shell = "ruff format --check python tests || { echo; echo \"Python formatting issues found in the staged snapshot.\"; echo \"Run: uv run --group dev python -m poethepoet format\"; echo \"Then restage the changes: git add -u python tests\"; exit 1; }"
+
+# ── Linting ────────────────────────────────────────────────────────────────
+[tool.poe.tasks.ruff-check]
+help = "Lint Python sources with ruff"
+cmd = "ruff check python tests"
+
+[tool.poe.tasks.ruff-fix]
+help = "Lint and auto-fix Python sources with ruff"
+cmd = "ruff check --fix python tests"
+
+[tool.poe.tasks.ty-check]
+help = "Type-check Python sources with ty"
+cmd = "ty check python tests"
+
+[tool.poe.tasks.lint]
+help = "Run manifest validation and Python linters"
+sequence = ["manifests-check", "ruff-check", "ty-check"]
+
+# ── Testing ────────────────────────────────────────────────────────────────
+[tool.poe.tasks.pytest]
+help = "Run the Python test suite"
+cmd = "python -m pytest"
+
+[tool.poe.tasks.pytest-verbose]
+help = "Run the Python test suite with verbose output"
+cmd = "python -m pytest -v"
+
+[tool.poe.tasks.rust-test]
+help = "Run the Rust workspace test suite"
+cmd = "cargo test --workspace"
+
+[tool.poe.tasks.rust-test-verbose]
+help = "Run the Rust workspace tests with captured output"
+cmd = "cargo test --workspace -- --nocapture"
+
+[tool.poe.tasks.smoke]
+help = "Quick smoke test: run cpm --help"
+cmd = "cpm --help"
+
+[tool.poe.tasks.smoke-awesome-copilot]
+help = "Network-backed smoke test against github/awesome-copilot"
+cmd = "bash scripts/smoke-awesome-copilot.sh"
+
+[tool.poe.tasks.test]
+help = "Run all tests (Python + Rust + smoke)"
+sequence = ["pytest", "rust-test", "smoke"]
+
+[tool.poe.tasks.manifests-check]
+help = "Validate checked-in TOML manifests"
+cmd = "python scripts/check_committed_toml.py"
+
+# ── Build ──────────────────────────────────────────────────────────────────
+[tool.poe.tasks.rust-build]
+help = "Build the Rust workspace (debug)"
+cmd = "cargo build --workspace"
+
+[tool.poe.tasks.rust-build-release]
+help = "Build the Rust workspace (release)"
+cmd = "cargo build --workspace --release"
+
+[tool.poe.tasks.rust-fmt]
+help = "Format Rust sources with rustfmt"
+cmd = "cargo fmt --all"
+
+[tool.poe.tasks.rust-fmt-check]
+help = "Check Rust formatting without making changes"
+cmd = "cargo fmt --all -- --check"
+
+[tool.poe.tasks.rust-fmt-check-hook]
+help = "Hook-friendly Rust format check with fix guidance"
+shell = "cargo fmt --all -- --check || { echo; echo \"Rust formatting issues found in the staged snapshot.\"; echo \"Run: uv run --group dev python -m poethepoet rust-fmt\"; echo \"Then restage the changes: git add -u crates\"; exit 1; }"
+
+[tool.poe.tasks.rust-clippy]
+help = "Run clippy lints on the Rust workspace"
+cmd = "cargo clippy --workspace -- -D warnings"
+
+# ── CI pipeline ────────────────────────────────────────────────────────────
+[tool.poe.tasks.ci]
+help = "Full CI pipeline: lint → test → build"
+sequence = ["lint", "test", "rust-build"]
+
+[tool.poe.tasks.ci-full]
+help = "Full CI pipeline with release build and formatting checks"
+sequence = [
+  "format-check",
+  "rust-fmt-check",
+  "lint",
+  "rust-clippy",
+  "test",
+  "rust-build-release",
+]
+
+[tool.poe.tasks.hooks-check]
+help = "Run the committed lefthook pre-commit pipeline"
+cmd = "lefthook run pre-commit --all-files"
+
+# ── Utilities ──────────────────────────────────────────────────────────────
+[tool.poe.tasks.toml-format]
+help = "Run tombi to format all TOML files"
+cmd = "tombi format"
+
+[tool.poe.tasks.toml-lint]
+help = "Run tombi to lint all TOML files"
+cmd = "tombi lint"
+
+[tool.poe.tasks.clean]
+help = "Remove build artefacts (target/ and __pycache__)"
+shell = "cargo clean && find . -type d -name __pycache__ -exec rm -rf {} + 2>/dev/null; echo done"

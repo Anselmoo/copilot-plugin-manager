@@ -1,3 +1,7 @@
+# Legacy upstream source references from the catalog era.
+# These entries are kept as a reference list only; the current Rust-first repo
+# does not require developers or CI to initialize them by default.
+
 [submodule "external/awesome-copilot"]
 	path = external/awesome-copilot
 	url = https://github.com/github/awesome-copilot.git
@@ -25,6 +29,7 @@
 [submodule "external/voltagent-subagents"]
 	path = external/voltagent-subagents
 	url = https://github.com/VoltAgent/awesome-claude-code-subagents.git
+
 [submodule "external/anthropics-"]
 	path = external/anthropics-
 	url = https://github.com/anthropics/skills.git

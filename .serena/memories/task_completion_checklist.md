@@ -1,0 +1,4 @@
+- After CLI/core changes, run at least `cargo test -p cpm-core -p cpm-cli`.
+- Check changed files for diagnostics with editor error reporting.
+- If command behavior touches manifest/lock/install paths, prefer validating against real `cpm.toml`/`cpm.lock` flows rather than placeholder defaults.
+- Mention remaining architecture gaps explicitly when hooks/workflows or other six-kind features are still not implemented in core/types.

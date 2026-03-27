@@ -32,9 +32,10 @@ concurrency:
 env:
   PYTHON_VERSION: '3.12'
 
+# ── Lint ─────────────────────────────────────────────────────────────────────
 jobs:
   lint:
-    name: Lint & pre-commit
+    name: Lint & lefthook
     runs-on: ubuntu-latest
     steps:
       - name: Checkout
@@ -51,12 +52,22 @@ jobs:
         uses: astral-sh/setup-uv@v7
         with:
           enable-cache: true
+          cache-dependency-glob: |
+            pyproject.toml
+            uv.lock
 
-      - name: Run pre-commit hooks via uvx
-        run: uvx pre-commit run --all-files --show-diff-on-failure
+      - name: Sync dependencies
+        run: uv sync --group dev --python ${{ env.PYTHON_VERSION }}
 
+      - name: Verify lefthook config exists
+        run: test -f lefthook.yml
+
+      - name: Run lefthook hooks
+        run: uvx lefthook run pre-commit --all-files
+
+# ── Primary test suite (Linux — full) ────────────────────────────────────────
   test:
-    name: Tests
+    name: Tests (ubuntu-latest)
     needs: lint
     runs-on: ubuntu-latest
     steps:
@@ -65,6 +76,12 @@ jobs:
         with:
           submodules: recursive
 
+      - name: Install Rust toolchain
+        uses: dtolnay/rust-toolchain@stable
+
+      - name: Restore Rust cache
+        uses: Swatinem/rust-cache@v2
+
       - name: Set up Python
         uses: actions/setup-python@v6
         with:
@@ -74,28 +91,155 @@ jobs:
         uses: astral-sh/setup-uv@v7
         with:
           enable-cache: true
+          cache-dependency-glob: |
+            pyproject.toml
+            uv.lock
 
       - name: Sync dependencies
-        run: uv sync --group dev
+        run: uv sync --group dev --python ${{ env.PYTHON_VERSION }}
 
-
-      - name: Run ty
+      - name: Run type checker
         run: uv run ty check --output-format github
 
-      - name: Run tests
-        run: uv run pytest -q
+      - name: Run Rust tests
+        run: cargo test --workspace
 
-  build:
-    name: Build package
+      - name: Run lint, Python tests, and build
+        run: uv run --group dev python -m poethepoet ci-full
+
+# ── Verify cpm tooling in an isolated repo ───────────────────────────────────
+  verify-overview:
+    name: Verify overview command
     needs: test
-    if: github.event_name != 'pull_request'
     runs-on: ubuntu-latest
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+
+      - name: Install Rust toolchain
+        uses: dtolnay/rust-toolchain@stable
+
+      - name: Restore Rust cache
+        uses: Swatinem/rust-cache@v2
+
+      - name: Set up uv
+        uses: astral-sh/setup-uv@v5
+        with:
+          enable-cache: true
+          cache-dependency-glob: |
+            pyproject.toml
+            uv.lock
+
+      - name: Install Python ${{ env.PYTHON_VERSION }}
+        run: uv python install ${{ env.PYTHON_VERSION }}
+
+      - name: Sync dependencies
+        run: uv sync --group dev --python ${{ env.PYTHON_VERSION }}
+
+      - name: Verify overview command in a fresh repo
+        run: |
+          tmpdir="$(mktemp -d)"
+          cd "$tmpdir"
+          uv run --project "$GITHUB_WORKSPACE" cpm init --name ci-overview
+          uv run --project "$GITHUB_WORKSPACE" cpm overview --json
+
+# ── Frozen smoke-tests on macOS and Windows ──────────────────────────────────
+  smoke:
+    name: Smoke (frozen) — ${{ matrix.os }}
+    needs: test
+    runs-on: ${{ matrix.os }}
+    strategy:
+      fail-fast: false
+      matrix:
+        os: [macos-latest, windows-latest]
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+
+      - name: Install Rust toolchain
+        uses: dtolnay/rust-toolchain@stable
+
+      - name: Restore Rust cache
+        uses: Swatinem/rust-cache@v2
+
+      - name: Set up uv
+        uses: astral-sh/setup-uv@v6
+        with:
+          enable-cache: true
+          cache-dependency-glob: |
+            pyproject.toml
+            uv.lock
+
+      - name: Install Python ${{ env.PYTHON_VERSION }}
+        run: uv python install ${{ env.PYTHON_VERSION }}
+
+      - name: Sync dependencies (frozen)
+        run: uv sync --group dev --python ${{ env.PYTHON_VERSION }} --frozen
+
+      - name: Run Rust tests
+        run: cargo test --workspace
+
+      - name: Smoke — cpm --help
+        run: uv run --group dev python -m poethepoet smoke
+
+# ── Multi-platform wheel + sdist build ───────────────────────────────────────
+  build-wheels:
+    name: Build distributions (${{ matrix.os }})
+    needs: [test, verify-overview, smoke]
+    if: github.event_name != 'pull_request'
+    runs-on: ${{ matrix.os }}
+    strategy:
+      fail-fast: false
+      matrix:
+        os: [ubuntu-latest, macos-latest, windows-latest]
     steps:
       - name: Checkout
         uses: actions/checkout@v6
         with:
           submodules: recursive
 
+      - name: Install Rust toolchain
+        uses: dtolnay/rust-toolchain@stable
+
+      - name: Restore Rust cache
+        uses: Swatinem/rust-cache@v2
+
+      - name: Set up Python
+        uses: actions/setup-python@v6
+        with:
+          python-version: ${{ env.PYTHON_VERSION }}
+
+      - name: Set up uv
+        uses: astral-sh/setup-uv@v7
+        with:
+          enable-cache: true
+          cache-dependency-glob: |
+            pyproject.toml
+            uv.lock
+
+      - name: Sync dependencies
+        run: uv sync --group dev --python ${{ env.PYTHON_VERSION }}
+
+      - name: Build source distribution (Linux only)
+        if: matrix.os == 'ubuntu-latest'
+        run: uv build --sdist
+
+      - name: Build wheel
+        run: uv build --wheel
+
+      - name: Upload distribution artifacts
+        uses: actions/upload-artifact@v7
+        with:
+          name: python-package-distributions-${{ matrix.os }}
+          path: dist/
+
+# ── Validate all wheels with twine ───────────────────────────────────────────
+  check-distributions:
+    name: Check distributions
+    needs: build-wheels
+    if: github.event_name != 'pull_request'
+    runs-on: ubuntu-latest
+    steps:
       - name: Set up Python
         uses: actions/setup-python@v6
         with:
@@ -106,24 +250,26 @@ jobs:
         with:
           enable-cache: true
 
-      - name: Sync dependencies
-        run: uv sync --group dev
-
-      - name: Build distributions
-        run: uv build
+      - name: Download distribution artifacts
+        uses: actions/download-artifact@v8
+        with:
+          pattern: python-package-distributions-*
+          path: dist/
+          merge-multiple: true
 
       - name: Check distributions
         run: uvx twine check dist/*
 
-      - name: Upload distribution artifacts
+      - name: Upload merged distribution artifacts
         uses: actions/upload-artifact@v7
         with:
           name: python-package-distributions
           path: dist/
 
+# ── Publish to TestPyPI (every push to main) ─────────────────────────────────
   publish-testpypi:
     name: Publish to TestPyPI
-    needs: build
+    needs: check-distributions
     if: github.event_name == 'push' && github.ref == 'refs/heads/main'
     runs-on: ubuntu-latest
     permissions:
@@ -143,9 +289,10 @@ jobs:
           repository-url: https://test.pypi.org/legacy/
           skip-existing: true
 
+# ── Publish to PyPI (tagged releases only) ───────────────────────────────────
   publish-pypi:
     name: Publish to PyPI
-    needs: build
+    needs: check-distributions
     if: github.event_name == 'push' && startsWith(github.ref, 'refs/tags/v')
     runs-on: ubuntu-latest
     permissions:
