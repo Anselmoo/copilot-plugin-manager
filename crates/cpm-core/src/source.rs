@@ -12,6 +12,7 @@ use sha2::{Digest, Sha256};
 
 use crate::config::rewrite_source_url;
 use crate::fetcher::{atomic_write, cache_dir};
+use crate::paths::portable_path_string;
 use crate::CpmError;
 
 /// A normalized asset source that can be written into `cpm.toml`.
@@ -715,12 +716,7 @@ fn normalize_path_source(kind: AssetKind, source: &str) -> Result<NormalizedAsse
         });
     }
 
-    let utf8_path = Utf8PathBuf::from_path_buf(normalized_path.to_path_buf()).map_err(|_| {
-        CpmError::InvalidSource {
-            input: source.to_owned(),
-            reason: "local paths must be valid UTF-8".to_owned(),
-        }
-    })?;
+    let utf8_path = Utf8PathBuf::from(portable_path_string(normalized_path));
 
     Ok(NormalizedAssetSource {
         name: normalized.name,
@@ -1256,19 +1252,31 @@ mod tests {
             "Windows path should resolve to local path"
         );
         assert!(normalized.url.is_none(), "Windows path should not have URL");
+        assert_eq!(
+            normalized.path.as_ref().map(|path| path.as_str()),
+            Some(crate::paths::portable_path_string(&file_path).as_str())
+        );
     }
 
     #[test]
     #[cfg_attr(not(windows), ignore)]
     fn windows_style_instruction_paths_use_filename_for_name() {
-        let normalized =
-            normalize_asset_source(AssetKind::Instruction, r"C:\temp\instructions\shell.md")
-                .expect("normalize instruction path");
+        use tempfile::TempDir;
+
+        let dir = TempDir::new().expect("tempdir");
+        let instructions_dir = dir.path().join("instructions");
+        std::fs::create_dir_all(&instructions_dir).expect("mkdir instructions");
+        let file_path = instructions_dir.join("shell.md");
+        std::fs::write(&file_path, "# shell").expect("write instruction");
+
+        let path_str = file_path.to_string_lossy().to_string();
+        let normalized = normalize_asset_source(AssetKind::Instruction, &path_str)
+            .expect("normalize instruction path");
 
         assert_eq!(normalized.name, "shell");
         assert_eq!(
             normalized.path.as_ref().map(|path| path.as_str()),
-            Some(r"C:/temp/instructions/shell.md")
+            Some(crate::paths::portable_path_string(&file_path).as_str())
         );
     }
 

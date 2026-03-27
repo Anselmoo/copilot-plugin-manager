@@ -352,7 +352,7 @@ fn describe_global_issue(issue: &GlobalClaimIssue) -> String {
 #[cfg(test)]
 mod tests {
     use super::*;
-    use crate::paths::join_portable_path;
+    use crate::paths::{join_portable_path, portable_path_string};
     use cpm_types::{
         AssetSource, GlobalClaim, GlobalLockfile, Lockfile, Manifest, PluginMeta, ResolvedAsset,
         Scope,
@@ -403,7 +403,7 @@ mod tests {
             source: Some(format!("https://example.com/{name}")),
             registry: Some("awesome-copilot".to_owned()),
             description: None,
-            path: camino::Utf8PathBuf::from_path_buf(path.to_path_buf()).ok(),
+            path: Some(camino::Utf8PathBuf::from(portable_path_string(path))),
             enabled: Some(true),
             installed_at: None,
             extra: Default::default(),

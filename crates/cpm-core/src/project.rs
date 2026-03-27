@@ -25,7 +25,7 @@ use crate::{
         write_mcp_server_entry,
     },
     license::{detect_license, enforce_license_policy},
-    paths::copilot_state_dir,
+    paths::{copilot_state_dir, portable_path_string},
     resolver::detect_conflicts,
     source::{
         docker_image_pin, parse_github_source, resolve_package_transport_version,
@@ -2997,12 +2997,7 @@ fn collect_local_directory_files(
             file: path.display().to_string(),
             msg: err.to_string(),
         })?;
-        let relative = Utf8PathBuf::from_path_buf(relative.to_path_buf()).map_err(|_| {
-            CpmError::InvalidSource {
-                input: path.display().to_string(),
-                reason: "local asset paths must be valid UTF-8".to_owned(),
-            }
-        })?;
+        let relative = Utf8PathBuf::from(portable_path_string(relative));
 
         files.push(SourceFile {
             relative_path: relative,
@@ -3346,15 +3341,7 @@ impl From<&ResolvedAsset> for LockfileRecord {
                     None,
                     args.clone(),
                     asset.source.url.clone(),
-                    Some(
-                        Utf8PathBuf::from_path_buf(path.clone()).unwrap_or_else(|path| {
-                            tracing::warn!(
-                                path = %path.display(),
-                                "non-UTF-8 MCP path was lossy-converted before writing the lockfile"
-                            );
-                            Utf8PathBuf::from(path.to_string_lossy().into_owned())
-                        }),
-                    ),
+                    Some(Utf8PathBuf::from(portable_path_string(path))),
                 ),
                 Some(McpTransport::Script { command, args }) => (
                     Some(LockfileTransport::Name("script".into())),

@@ -21,7 +21,7 @@ use cpm_types::{
 use indexmap::IndexMap;
 use tracing::{debug, info};
 
-use crate::{source::resolve_pinned_rev, CpmError};
+use crate::{paths::portable_path_string, source::resolve_pinned_rev, CpmError};
 
 /// Check the manifest for local/global scope conflicts and return an error on
 /// the first one found.
@@ -357,10 +357,7 @@ fn check_section(
 /// and relative-path representations of the same directory compare equal.
 pub fn canonical_repo_root(repo_root: &Path) -> Result<Utf8PathBuf, CpmError> {
     let canonical = repo_root.canonicalize()?;
-    Utf8PathBuf::from_path_buf(canonical).map_err(|path| CpmError::InvalidConfig {
-        key: "repo_root".to_owned(),
-        reason: format!("repository path must be valid UTF-8: {}", path.display()),
-    })
+    Ok(Utf8PathBuf::from(portable_path_string(&canonical)))
 }
 
 fn find_claim<'a>(

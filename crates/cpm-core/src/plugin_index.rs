@@ -11,10 +11,10 @@ use std::path::{Path, PathBuf};
 
 use camino::Utf8PathBuf;
 use indexmap::IndexMap;
-use serde::Deserialize;
+use serde::{Deserialize, Deserializer};
 
 use crate::fetcher::sha256_file;
-use crate::paths::{copilot_home_dir, copilot_state_dir, join_portable_path};
+use crate::paths::{copilot_home_dir, copilot_state_dir, join_portable_path, portable_path_string};
 use crate::CpmError;
 
 /// A plugin entry read from the Copilot plugin index.
@@ -258,7 +258,7 @@ fn read_plugin_markers_from(dir: &Path) -> Result<Vec<InstalledPlugin>, CpmError
         };
 
         let install_root = dir.join(name);
-        let path = camino::Utf8PathBuf::from_path_buf(install_root).ok();
+        let path = Some(portable_utf8_path(&install_root));
         plugins.push(InstalledPlugin {
             name: Some(name.to_owned()),
             version: None,
@@ -335,7 +335,7 @@ fn read_installed_plugin_dirs_from(dir: &Path) -> Result<Vec<InstalledPlugin>, C
                 source: None,
                 registry: Some(registry.to_owned()),
                 description: None,
-                path: camino::Utf8PathBuf::from_path_buf(plugin_dir).ok(),
+                path: Some(portable_utf8_path(&plugin_dir)),
                 enabled: None,
                 installed_at: None,
                 extra: IndexMap::new(),
@@ -496,7 +496,12 @@ struct RawInstalledPlugin {
     registry: Option<String>,
     #[serde(default)]
     description: Option<String>,
-    #[serde(default, alias = "cache_path", alias = "cachePath")]
+    #[serde(
+        default,
+        alias = "cache_path",
+        alias = "cachePath",
+        deserialize_with = "deserialize_optional_portable_utf8_path"
+    )]
     path: Option<Utf8PathBuf>,
     #[serde(default)]
     enabled: Option<bool>,
@@ -521,6 +526,20 @@ impl RawInstalledPlugin {
             extra: self.extra,
         }
     }
+}
+
+fn portable_utf8_path(path: &Path) -> Utf8PathBuf {
+    Utf8PathBuf::from(portable_path_string(path))
+}
+
+fn deserialize_optional_portable_utf8_path<'de, D>(
+    deserializer: D,
+) -> Result<Option<Utf8PathBuf>, D::Error>
+where
+    D: Deserializer<'de>,
+{
+    let path = Option::<String>::deserialize(deserializer)?;
+    Ok(path.map(|path| portable_utf8_path(Path::new(&path))))
 }
 
 #[cfg(test)]
@@ -676,20 +695,18 @@ mod tests {
         );
         std::fs::write(
             copilot_dir.join("config.json"),
-            format!(
-                r#"{{
-                  "installed_plugins": [
-                    {{
-                      "name": "context-engineering",
-                      "marketplace": "awesome-copilot",
-                      "version": "1.0.0",
-                      "cache_path": "{}",
-                      "enabled": true
-                    }}
-                  ]
-                }}"#,
-                cache_path.display()
-            ),
+            serde_json::json!({
+                "installed_plugins": [
+                    {
+                        "name": "context-engineering",
+                        "marketplace": "awesome-copilot",
+                        "version": "1.0.0",
+                        "cache_path": cache_path,
+                        "enabled": true
+                    }
+                ]
+            })
+            .to_string(),
         )
         .expect("config");
 
@@ -703,7 +720,7 @@ mod tests {
         assert_eq!(plugin.version.as_deref(), Some("1.0.0"));
         assert_eq!(
             plugin.path.as_ref().map(|path| path.as_str()),
-            Some(cache_path.to_string_lossy().as_ref())
+            Some(portable_path_string(&cache_path).as_str())
         );
     }
 
@@ -728,7 +745,7 @@ mod tests {
         let plugin = find_installed_plugin_by_name(&plugins, "pptx").expect("plugin");
         assert_eq!(
             plugin.path.as_ref().map(|path| path.as_str()),
-            Some(plugins_dir.join("pptx").to_string_lossy().as_ref())
+            Some(portable_path_string(&plugins_dir.join("pptx")).as_str())
         );
         assert!(hash_installed_plugin_manifest(plugin)
             .expect("hash")
@@ -756,7 +773,7 @@ mod tests {
         assert_eq!(plugin.registry.as_deref(), Some("awesome-copilot"));
         assert_eq!(
             plugin.path.as_ref().map(|path| path.as_str()),
-            Some(plugin_dir.to_string_lossy().as_ref())
+            Some(portable_path_string(&plugin_dir).as_str())
         );
         assert!(hash_installed_plugin_manifest(plugin)
             .expect("hash")
@@ -785,7 +802,27 @@ mod tests {
         assert_eq!(plugin.version.as_deref(), Some("1.0.0"));
         assert_eq!(
             plugin.path.as_ref().map(|path| path.as_str()),
-            Some(plugins_dir.join("pptx").to_string_lossy().as_ref())
+            Some(portable_path_string(&plugins_dir.join("pptx")).as_str())
+        );
+    }
+
+    #[test]
+    fn copilot_config_normalizes_windows_style_cache_paths() {
+        let plugin = parse_plugin_collection(
+            serde_json::json!([
+                {
+                    "name": "context-engineering",
+                    "marketplace": "awesome-copilot",
+                    "cache_path": r"C:\Users\runneradmin\.copilot\installed-plugins\awesome-copilot\context-engineering"
+                }
+            ]),
+            Path::new("config.json"),
+        )
+        .expect("parse");
+
+        assert_eq!(
+            plugin[0].path.as_ref().map(|path| path.as_str()),
+            Some("C:/Users/runneradmin/.copilot/installed-plugins/awesome-copilot/context-engineering")
         );
     }
 
