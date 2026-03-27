@@ -24,6 +24,17 @@ pub fn copilot_state_dir() -> PathBuf {
         .join(".copilot")
 }
 
+/// Join a slash-delimited relative path onto an OS path using native separators.
+///
+/// This keeps cpm's internal slash-normalized asset paths portable while still
+/// producing correct filesystem paths on the host platform.
+pub fn join_portable_path(base: &Path, relative: &str) -> PathBuf {
+    relative
+        .split(['/', '\\'])
+        .filter(|segment| !segment.is_empty())
+        .fold(base.to_path_buf(), |path, segment| path.join(segment))
+}
+
 /// Render a path in the portable slash-normalized form used by JSON output and
 /// tests.
 ///
@@ -39,7 +50,16 @@ pub fn portable_path_string(path: &Path) -> String {
 mod tests {
     use std::path::Path;
 
-    use super::portable_path_string;
+    use super::{join_portable_path, portable_path_string};
+
+    #[test]
+    fn join_portable_path_uses_native_component_joining() {
+        let base = Path::new("/tmp/demo");
+        assert_eq!(
+            join_portable_path(base, ".github/plugins/bundle.yml"),
+            base.join(".github").join("plugins").join("bundle.yml")
+        );
+    }
 
     #[test]
     fn portable_path_string_normalizes_windows_prefix_and_separators() {

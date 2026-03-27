@@ -242,7 +242,10 @@ mod tests {
         content: &[u8],
         hash: &str,
     ) -> (ResolvedAsset, std::path::PathBuf) {
-        let file_path = dir.join(".github/plugins").join(format!("{name}.yml"));
+        let file_path = dir
+            .join(".github")
+            .join("plugins")
+            .join(format!("{name}.yml"));
         std::fs::create_dir_all(file_path.parent().expect("parent")).expect("mkdir");
         std::fs::write(&file_path, content).expect("write");
 
@@ -351,7 +354,11 @@ mod tests {
     #[test]
     fn doctor_reports_per_file_hash_mismatch() {
         let dir = TempDir::new().expect("tempdir");
-        let file_path = dir.path().join(".github/plugins").join("bundle.yml");
+        let file_path = dir
+            .path()
+            .join(".github")
+            .join("plugins")
+            .join("bundle.yml");
         std::fs::create_dir_all(file_path.parent().expect("parent")).expect("mkdir");
         std::fs::write(&file_path, b"tampered").expect("write");
 

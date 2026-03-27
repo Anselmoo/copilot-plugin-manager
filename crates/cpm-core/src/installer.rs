@@ -604,6 +604,7 @@ fn prune_empty_dirs(current: Option<&Path>, stop_at: &Path) -> Result<(), CpmErr
 #[cfg(test)]
 mod tests {
     use super::*;
+    use crate::paths::join_portable_path;
     use cpm_types::{AssetOwnership, AssetSource, EnvSpec};
     use std::path::PathBuf;
     use tempfile::TempDir;
@@ -909,7 +910,7 @@ mod tests {
             vec![],
         );
         install_asset(&asset, dir.path()).expect("install");
-        let config_path = dir.path().join(".vscode/mcp.json");
+        let config_path = join_portable_path(dir.path(), ".vscode/mcp.json");
         assert!(config_path.exists(), ".vscode/mcp.json should be created");
         let raw = std::fs::read_to_string(&config_path).expect("read");
         let v: serde_json::Value = serde_json::from_str(&raw).expect("parse");
@@ -939,7 +940,7 @@ mod tests {
         install_asset(&asset_a, dir.path()).expect("install a");
         install_asset(&asset_b, dir.path()).expect("install b");
 
-        let config_path = dir.path().join(".vscode/mcp.json");
+        let config_path = join_portable_path(dir.path(), ".vscode/mcp.json");
         let raw = std::fs::read_to_string(&config_path).expect("read");
         let v: serde_json::Value = serde_json::from_str(&raw).expect("parse");
         assert_eq!(v["servers"]["server-a"]["type"], "http");
@@ -968,7 +969,7 @@ mod tests {
         install_asset(&asset_b, dir.path()).expect("install b");
         remove_asset(&asset_a, dir.path()).expect("remove a");
 
-        let config_path = dir.path().join(".vscode/mcp.json");
+        let config_path = join_portable_path(dir.path(), ".vscode/mcp.json");
         assert!(
             config_path.exists(),
             "config file should survive after partial removal"
@@ -1063,7 +1064,7 @@ mod tests {
     #[test]
     fn remove_asset_prunes_empty_install_directories() {
         let dir = TempDir::new().expect("tempdir");
-        let install_path = dir.path().join(".github/skills/my-skill/SKILL.md");
+        let install_path = join_portable_path(dir.path(), ".github/skills/my-skill/SKILL.md");
         std::fs::create_dir_all(install_path.parent().expect("skill dir"))
             .expect("create skill dir");
         std::fs::write(&install_path, "# My Skill\n").expect("write skill");
@@ -1100,7 +1101,7 @@ mod tests {
 
         remove_asset(&asset, dir.path()).expect("remove");
 
-        assert!(!dir.path().join(".github/skills/my-skill").exists());
-        assert!(!dir.path().join(".github/skills").exists());
+        assert!(!join_portable_path(dir.path(), ".github/skills/my-skill").exists());
+        assert!(!join_portable_path(dir.path(), ".github/skills").exists());
     }
 }

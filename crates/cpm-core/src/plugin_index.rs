@@ -14,7 +14,7 @@ use indexmap::IndexMap;
 use serde::Deserialize;
 
 use crate::fetcher::sha256_file;
-use crate::paths::{copilot_home_dir, copilot_state_dir};
+use crate::paths::{copilot_home_dir, copilot_state_dir, join_portable_path};
 use crate::CpmError;
 
 /// A plugin entry read from the Copilot plugin index.
@@ -191,7 +191,7 @@ pub fn hash_installed_plugin_manifest(
         vec![root]
     } else {
         vec![
-            root.join(".github/plugin/plugin.json"),
+            join_portable_path(&root, ".github/plugin/plugin.json"),
             root.join("plugin.json"),
         ]
     };
@@ -670,7 +670,10 @@ mod tests {
         let dir = TempDir::new().expect("tempdir");
         let copilot_dir = dir.path().join(".copilot");
         std::fs::create_dir_all(&copilot_dir).expect("mkdir");
-        let cache_path = copilot_dir.join("installed-plugins/awesome-copilot/context-engineering");
+        let cache_path = join_portable_path(
+            &copilot_dir,
+            "installed-plugins/awesome-copilot/context-engineering",
+        );
         std::fs::write(
             copilot_dir.join("config.json"),
             format!(
@@ -709,10 +712,11 @@ mod tests {
         let dir = TempDir::new().expect("tempdir");
         let copilot_dir = dir.path().join(".copilot");
         let plugins_dir = copilot_dir.join("plugins");
-        std::fs::create_dir_all(plugins_dir.join("pptx/.github/plugin")).expect("mkdir");
+        std::fs::create_dir_all(join_portable_path(&plugins_dir, "pptx/.github/plugin"))
+            .expect("mkdir");
         std::fs::write(plugins_dir.join("pptx.installed"), "").expect("marker");
         std::fs::write(
-            plugins_dir.join("pptx/.github/plugin/plugin.json"),
+            join_portable_path(&plugins_dir, "pptx/.github/plugin/plugin.json"),
             br#"{"name":"pptx"}"#,
         )
         .expect("plugin json");
@@ -736,10 +740,10 @@ mod tests {
     fn discovers_modern_installed_plugin_dirs_when_index_missing() {
         let dir = TempDir::new().expect("tempdir");
         let copilot_dir = dir.path().join(".copilot");
-        let plugin_dir = copilot_dir.join("installed-plugins/awesome-copilot/pptx");
-        std::fs::create_dir_all(plugin_dir.join(".github/plugin")).expect("mkdir");
+        let plugin_dir = join_portable_path(&copilot_dir, "installed-plugins/awesome-copilot/pptx");
+        std::fs::create_dir_all(join_portable_path(&plugin_dir, ".github/plugin")).expect("mkdir");
         std::fs::write(
-            plugin_dir.join(".github/plugin/plugin.json"),
+            join_portable_path(&plugin_dir, ".github/plugin/plugin.json"),
             br#"{"name":"pptx"}"#,
         )
         .expect("plugin json");

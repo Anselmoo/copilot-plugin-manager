@@ -6,7 +6,7 @@
 use std::{path::Path, process::Command};
 
 use camino::Utf8PathBuf;
-use cpm_core::paths::portable_path_string;
+use cpm_core::paths::{join_portable_path, portable_path_string};
 use cpm_core::project::{
     load_global_lockfile_from, load_lockfile, write_global_lockfile_to, write_lockfile,
     write_manifest,
@@ -676,7 +676,7 @@ fn lock_check_without_lockfile_reports_missing_lockfile() {
 #[test]
 fn add_local_skill_creates_manifest_and_lock() {
     let dir = tempfile::TempDir::new().expect("tempdir");
-    let skill_dir = dir.path().join("skills/my-skill");
+    let skill_dir = join_portable_path(dir.path(), "skills/my-skill");
     std::fs::create_dir_all(&skill_dir).expect("mkdir");
     std::fs::write(skill_dir.join("SKILL.md"), "# My Skill\n").expect("write SKILL.md");
 
@@ -694,14 +694,14 @@ fn add_local_skill_creates_manifest_and_lock() {
     assert!(dir.path().join("cpm.toml").exists());
     assert!(dir.path().join("cpm.lock").exists());
 
-    let installed = dir.path().join(".github/skills/my-skill/SKILL.md");
+    let installed = join_portable_path(dir.path(), ".github/skills/my-skill/SKILL.md");
     assert!(installed.exists(), "installed skill file should exist");
 }
 
 #[test]
 fn add_local_skill_writes_canonical_toml() {
     let dir = tempfile::TempDir::new().expect("tempdir");
-    let skill_dir = dir.path().join("skills/canonical-skill");
+    let skill_dir = join_portable_path(dir.path(), "skills/canonical-skill");
     std::fs::create_dir_all(&skill_dir).expect("mkdir");
     std::fs::write(skill_dir.join("SKILL.md"), "# Canonical\n").expect("write");
 
@@ -748,7 +748,9 @@ fn add_local_instruction_normalizes_filename_and_uses_group_section() {
 
     let installed = dir
         .path()
-        .join(".github/instructions/shell.instructions.md");
+        .join(".github")
+        .join("instructions")
+        .join("shell.instructions.md");
     assert!(
         installed.exists(),
         "installed instruction file should exist"
@@ -898,7 +900,7 @@ fn requested_dev_group_examples_round_trip_in_manifest() {
 #[test]
 fn remove_skill_updates_manifest() {
     let dir = tempfile::TempDir::new().expect("tempdir");
-    let skill_dir = dir.path().join("skills/to-remove");
+    let skill_dir = join_portable_path(dir.path(), "skills/to-remove");
     std::fs::create_dir_all(&skill_dir).expect("mkdir");
     std::fs::write(skill_dir.join("SKILL.md"), "# To Remove\n").expect("write");
 
@@ -982,18 +984,23 @@ fn add_plugin_tree_source_installs_natively_without_delegate() {
     let home = tempfile::TempDir::new().expect("home tempdir");
     let fake_copilot = tempfile::TempDir::new().expect("copilot tempdir");
     let repo = tempfile::TempDir::new().expect("repo tempdir");
-    let plugin_dir = repo.path().join("plugins/native-bundle");
+    let plugin_dir = join_portable_path(repo.path(), "plugins/native-bundle");
     let (copilot_bin, log_path) = fake_copilot_env(&home, &fake_copilot);
 
-    std::fs::create_dir_all(plugin_dir.join(".github/plugin")).expect("mkdir plugin");
-    std::fs::create_dir_all(plugin_dir.join("skills/pdf")).expect("mkdir skill");
+    std::fs::create_dir_all(join_portable_path(&plugin_dir, ".github/plugin"))
+        .expect("mkdir plugin");
+    std::fs::create_dir_all(join_portable_path(&plugin_dir, "skills/pdf")).expect("mkdir skill");
     std::fs::write(plugin_dir.join("README.md"), "# Native Bundle\n").expect("write readme");
     std::fs::write(
-        plugin_dir.join(".github/plugin/plugin.json"),
+        join_portable_path(&plugin_dir, ".github/plugin/plugin.json"),
         r#"{"name":"native-bundle","version":"1.0.0"}"#,
     )
     .expect("write plugin json");
-    std::fs::write(plugin_dir.join("skills/pdf/SKILL.md"), "# PDF\n").expect("write skill");
+    std::fs::write(
+        join_portable_path(&plugin_dir, "skills/pdf/SKILL.md"),
+        "# PDF\n",
+    )
+    .expect("write skill");
 
     let output = cpm_bin()
         .args([
@@ -1022,7 +1029,10 @@ fn add_plugin_tree_source_installs_natively_without_delegate() {
     );
     assert!(
         repo.path()
-            .join(".github/plugins/native-bundle/README.md")
+            .join(".github")
+            .join("plugins")
+            .join("native-bundle")
+            .join("README.md")
             .exists(),
         "native plugin files should be installed into the repo"
     );
@@ -1167,13 +1177,14 @@ fn sync_plugin_tree_source_installs_natively_without_delegate() {
     let home = tempfile::TempDir::new().expect("home tempdir");
     let fake_copilot = tempfile::TempDir::new().expect("copilot tempdir");
     let repo = tempfile::TempDir::new().expect("repo tempdir");
-    let plugin_dir = repo.path().join("plugins/testing-automation");
+    let plugin_dir = join_portable_path(repo.path(), "plugins/testing-automation");
     let (copilot_bin, log_path) = fake_copilot_env(&home, &fake_copilot);
 
-    std::fs::create_dir_all(plugin_dir.join(".github/plugin")).expect("mkdir plugin");
+    std::fs::create_dir_all(join_portable_path(&plugin_dir, ".github/plugin"))
+        .expect("mkdir plugin");
     std::fs::write(plugin_dir.join("README.md"), "# Testing Automation\n").expect("write readme");
     std::fs::write(
-        plugin_dir.join(".github/plugin/plugin.json"),
+        join_portable_path(&plugin_dir, ".github/plugin/plugin.json"),
         r#"{"name":"testing-automation","version":"1.0.0"}"#,
     )
     .expect("write plugin json");
@@ -1206,7 +1217,10 @@ fn sync_plugin_tree_source_installs_natively_without_delegate() {
     );
     assert!(
         repo.path()
-            .join(".github/plugins/testing-automation/README.md")
+            .join(".github")
+            .join("plugins")
+            .join("testing-automation")
+            .join("README.md")
             .exists(),
         "native plugin files should be materialized during sync"
     );
@@ -1225,7 +1239,7 @@ fn sync_plugin_tree_source_installs_natively_without_delegate() {
 fn doctor_passes_on_fresh_install() {
     let home = tempfile::TempDir::new().expect("home tempdir");
     let dir = tempfile::TempDir::new().expect("tempdir");
-    let skill_dir = dir.path().join("skills/healthy");
+    let skill_dir = join_portable_path(dir.path(), "skills/healthy");
     std::fs::create_dir_all(&skill_dir).expect("mkdir");
     std::fs::write(skill_dir.join("SKILL.md"), "# Healthy\n").expect("write");
 
@@ -1257,7 +1271,7 @@ fn doctor_passes_on_fresh_install() {
 fn sync_records_global_claim_for_repo() {
     let home = tempfile::TempDir::new().expect("home tempdir");
     let repo = tempfile::TempDir::new().expect("repo tempdir");
-    let skill_dir = repo.path().join("skills/shared");
+    let skill_dir = join_portable_path(repo.path(), "skills/shared");
     std::fs::create_dir_all(&skill_dir).expect("mkdir");
     std::fs::write(skill_dir.join("SKILL.md"), "# Shared\n").expect("write skill");
     write_global_skill_manifest(repo.path(), &skill_dir);
@@ -1277,8 +1291,9 @@ fn sync_records_global_claim_for_repo() {
         String::from_utf8_lossy(&output.stderr)
     );
 
-    let global_lock = load_global_lockfile_from(&home.path().join(".copilot/cpm.lock"))
-        .expect("load global lock");
+    let global_lock =
+        load_global_lockfile_from(&join_portable_path(home.path(), ".copilot/cpm.lock"))
+            .expect("load global lock");
     assert_eq!(global_lock.claims.len(), 1);
     assert_eq!(global_lock.claims[0].asset.name, "shared");
     assert_eq!(global_lock.claims[0].asset.scope, Scope::Global);
@@ -1293,7 +1308,7 @@ fn sync_records_global_claim_for_repo() {
 fn sync_fails_when_global_asset_conflicts_with_other_repo_claim() {
     let home = tempfile::TempDir::new().expect("home tempdir");
     let repo = tempfile::TempDir::new().expect("repo tempdir");
-    let skill_dir = repo.path().join("skills/shared");
+    let skill_dir = join_portable_path(repo.path(), "skills/shared");
     std::fs::create_dir_all(&skill_dir).expect("mkdir");
     std::fs::write(skill_dir.join("SKILL.md"), "# Shared\n").expect("write skill");
     write_global_skill_manifest(repo.path(), &skill_dir);
@@ -1303,8 +1318,11 @@ fn sync_fails_when_global_asset_conflicts_with_other_repo_claim() {
         Path::new("/tmp/other-repo"),
         "sha256:conflict",
     ));
-    write_global_lockfile_to(&home.path().join(".copilot/cpm.lock"), &global_lock)
-        .expect("seed global lock");
+    write_global_lockfile_to(
+        &join_portable_path(home.path(), ".copilot/cpm.lock"),
+        &global_lock,
+    )
+    .expect("seed global lock");
 
     let output = cpm_bin()
         .args(["sync"])
@@ -1365,7 +1383,7 @@ fn sync_plugin_delegates_install_and_writes_lock() {
 #[test]
 fn list_includes_installed_assets() {
     let dir = tempfile::TempDir::new().expect("tempdir");
-    let skill_dir = dir.path().join("skills/listed");
+    let skill_dir = join_portable_path(dir.path(), "skills/listed");
     std::fs::create_dir_all(&skill_dir).expect("mkdir");
     std::fs::write(skill_dir.join("SKILL.md"), "# Listed\n").expect("write");
 
@@ -1465,7 +1483,11 @@ fn overview_and_status_use_plugin_markers_when_index_is_missing() {
         String::from_utf8_lossy(&add_output.stderr)
     );
 
-    std::fs::remove_file(home.path().join(".copilot/plugin-index.json")).expect("remove index");
+    std::fs::remove_file(join_portable_path(
+        home.path(),
+        ".copilot/plugin-index.json",
+    ))
+    .expect("remove index");
 
     let overview_output = cpm_bin()
         .args(["overview", "--plugin", "--external", "--json"])
@@ -1489,7 +1511,10 @@ fn overview_and_status_use_plugin_markers_when_index_is_missing() {
         normalized_path_string(
             &home
                 .path()
-                .join(".copilot/installed-plugins/awesome-copilot/pptx")
+                .join(".copilot")
+                .join("installed-plugins")
+                .join("awesome-copilot")
+                .join("pptx")
         )
     );
     assert!(overview_json["external"]["unclaimed_global"]
@@ -1710,8 +1735,12 @@ fn reporting_commands_emit_json_with_install_targets() {
 #[test]
 fn status_json_reports_unlocked_assets() {
     let dir = tempfile::TempDir::new().expect("tempdir");
-    std::fs::create_dir_all(dir.path().join("skills/unlocked")).expect("mkdir");
-    std::fs::write(dir.path().join("skills/unlocked/SKILL.md"), "# Unlocked\n").expect("write");
+    std::fs::create_dir_all(join_portable_path(dir.path(), "skills/unlocked")).expect("mkdir");
+    std::fs::write(
+        join_portable_path(dir.path(), "skills/unlocked/SKILL.md"),
+        "# Unlocked\n",
+    )
+    .expect("write");
 
     let mut manifest = Manifest::default();
     manifest.skills.insert(
@@ -1909,8 +1938,11 @@ fn reset_drops_global_claim_via_canonicalized_repo_path() {
         global_lock
             .claims
             .push(GlobalClaim::new(canonical_utf8, lock_skill));
-        write_global_lockfile_to(&home.path().join(".copilot/cpm.lock"), &global_lock)
-            .expect("write global lock");
+        write_global_lockfile_to(
+            &join_portable_path(home.path(), ".copilot/cpm.lock"),
+            &global_lock,
+        )
+        .expect("write global lock");
 
         // Run reset from the *symlink* path — the old code would compare the
         // symlink string against the canonical path and fail to remove the claim.
@@ -1929,8 +1961,9 @@ fn reset_drops_global_claim_via_canonicalized_repo_path() {
             String::from_utf8_lossy(&output.stderr)
         );
 
-        let updated_global = load_global_lockfile_from(&home.path().join(".copilot/cpm.lock"))
-            .expect("load updated global lock");
+        let updated_global =
+            load_global_lockfile_from(&join_portable_path(home.path(), ".copilot/cpm.lock"))
+                .expect("load updated global lock");
         assert!(
             updated_global.claims.is_empty(),
             "reset via symlink should have removed the global claim; claims: {:?}",
@@ -1963,7 +1996,7 @@ fn reset_dry_run_reports_unmanaged_scan_requirement_without_hard() {
 fn reset_hard_skips_assets_claimed_by_other_repo() {
     let home = tempfile::TempDir::new().expect("home tempdir");
     let repo = tempfile::TempDir::new().expect("repo tempdir");
-    let global_skill_dir = home.path().join(".copilot/skills/shared");
+    let global_skill_dir = join_portable_path(home.path(), ".copilot/skills/shared");
     std::fs::create_dir_all(&global_skill_dir).expect("mkdir");
     std::fs::write(global_skill_dir.join("SKILL.md"), "# Shared\n").expect("write");
 
@@ -1975,8 +2008,11 @@ fn reset_hard_skips_assets_claimed_by_other_repo() {
         Path::new("/tmp/other-repo"),
         "sha256:shared",
     ));
-    write_global_lockfile_to(&home.path().join(".copilot/cpm.lock"), &global_lock)
-        .expect("write global lock");
+    write_global_lockfile_to(
+        &join_portable_path(home.path(), ".copilot/cpm.lock"),
+        &global_lock,
+    )
+    .expect("write global lock");
 
     let output = cpm_bin()
         .args(["reset", "--scope", "global", "--dry-run", "--hard"])
@@ -2055,10 +2091,13 @@ fn reset_hard_unmanaged_plugin_delegates_to_copilot_uninstall() {
     // Create an unmanaged plugin directory in Copilot's modern installed-plugin root.
     let plugin_dir = home
         .path()
-        .join(".copilot/installed-plugins/awesome-copilot/orphan-plugin");
-    std::fs::create_dir_all(plugin_dir.join(".github/plugin")).expect("mkdir");
+        .join(".copilot")
+        .join("installed-plugins")
+        .join("awesome-copilot")
+        .join("orphan-plugin");
+    std::fs::create_dir_all(join_portable_path(&plugin_dir, ".github/plugin")).expect("mkdir");
     std::fs::write(
-        plugin_dir.join(".github/plugin/plugin.json"),
+        join_portable_path(&plugin_dir, ".github/plugin/plugin.json"),
         br#"{"name":"orphan-plugin"}"#,
     )
     .expect("write plugin file");
@@ -2067,7 +2106,7 @@ fn reset_hard_unmanaged_plugin_delegates_to_copilot_uninstall() {
     write_manifest(&repo.path().join("cpm.toml"), &Manifest::default()).expect("write manifest");
     write_lockfile(&repo.path().join("cpm.lock"), &Lockfile::new()).expect("write lock");
     write_global_lockfile_to(
-        &home.path().join(".copilot/cpm.lock"),
+        &join_portable_path(home.path(), ".copilot/cpm.lock"),
         &GlobalLockfile::new(),
     )
     .expect("write empty global lock");
@@ -2112,12 +2151,15 @@ fn reset_hard_unmanaged_plugin_dedup_prevents_double_uninstall() {
     // plugin directory and the *.installed marker file are present.
     let installed_plugins_dir = home
         .path()
-        .join(".copilot/installed-plugins/awesome-copilot");
-    let legacy_plugins_dir = home.path().join(".copilot/plugins");
+        .join(".copilot")
+        .join("installed-plugins")
+        .join("awesome-copilot");
+    let legacy_plugins_dir = join_portable_path(home.path(), ".copilot/plugins");
     let plugin_dir = installed_plugins_dir.join("orphan-plugin");
-    std::fs::create_dir_all(plugin_dir.join(".github/plugin")).expect("mkdir plugin dir");
+    std::fs::create_dir_all(join_portable_path(&plugin_dir, ".github/plugin"))
+        .expect("mkdir plugin dir");
     std::fs::write(
-        plugin_dir.join(".github/plugin/plugin.json"),
+        join_portable_path(&plugin_dir, ".github/plugin/plugin.json"),
         br#"{"name":"orphan-plugin"}"#,
     )
     .expect("write plugin file");
@@ -2128,7 +2170,7 @@ fn reset_hard_unmanaged_plugin_dedup_prevents_double_uninstall() {
     write_manifest(&repo.path().join("cpm.toml"), &Manifest::default()).expect("write manifest");
     write_lockfile(&repo.path().join("cpm.lock"), &Lockfile::new()).expect("write lock");
     write_global_lockfile_to(
-        &home.path().join(".copilot/cpm.lock"),
+        &join_portable_path(home.path(), ".copilot/cpm.lock"),
         &GlobalLockfile::new(),
     )
     .expect("write empty global lock");
@@ -2173,10 +2215,14 @@ fn reset_hard_removes_stale_plugin_dirs_when_copilot_reports_not_installed() {
 
     let plugin_dir = home
         .path()
-        .join(".copilot/installed-plugins/awesome-copilot/orphan-plugin");
-    std::fs::create_dir_all(plugin_dir.join(".github/plugin")).expect("mkdir plugin dir");
+        .join(".copilot")
+        .join("installed-plugins")
+        .join("awesome-copilot")
+        .join("orphan-plugin");
+    std::fs::create_dir_all(join_portable_path(&plugin_dir, ".github/plugin"))
+        .expect("mkdir plugin dir");
     std::fs::write(
-        plugin_dir.join(".github/plugin/plugin.json"),
+        join_portable_path(&plugin_dir, ".github/plugin/plugin.json"),
         br#"{"name":"orphan-plugin"}"#,
     )
     .expect("write plugin file");
@@ -2184,7 +2230,7 @@ fn reset_hard_removes_stale_plugin_dirs_when_copilot_reports_not_installed() {
     write_manifest(&repo.path().join("cpm.toml"), &Manifest::default()).expect("write manifest");
     write_lockfile(&repo.path().join("cpm.lock"), &Lockfile::new()).expect("write lock");
     write_global_lockfile_to(
-        &home.path().join(".copilot/cpm.lock"),
+        &join_portable_path(home.path(), ".copilot/cpm.lock"),
         &GlobalLockfile::new(),
     )
     .expect("write empty global lock");
@@ -2239,7 +2285,7 @@ fn reset_hard_removes_stale_plugin_config_entries_when_copilot_reports_not_insta
     write_manifest(&repo.path().join("cpm.toml"), &Manifest::default()).expect("write manifest");
     write_lockfile(&repo.path().join("cpm.lock"), &Lockfile::new()).expect("write lock");
     write_global_lockfile_to(
-        &home.path().join(".copilot/cpm.lock"),
+        &join_portable_path(home.path(), ".copilot/cpm.lock"),
         &GlobalLockfile::new(),
     )
     .expect("write empty global lock");
@@ -2279,7 +2325,7 @@ fn reset_hard_removes_stale_plugin_config_entries_when_copilot_reports_not_insta
 fn reset_global_asset_drops_claim_from_global_lockfile() {
     let home = tempfile::TempDir::new().expect("home tempdir");
     let repo = tempfile::TempDir::new().expect("repo tempdir");
-    let skill_dir = repo.path().join("skills/shared");
+    let skill_dir = join_portable_path(repo.path(), "skills/shared");
     std::fs::create_dir_all(&skill_dir).expect("mkdir");
     std::fs::write(skill_dir.join("SKILL.md"), "# Shared\n").expect("write skill");
     write_global_skill_manifest(repo.path(), &skill_dir);
@@ -2299,7 +2345,7 @@ fn reset_global_asset_drops_claim_from_global_lockfile() {
         String::from_utf8_lossy(&sync_output.stderr)
     );
 
-    let global_lock_path = home.path().join(".copilot/cpm.lock");
+    let global_lock_path = join_portable_path(home.path(), ".copilot/cpm.lock");
     let before = load_global_lockfile_from(&global_lock_path).expect("load before");
     assert_eq!(
         before.claims.len(),
@@ -2336,7 +2382,7 @@ fn overview_reports_unmanaged_global_mcp_entries_from_config() {
     let repo = tempfile::TempDir::new().expect("repo tempdir");
     std::fs::create_dir_all(home.path().join(".copilot")).expect("mkdir");
     std::fs::write(
-        home.path().join(".copilot/mcp-config.json"),
+        join_portable_path(home.path(), ".copilot/mcp-config.json"),
         r#"{ "mcpServers": { "external-server": { "type": "http", "url": "https://example.com/mcp" } } }"#,
     )
     .expect("write mcp config");
@@ -2359,7 +2405,8 @@ fn overview_reports_unmanaged_global_mcp_entries_from_config() {
     assert_eq!(json["unmanaged"][0]["entry_type"], "mcp-server");
     assert_eq!(
         json["unmanaged"][0]["path"],
-        normalized_path_string(&home.path().join(".copilot/mcp-config.json")) + "#external-server"
+        normalized_path_string(&join_portable_path(home.path(), ".copilot/mcp-config.json"))
+            + "#external-server"
     );
 }
 
@@ -2424,7 +2471,7 @@ fn sync_removes_stale_local_skill_when_removed_from_manifest() {
     let dir = tempfile::TempDir::new().expect("repo dir");
 
     // Create a source skill directory with a real file.
-    let skill_src = dir.path().join("src-skills/vanishing");
+    let skill_src = join_portable_path(dir.path(), "src-skills/vanishing");
     std::fs::create_dir_all(&skill_src).expect("mkdir skill src");
     std::fs::write(skill_src.join("SKILL.md"), "# Vanishing\n").expect("write skill");
 
@@ -2443,7 +2490,7 @@ fn sync_removes_stale_local_skill_when_removed_from_manifest() {
         String::from_utf8_lossy(&add_out.stderr)
     );
 
-    let installed_file = dir.path().join(".github/skills/vanishing/SKILL.md");
+    let installed_file = join_portable_path(dir.path(), ".github/skills/vanishing/SKILL.md");
     assert!(
         installed_file.exists(),
         "skill must be installed before the test"
@@ -2483,7 +2530,7 @@ fn sync_removes_stale_local_install_when_skill_scope_changes_to_global() {
     let dir = tempfile::TempDir::new().expect("repo dir");
 
     // Create a source skill directory.
-    let skill_src = dir.path().join("src-skills/shared");
+    let skill_src = join_portable_path(dir.path(), "src-skills/shared");
     std::fs::create_dir_all(&skill_src).expect("mkdir skill src");
     std::fs::write(skill_src.join("SKILL.md"), "# Shared\n").expect("write skill");
 
@@ -2502,7 +2549,7 @@ fn sync_removes_stale_local_install_when_skill_scope_changes_to_global() {
         String::from_utf8_lossy(&add_out.stderr)
     );
 
-    let local_file = dir.path().join(".github/skills/shared/SKILL.md");
+    let local_file = join_portable_path(dir.path(), ".github/skills/shared/SKILL.md");
     assert!(
         local_file.exists(),
         "local skill must be present before scope change"
@@ -2535,7 +2582,7 @@ fn sync_removes_stale_local_install_when_skill_scope_changes_to_global() {
         "old local install should have been removed after scope change to global"
     );
 
-    let global_file = home.path().join(".copilot/skills/shared/SKILL.md");
+    let global_file = join_portable_path(home.path(), ".copilot/skills/shared/SKILL.md");
     assert!(
         global_file.exists(),
         "new global install should exist after scope change"
@@ -2551,7 +2598,7 @@ fn sync_reports_progress_for_non_plugin_skill_install() {
     let home = tempfile::TempDir::new().expect("home tempdir");
     let dir = tempfile::TempDir::new().expect("repo dir");
 
-    let skill_src = dir.path().join("src-skills/tracked");
+    let skill_src = join_portable_path(dir.path(), "src-skills/tracked");
     std::fs::create_dir_all(&skill_src).expect("mkdir skill src");
     std::fs::write(skill_src.join("SKILL.md"), "# Tracked\n").expect("write skill");
 

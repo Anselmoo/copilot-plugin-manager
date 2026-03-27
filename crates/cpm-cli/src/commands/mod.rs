@@ -1334,7 +1334,8 @@ mod tests {
     fn build_locked_plugin_asset_captures_plugin_meta_and_manifest_hash() {
         let dir = TempDir::new().expect("tempdir");
         let plugin_root = dir.path().join("pptx");
-        let plugin_json = plugin_root.join(".github/plugin/plugin.json");
+        let plugin_json =
+            cpm_core::paths::join_portable_path(&plugin_root, ".github/plugin/plugin.json");
         std::fs::create_dir_all(plugin_json.parent().expect("parent")).expect("mkdir");
         std::fs::write(&plugin_json, br#"{"name":"pptx"}"#).expect("write plugin json");
 

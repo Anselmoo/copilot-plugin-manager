@@ -3589,12 +3589,13 @@ impl GlobalClaimRecord {
 #[cfg(test)]
 mod tests {
     use super::*;
+    use crate::paths::join_portable_path;
     use tempfile::TempDir;
 
     #[tokio::test]
     async fn apply_manifest_materializes_local_skill_and_populates_lock() {
         let repo = TempDir::new().expect("tempdir");
-        let skill_dir = repo.path().join("skills/pdf");
+        let skill_dir = join_portable_path(repo.path(), "skills/pdf");
         std::fs::create_dir_all(&skill_dir).expect("mkdir");
         std::fs::write(skill_dir.join("SKILL.md"), "# PDF\n").expect("write skill");
         std::fs::write(skill_dir.join("helper.txt"), "helper").expect("write helper");
@@ -3649,8 +3650,8 @@ mod tests {
                 Utf8PathBuf::from("pdf/helper.txt")
             ]
         );
-        assert!(repo.path().join(".github/skills/pdf/SKILL.md").exists());
-        assert!(repo.path().join(".github/skills/pdf/helper.txt").exists());
+        assert!(join_portable_path(repo.path(), ".github/skills/pdf/SKILL.md").exists());
+        assert!(join_portable_path(repo.path(), ".github/skills/pdf/helper.txt").exists());
         assert!(lock.skills[0].hash.starts_with("sha256:"));
         assert_eq!(
             lock.skills[0]
@@ -3664,12 +3665,14 @@ mod tests {
     #[tokio::test]
     async fn apply_manifest_detects_plugin_bundle_sub_assets() {
         let repo = TempDir::new().expect("tempdir");
-        let plugin_dir = repo.path().join("plugins/partners");
-        std::fs::create_dir_all(plugin_dir.join(".github/plugin")).expect("create plugin manifest");
+        let plugin_dir = join_portable_path(repo.path(), "plugins/partners");
+        std::fs::create_dir_all(join_portable_path(&plugin_dir, ".github/plugin"))
+            .expect("create plugin manifest");
         std::fs::create_dir_all(plugin_dir.join("agents")).expect("create agents");
-        std::fs::create_dir_all(plugin_dir.join("skills/prompt-lib/docs")).expect("create skills");
+        std::fs::create_dir_all(join_portable_path(&plugin_dir, "skills/prompt-lib/docs"))
+            .expect("create skills");
         std::fs::write(
-            plugin_dir.join(".github/plugin/plugin.json"),
+            join_portable_path(&plugin_dir, ".github/plugin/plugin.json"),
             r#"{
   "name": "partners",
   "agents": ["./agents"],
@@ -3677,15 +3680,18 @@ mod tests {
 }"#,
         )
         .expect("write plugin manifest");
-        std::fs::write(plugin_dir.join("agents/terraform.md"), "# Terraform\n")
-            .expect("write agent");
         std::fs::write(
-            plugin_dir.join("skills/prompt-lib/SKILL.md"),
+            join_portable_path(&plugin_dir, "agents/terraform.md"),
+            "# Terraform\n",
+        )
+        .expect("write agent");
+        std::fs::write(
+            join_portable_path(&plugin_dir, "skills/prompt-lib/SKILL.md"),
             "# Prompt Lib\n",
         )
         .expect("write skill");
         std::fs::write(
-            plugin_dir.join("skills/prompt-lib/docs/guide.md"),
+            join_portable_path(&plugin_dir, "skills/prompt-lib/docs/guide.md"),
             "# Guide\n",
         )
         .expect("write helper");
@@ -3757,7 +3763,7 @@ mod tests {
     #[tokio::test]
     async fn apply_manifest_rejects_disallowed_license() {
         let repo = TempDir::new().expect("tempdir");
-        let skill_dir = repo.path().join("skills/gpl-skill");
+        let skill_dir = join_portable_path(repo.path(), "skills/gpl-skill");
         std::fs::create_dir_all(&skill_dir).expect("mkdir");
         std::fs::write(skill_dir.join("SKILL.md"), "# GPL\n").expect("write skill");
         std::fs::write(
@@ -3813,7 +3819,7 @@ mod tests {
     #[tokio::test]
     async fn apply_manifest_installs_grouped_asset_when_group_requested() {
         let repo = TempDir::new().expect("tempdir");
-        let skill_dir = repo.path().join("skills/research-pdf");
+        let skill_dir = join_portable_path(repo.path(), "skills/research-pdf");
         std::fs::create_dir_all(&skill_dir).expect("mkdir");
         std::fs::write(skill_dir.join("SKILL.md"), "# Research PDF\n").expect("write skill");
 
@@ -3860,10 +3866,7 @@ mod tests {
 
         assert_eq!(lock.skills.len(), 1);
         assert_eq!(lock.skills[0].source.group, "research");
-        assert!(repo
-            .path()
-            .join(".github/skills/research-pdf/SKILL.md")
-            .exists());
+        assert!(join_portable_path(repo.path(), ".github/skills/research-pdf/SKILL.md").exists());
     }
 
     /// Regression: `cpm add <pypi-url> --uvx --scope local` used to call
@@ -4899,7 +4902,7 @@ args = []
     fn install_prepared_skips_user_owned_existing_file() {
         let dir = TempDir::new().expect("tempdir");
         // Pre-write the file so it already exists on disk.
-        let dest = dir.path().join(".github/skills/my-skill/SKILL.md");
+        let dest = join_portable_path(dir.path(), ".github/skills/my-skill/SKILL.md");
         std::fs::create_dir_all(dest.parent().expect("parent")).expect("mkdir");
         std::fs::write(&dest, b"original").expect("pre-write");
 
@@ -4923,7 +4926,7 @@ args = []
     fn install_prepared_writes_user_owned_file_on_first_install() {
         let dir = TempDir::new().expect("tempdir");
         // The file does NOT exist yet — first install must succeed.
-        let dest = dir.path().join(".github/skills/new-skill/SKILL.md");
+        let dest = join_portable_path(dir.path(), ".github/skills/new-skill/SKILL.md");
 
         let prepared = make_prepared_skill(
             "new-skill",
@@ -4941,7 +4944,7 @@ args = []
     #[test]
     fn install_prepared_overwrites_upstream_owned_existing_file() {
         let dir = TempDir::new().expect("tempdir");
-        let dest = dir.path().join(".github/skills/up-skill/SKILL.md");
+        let dest = join_portable_path(dir.path(), ".github/skills/up-skill/SKILL.md");
         std::fs::create_dir_all(dest.parent().expect("parent")).expect("mkdir");
         std::fs::write(&dest, b"old content").expect("pre-write");
 
@@ -5547,8 +5550,8 @@ url = "https://example.com/legacy"
         let repo = TempDir::new().expect("tempdir");
 
         // Create two distinct skill directories.
-        let skill_v1 = repo.path().join("skills/v1");
-        let skill_v2 = repo.path().join("skills/v2");
+        let skill_v1 = join_portable_path(repo.path(), "skills/v1");
+        let skill_v2 = join_portable_path(repo.path(), "skills/v2");
         std::fs::create_dir_all(&skill_v1).expect("mkdir v1");
         std::fs::create_dir_all(&skill_v2).expect("mkdir v2");
         std::fs::write(skill_v1.join("SKILL.md"), "# V1\n").expect("write v1");

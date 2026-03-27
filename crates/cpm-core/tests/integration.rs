@@ -8,6 +8,7 @@ use cpm_core::{
         copilot_mcp_config_path, copilot_server_entry, install_asset, install_dir, mcp_json,
         remove_asset,
     },
+    paths::join_portable_path,
     project::{load_lockfile, load_manifest, write_lockfile, write_manifest},
     resolver::{check_lock_freshness, detect_conflicts},
     status::{check_status, AssetStatus},
@@ -81,7 +82,8 @@ fn manifest_round_trips_through_file() {
 #[test]
 fn checked_in_manifests_load_successfully() {
     let repo_root = Path::new(env!("CARGO_MANIFEST_DIR"))
-        .join("../..")
+        .join("..")
+        .join("..")
         .canonicalize()
         .expect("canonical repo root");
 
@@ -221,21 +223,21 @@ fn install_dir_local_paths_by_kind() {
     let root = Path::new("/repo");
     assert_eq!(
         install_dir(AssetKind::Plugin, Scope::Local, root),
-        root.join(".github/plugins")
+        join_portable_path(root, ".github/plugins")
     );
     assert_eq!(
         install_dir(AssetKind::Skill, Scope::Local, root),
-        root.join(".github/skills")
+        join_portable_path(root, ".github/skills")
     );
     assert_eq!(
         install_dir(AssetKind::Agent, Scope::Local, root),
-        root.join(".github/agents")
+        join_portable_path(root, ".github/agents")
     );
     // MCP assets are written into the aggregate Copilot config, not a bare
     // directory.  Verify the dedicated path helper instead.
     assert_eq!(
         copilot_mcp_config_path(Scope::Local, root),
-        root.join(".vscode/mcp.json")
+        join_portable_path(root, ".vscode/mcp.json")
     );
 }
 
@@ -278,7 +280,7 @@ fn install_and_remove_mcp_json() {
     install_asset(&asset, dir.path()).expect("install");
 
     // Local MCP config lives in .vscode/mcp.json (Copilot workspace format).
-    let config_path = dir.path().join(".vscode/mcp.json");
+    let config_path = join_portable_path(dir.path(), ".vscode/mcp.json");
     assert!(
         config_path.exists(),
         ".vscode/mcp.json should exist after install"
@@ -320,7 +322,7 @@ fn install_mcp_upserts_multiple_servers_into_one_file() {
     install_asset(&asset_http, dir.path()).expect("install http");
     install_asset(&asset_npx, dir.path()).expect("install npx");
 
-    let config_path = dir.path().join(".vscode/mcp.json");
+    let config_path = join_portable_path(dir.path(), ".vscode/mcp.json");
     let raw = std::fs::read_to_string(&config_path).expect("read config");
     let v: serde_json::Value = serde_json::from_str(&raw).expect("parse config");
 
@@ -351,7 +353,7 @@ fn remove_mcp_leaves_other_servers_intact() {
     install_asset(&asset_b, dir.path()).expect("install b");
     remove_asset(&asset_a, dir.path()).expect("remove a");
 
-    let config_path = dir.path().join(".vscode/mcp.json");
+    let config_path = join_portable_path(dir.path(), ".vscode/mcp.json");
     let raw = std::fs::read_to_string(&config_path).expect("read");
     let v: serde_json::Value = serde_json::from_str(&raw).expect("parse");
     assert!(v["servers"].get("server-a").is_none(), "server-a removed");
@@ -367,7 +369,7 @@ fn remove_mcp_is_no_op_when_config_absent() {
     });
     // Removing without ever installing should succeed silently.
     remove_asset(&asset, dir.path()).expect("no-op remove should not error");
-    assert!(!dir.path().join(".vscode/mcp.json").exists());
+    assert!(!join_portable_path(dir.path(), ".vscode/mcp.json").exists());
 }
 
 #[test]

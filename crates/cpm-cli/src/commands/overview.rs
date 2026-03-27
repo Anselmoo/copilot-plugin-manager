@@ -934,6 +934,7 @@ mod tests {
     use std::sync::{Mutex, MutexGuard, OnceLock};
 
     use camino::Utf8PathBuf;
+    use cpm_core::paths::join_portable_path;
     use cpm_core::project::load_lockfile;
     use tempfile::TempDir;
 
@@ -1062,11 +1063,23 @@ path = "workflows/review.md"
         let skills_dir = dir.path().join(".github").join("skills");
         let lock_path = dir.path().join("cpm.lock");
         std::fs::create_dir_all(skills_dir.join("tracked-skill")).expect("create tracked dir");
-        std::fs::write(skills_dir.join("tracked-skill/SKILL.md"), "# tracked\n")
-            .expect("write tracked");
-        std::fs::create_dir_all(skills_dir.join("manual/docs")).expect("create unmanaged dir");
-        std::fs::write(skills_dir.join("manual/SKILL.md"), "# manual\n").expect("write manual");
-        std::fs::write(skills_dir.join("manual/docs/guide.md"), "# guide\n").expect("write guide");
+        std::fs::write(
+            join_portable_path(&skills_dir, "tracked-skill/SKILL.md"),
+            "# tracked\n",
+        )
+        .expect("write tracked");
+        std::fs::create_dir_all(join_portable_path(&skills_dir, "manual/docs"))
+            .expect("create unmanaged dir");
+        std::fs::write(
+            join_portable_path(&skills_dir, "manual/SKILL.md"),
+            "# manual\n",
+        )
+        .expect("write manual");
+        std::fs::write(
+            join_portable_path(&skills_dir, "manual/docs/guide.md"),
+            "# guide\n",
+        )
+        .expect("write guide");
         std::fs::write(
             &lock_path,
             r#"
@@ -1106,11 +1119,18 @@ path = "skills/tracked-skill"
         let dir = TempDir::new().expect("tempdir");
         let skills_dir = dir.path().join(".github").join("skills");
         let lock_path = dir.path().join("cpm.lock");
-        std::fs::create_dir_all(skills_dir.join("tracked-skill/docs")).expect("create tracked dir");
-        std::fs::write(skills_dir.join("tracked-skill/SKILL.md"), "# tracked\n")
-            .expect("write tracked");
-        std::fs::write(skills_dir.join("tracked-skill/docs/notes.md"), "# notes\n")
-            .expect("write extra file");
+        std::fs::create_dir_all(join_portable_path(&skills_dir, "tracked-skill/docs"))
+            .expect("create tracked dir");
+        std::fs::write(
+            join_portable_path(&skills_dir, "tracked-skill/SKILL.md"),
+            "# tracked\n",
+        )
+        .expect("write tracked");
+        std::fs::write(
+            join_portable_path(&skills_dir, "tracked-skill/docs/notes.md"),
+            "# notes\n",
+        )
+        .expect("write extra file");
         std::fs::write(
             &lock_path,
             r#"
@@ -1187,10 +1207,14 @@ path = "skills/tracked-skill"
 
         let plugin_dir = home
             .path()
-            .join(".copilot/installed-plugins/awesome-copilot/orphan-plugin");
-        std::fs::create_dir_all(plugin_dir.join(".github/plugin")).expect("mkdir plugin dir");
+            .join(".copilot")
+            .join("installed-plugins")
+            .join("awesome-copilot")
+            .join("orphan-plugin");
+        std::fs::create_dir_all(join_portable_path(&plugin_dir, ".github/plugin"))
+            .expect("mkdir plugin dir");
         std::fs::write(
-            plugin_dir.join(".github/plugin/plugin.json"),
+            join_portable_path(&plugin_dir, ".github/plugin/plugin.json"),
             br#"{"name":"orphan-plugin"}"#,
         )
         .expect("write plugin json");
@@ -1234,10 +1258,14 @@ path = "skills/tracked-skill"
 
         let plugin_dir = home
             .path()
-            .join(".copilot/installed-plugins/awesome-copilot/orphan-plugin");
-        std::fs::create_dir_all(plugin_dir.join(".github/plugin")).expect("mkdir plugin dir");
+            .join(".copilot")
+            .join("installed-plugins")
+            .join("awesome-copilot")
+            .join("orphan-plugin");
+        std::fs::create_dir_all(join_portable_path(&plugin_dir, ".github/plugin"))
+            .expect("mkdir plugin dir");
         std::fs::write(
-            plugin_dir.join(".github/plugin/plugin.json"),
+            join_portable_path(&plugin_dir, ".github/plugin/plugin.json"),
             br#"{"name":"orphan-plugin"}"#,
         )
         .expect("write plugin json");
