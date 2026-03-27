@@ -11,6 +11,7 @@ use cpm_core::project::{
     load_global_lockfile_from, load_lockfile, write_global_lockfile_to, write_lockfile,
     write_manifest,
 };
+use cpm_core::resolver::canonical_repo_root;
 use cpm_types::{
     AssetKind, AssetOwnership, AssetSource, GlobalClaim, GlobalLockfile, Lockfile, Manifest,
     ManifestGroup, McpTransport, PluginMeta, ResolvedAsset, Scope, SubAsset, SubAssetOwnership,
@@ -39,7 +40,11 @@ fn write_global_skill_manifest(repo_root: &Path, asset_path: &Path) {
 
 fn make_global_claim(claimed_by: &Path, hash: &str) -> GlobalClaim {
     GlobalClaim::new(
-        Utf8PathBuf::from_path_buf(claimed_by.to_path_buf()).expect("utf8 claimed_by"),
+        if claimed_by.exists() {
+            canonical_repo_root(claimed_by).expect("canonical claimed_by")
+        } else {
+            Utf8PathBuf::from(portable_path_string(claimed_by))
+        },
         ResolvedAsset {
             name: "shared".into(),
             kind: AssetKind::Skill,
@@ -1299,8 +1304,7 @@ fn sync_records_global_claim_for_repo() {
     assert_eq!(global_lock.claims[0].asset.scope, Scope::Global);
     assert_eq!(
         global_lock.claims[0].claimed_by,
-        Utf8PathBuf::from_path_buf(repo.path().canonicalize().expect("canonical repo"))
-            .expect("utf8 repo path")
+        canonical_repo_root(repo.path()).expect("canonical repo path")
     );
 }
 
@@ -1933,7 +1937,7 @@ fn reset_drops_global_claim_via_canonicalized_repo_path() {
         write_lockfile(&real_repo.path().join("cpm.lock"), &lockfile).expect("write lockfile");
 
         // Seed the global lock with the claim stored under the canonical real path.
-        let canonical_utf8 = Utf8PathBuf::from_path_buf(canonical_repo).expect("utf8");
+        let canonical_utf8 = canonical_repo_root(&canonical_repo).expect("utf8");
         let mut global_lock = GlobalLockfile::new();
         global_lock
             .claims
