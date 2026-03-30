@@ -1,6 +1,6 @@
 [project]
 name = "copilot-plugin-manager"
-version = "0.2.1"
+version = "0.2.2"
 description = "Rust-first GitHub Copilot asset manager with a thin Python wrapper"
 readme = "README.md"
 requires-python = ">=3.12"
@@ -47,10 +47,34 @@ dev = [
   "poethepoet>=0.37,<0.38",
   "pytest>=8.3,<9",
   "pytest-cov>=7.1.0",
+  "repo-release-tools>=0.1,<0.2",
   "ruff>=0.15,<0.16",
   "tombi>=0.9.9",
   "ty>=0.0.1a18",
 ]
+
+[tool.rrt]
+release_branch = "release/v{version}"
+changelog_file = "CHANGELOG.md"
+lock_command = ["uv", "lock", "-U"]
+
+[[tool.rrt.version_targets]]
+path = "pyproject.toml"
+kind = "pep621"
+
+[[tool.rrt.version_targets]]
+path = "Cargo.toml"
+section = "workspace.package"
+field = "version"
+
+[[tool.rrt.version_targets]]
+path = "cpm.toml"
+section = "package"
+field = "version"
+
+[[tool.rrt.version_targets]]
+path = "python/cpm/__init__.py"
+pattern = '^(__version__\s*=\s*")([^"]+)(")'
 
 [build-system]
 requires = ["maturin>=1.7,<2.0"]
@@ -242,75 +266,75 @@ cmd = "lefthook run pre-commit --all-files"
 # ── Release helpers ───────────────────────────────────────────────────────
 [tool.poe.tasks.bump_version]
 help = "Bump version metadata, refresh uv.lock, and create a release branch"
-cmd = "python scripts/bump_version.py"
+cmd = "rrt bump"
 
 [tool.poe.tasks.bump_patch]
 help = "Create a patch release version bump"
-cmd = "python scripts/bump_version.py patch"
+cmd = "rrt bump patch"
 
 [tool.poe.tasks.bump_minor]
 help = "Create a minor release version bump"
-cmd = "python scripts/bump_version.py minor"
+cmd = "rrt bump minor"
 
 [tool.poe.tasks.bump_major]
 help = "Create a major release version bump"
-cmd = "python scripts/bump_version.py major"
+cmd = "rrt bump major"
 
 [tool.poe.tasks.bump_no_changelog]
 help = "Create a patch version bump without editing the changelog"
-cmd = "python scripts/bump_version.py patch --no-changelog"
+cmd = "rrt bump patch --no-changelog"
 
 [tool.poe.tasks.changelog_preview]
 help = "Preview the next patch changelog and version bump without writing files"
-cmd = "python scripts/bump_version.py patch --dry-run"
+cmd = "rrt bump patch --dry-run"
 
 [tool.poe.tasks.branch_new]
 help = "Create a new branch using the project naming workflow"
-cmd = "python scripts/branch.py new"
+cmd = "rrt branch new"
 
 [tool.poe.tasks.branch_feat]
 help = "Create a feature branch"
-cmd = "python scripts/branch.py new feat"
+cmd = "rrt branch new feat"
 
 [tool.poe.tasks.branch_fix]
 help = "Create a bugfix branch"
-cmd = "python scripts/branch.py new fix"
+cmd = "rrt branch new fix"
 
 [tool.poe.tasks.branch_chore]
 help = "Create a chore branch"
-cmd = "python scripts/branch.py new chore"
+cmd = "rrt branch new chore"
 
 [tool.poe.tasks.branch_docs]
 help = "Create a documentation branch"
-cmd = "python scripts/branch.py new docs"
+cmd = "rrt branch new docs"
 
 [tool.poe.tasks.branch_refactor]
 help = "Create a refactor branch"
-cmd = "python scripts/branch.py new refactor"
+cmd = "rrt branch new refactor"
 
 [tool.poe.tasks.branch_test]
 help = "Create a testing-focused branch"
-cmd = "python scripts/branch.py new test"
+cmd = "rrt branch new test"
 
 [tool.poe.tasks.branch_ci]
 help = "Create a CI branch"
-cmd = "python scripts/branch.py new ci"
+cmd = "rrt branch new ci"
 
 [tool.poe.tasks.branch_perf]
 help = "Create a performance branch"
-cmd = "python scripts/branch.py new perf"
+cmd = "rrt branch new perf"
 
 [tool.poe.tasks.branch_style]
 help = "Create a style-only branch"
-cmd = "python scripts/branch.py new style"
+cmd = "rrt branch new style"
 
 [tool.poe.tasks.branch_build]
 help = "Create a build-system branch"
-cmd = "python scripts/branch.py new build"
+cmd = "rrt branch new build"
 
 [tool.poe.tasks.branch_rescue]
 help = "Recover or realign the current branch using the rescue workflow"
-cmd = "python scripts/branch.py rescue"
+cmd = "rrt branch rescue"
 
 # ── Utilities ──────────────────────────────────────────────────────────────
 [tool.poe.tasks.toml-format]

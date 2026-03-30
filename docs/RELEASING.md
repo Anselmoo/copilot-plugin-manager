@@ -24,12 +24,14 @@ uv run poe ci-full
 uv build
 ```
 
-For repo-managed release prep, the new helper tasks mirror the workflow used in the companion tooling repo:
+For repo-managed release prep, the release/branch helpers now come from
+`repo-release-tools` via the checked-in Poe tasks:
 
 ```bash
 uv run poe changelog_preview
 uv run poe bump_patch
 # or: uv run poe bump_minor / uv run poe bump_major
+uv run poe branch_feat add release helper
 ```
 
 If you changed the wrapper or packaging surface, it is also worth checking the compatibility entrypoints explicitly:
@@ -48,6 +50,11 @@ Before creating a release tag, update the repository version metadata in the pla
 - `pyproject.toml`
 - `Cargo.toml`
 - `python/cpm/__init__.py`
+
+Those updates are now driven by `[tool.rrt]` in `pyproject.toml`. The
+repo-specific `scripts/ci_version.py` flow remains in place for CI/TestPyPI
+build versions because upstream `repo-release-tools` does not yet support the
+mixed Python/Cargo CI versioning behavior this repository needs.
 
 If future Cargo crates stop inheriting the workspace version, update this document accordingly.
 
