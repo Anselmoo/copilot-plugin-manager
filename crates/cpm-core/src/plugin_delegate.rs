@@ -404,4 +404,25 @@ mod tests {
             other => panic!("expected PluginCommandFailed, got {other:?}"),
         }
     }
+
+    #[test]
+    fn plugin_command_failed_display_includes_stdout_and_stderr() {
+        let err = CpmError::PluginCommandFailed {
+            operation: "install".into(),
+            name: "cap-test".into(),
+            code: 3,
+            stdout: "out line".into(),
+            stderr: "err line".into(),
+        };
+
+        let rendered = err.to_string();
+        assert!(
+            rendered.contains("stdout: out line"),
+            "rendered: {rendered}"
+        );
+        assert!(
+            rendered.contains("stderr: err line"),
+            "rendered: {rendered}"
+        );
+    }
 }

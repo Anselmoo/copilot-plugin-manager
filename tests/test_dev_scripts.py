@@ -178,7 +178,7 @@ def test_rrt_bump_dry_run_reports_expected_patch_release(tmp_path: Path) -> None
     assert result.returncode == 0, result.stderr
     assert "Current" in result.stdout
     assert "0.2.2 → 0.2.3" in result.stdout
-    assert 'Would update' in result.stdout
+    assert "Would update" in result.stdout
     assert "Would run: uv lock -U" in result.stdout
     assert "Would run: git checkout -b release/v0.2.3" in result.stdout
 

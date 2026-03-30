@@ -490,7 +490,12 @@ struct RawInstalledPlugin {
     version: Option<String>,
     #[serde(default, alias = "rev", alias = "resolved_rev", alias = "resolvedRev")]
     revision: Option<String>,
-    #[serde(default, alias = "source_url", alias = "url")]
+    #[serde(
+        default,
+        alias = "source_url",
+        alias = "url",
+        deserialize_with = "deserialize_optional_plugin_source"
+    )]
     source: Option<String>,
     #[serde(default, alias = "marketplace")]
     registry: Option<String>,
@@ -540,6 +545,22 @@ where
 {
     let path = Option::<String>::deserialize(deserializer)?;
     Ok(path.map(|path| portable_utf8_path(Path::new(&path))))
+}
+
+fn deserialize_optional_plugin_source<'de, D>(deserializer: D) -> Result<Option<String>, D::Error>
+where
+    D: Deserializer<'de>,
+{
+    let value = Option::<serde_json::Value>::deserialize(deserializer)?;
+    Ok(match value {
+        None | Some(serde_json::Value::Null) => None,
+        Some(serde_json::Value::String(source)) => Some(source),
+        Some(serde_json::Value::Object(source)) => ["source", "url", "path"]
+            .into_iter()
+            .find_map(|key| source.get(key).and_then(serde_json::Value::as_str))
+            .map(str::to_owned),
+        Some(other) => Some(other.to_string()),
+    })
 }
 
 #[cfg(test)]
@@ -702,7 +723,11 @@ mod tests {
                         "marketplace": "awesome-copilot",
                         "version": "1.0.0",
                         "cache_path": cache_path,
-                        "enabled": true
+                        "enabled": true,
+                        "source": {
+                            "source": "https://github.com/github/awesome-copilot/tree/main/plugins/context-engineering",
+                            "path": "plugins/context-engineering"
+                        }
                     }
                 ]
             })
@@ -718,6 +743,10 @@ mod tests {
             .expect("context-engineering");
         assert_eq!(plugin.registry.as_deref(), Some("awesome-copilot"));
         assert_eq!(plugin.version.as_deref(), Some("1.0.0"));
+        assert_eq!(
+            plugin.source.as_deref(),
+            Some("https://github.com/github/awesome-copilot/tree/main/plugins/context-engineering")
+        );
         assert_eq!(
             plugin.path.as_ref().map(|path| path.as_str()),
             Some(portable_path_string(&cache_path).as_str())

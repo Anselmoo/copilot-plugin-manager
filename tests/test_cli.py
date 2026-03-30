@@ -55,12 +55,12 @@ def _uv_run_project(
     *args: str,
     cwd: Path,
 ) -> subprocess.CompletedProcess[str]:
-    env = os.environ.copy()
-    env.pop("CPM_BIN", None)
+    resolved_env = os.environ.copy()
+    resolved_env.pop("CPM_BIN", None)
     return subprocess.run(
         ["uv", "run", "--project", str(repo_root), *args],
         cwd=cwd,
-        env=env,
+        env=resolved_env,
         capture_output=True,
         text=True,
         check=False,
@@ -261,6 +261,18 @@ def test_python_package_version_matches_pyproject() -> None:
 
 def test_uv_run_legacy_console_script_exits_zero(tmp_path: Path) -> None:
     result = _uv_run_project(REPO_ROOT, "copilot-plugin-manager", "--help", cwd=tmp_path)
+    assert result.returncode == 0, result.stderr
+    assert "cpm" in result.stdout.lower()
+
+
+def test_uv_run_cpm_entrypoint_exits_zero(tmp_path: Path) -> None:
+    result = _uv_run_project(REPO_ROOT, "cpm", "--help", cwd=tmp_path)
+    assert result.returncode == 0, result.stderr
+    assert "cpm" in result.stdout.lower()
+
+
+def test_uv_run_cpm_entrypoint_accepts_verbose_flag(tmp_path: Path) -> None:
+    result = _uv_run_project(REPO_ROOT, "cpm", "-v", "--help", cwd=tmp_path)
     assert result.returncode == 0, result.stderr
     assert "cpm" in result.stdout.lower()
 

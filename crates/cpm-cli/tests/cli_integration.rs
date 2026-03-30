@@ -283,13 +283,35 @@ mkdir -p "$copilot_dir" "$legacy_plugin_dir" "$installed_plugins_dir"
 printf '%s %s %s\n' "$1" "$2" "$3" >> "$log_file"
 op="$2"
 request="$3"
-name="${request%@*}"
-if [ "$name" != "$request" ]; then
-  registry="${request#*@}"
-else
-  registry="awesome-copilot"
-fi
-plugin_root="$installed_plugins_dir/$registry/$name"
+registry=""
+direct_root="$installed_plugins_dir/_direct"
+case "$request" in
+  *@*)
+    name="${request%@*}"
+    registry="${request#*@}"
+    plugin_root="$installed_plugins_dir/$registry/$name"
+    ;;
+  */*:* )
+    path_part="${request#*:}"
+    name="${path_part##*/}"
+    safe_request=$(printf '%s' "$request" | tr '/:' '-')
+    plugin_root="$direct_root/$safe_request"
+    ;;
+  */* )
+    name="${request##*/}"
+    safe_request=$(printf '%s' "$request" | tr '/:' '-')
+    plugin_root="$direct_root/$safe_request"
+    ;;
+  /*|./*|../*)
+    name="$(basename "$request")"
+    plugin_root="$direct_root/$name"
+    ;;
+  *)
+    name="$request"
+    registry="awesome-copilot"
+    plugin_root="$installed_plugins_dir/$registry/$name"
+    ;;
+esac
 marker_path="$legacy_plugin_dir/$name.installed"
 index_path="$copilot_dir/plugin-index.json"
 write_entry() {
@@ -299,9 +321,15 @@ write_entry() {
   mkdir -p "$plugin_root/.github/plugin"
   : > "$marker_path"
   printf '{"name":"%s","marker":"%s"}\n' "$name" "$marker" > "$plugin_root/.github/plugin/plugin.json"
-  cat > "$index_path" <<EOF
-{"plugins":[{"name":"$name","version":"$version","revision":"$revision","source_url":"https://example.test/$name","registry":"$registry","path":"$plugin_root","enabled":true}]}
+  if [ -n "$registry" ]; then
+    cat > "$index_path" <<EOF
+{"plugins":[{"name":"$name","version":"$version","revision":"$revision","source_url":"$request","registry":"$registry","path":"$plugin_root","enabled":true}]}
 EOF
+  else
+    cat > "$index_path" <<EOF
+{"plugins":[{"name":"$name","version":"$version","revision":"$revision","source_url":"$request","path":"$plugin_root","enabled":true}]}
+EOF
+  fi
 }
 case "$op" in
   install)
@@ -357,14 +385,35 @@ echo %1 %2 %3 >> "%log_file%"
 
 set "op=%2"
 set "request=%3"
-set "name=%request:@=^>%"
-if not "!name!"=="!request!" (
+set "registry="
+set "name="
+set "plugin_root="
+set "direct_root=%installed_plugins_dir%\_direct"
+if not "!request:@=!"=="!request!" (
     for /f "tokens=1 delims=@" %%a in ("!request!") do set "name=%%a"
     for /f "tokens=2 delims=@" %%a in ("!request!") do set "registry=%%a"
+    set "plugin_root=%installed_plugins_dir%\!registry!\!name!"
+) else if not "!request:/=!"=="!request!" (
+    set "path_part="
+    for /f "tokens=2 delims=:" %%a in ("!request!") do set "path_part=%%a"
+    if defined path_part (
+        set "path_part=!path_part:/=\!"
+        for %%f in ("!path_part!") do set "name=%%~nxf"
+    ) else (
+        for /f "tokens=2 delims=/" %%a in ("!request!") do set "name=%%a"
+    )
+    set "safe_request=!request!"
+    set "safe_request=!safe_request:/=-!"
+    set "safe_request=!safe_request::=-!"
+    set "plugin_root=%direct_root%\!safe_request!"
+) else if not "!request:\=!"=="!request!" (
+    for %%f in ("!request!") do set "name=%%~nxf"
+    set "plugin_root=%direct_root%\!name!"
 ) else (
+    set "name=!request!"
     set "registry=awesome-copilot"
+    set "plugin_root=%installed_plugins_dir%\!registry!\!name!"
 )
-set "plugin_root=%installed_plugins_dir%\!registry!\!name!"
 set "marker_path=%legacy_plugin_dir%\!name!.installed"
 set "index_path=%copilot_dir%\plugin-index.json"
 
@@ -394,9 +443,15 @@ type nul > "%marker_path%"
 (
     echo {"name":"!name!","marker":"!marker!"}
 ) > "%plugin_root%\.github\plugin\plugin.json"
-(
-    echo {"plugins":[{"name":"!name!","version":"!version!","revision":"!revision!","source_url":"https://example.test/!name!","registry":"!registry!","path":"!escaped_plugin_root!","enabled":true}]}
-) > "%index_path%"
+    if defined registry (
+        (
+            echo {"plugins":[{"name":"!name!","version":"!version!","revision":"!revision!","source_url":"!request!","registry":"!registry!","path":"!escaped_plugin_root!","enabled":true}]}
+        ) > "%index_path%"
+    ) else (
+        (
+            echo {"plugins":[{"name":"!name!","version":"!version!","revision":"!revision!","source_url":"!request!","path":"!escaped_plugin_root!","enabled":true}]}
+        ) > "%index_path%"
+    )
 exit /b 0
 "#;
         std::fs::write(&script_path, script).expect("write fake copilot");
@@ -1000,6 +1055,122 @@ fn add_plugin_delegates_and_writes_lock_metadata() {
 }
 
 #[test]
+fn add_plugin_github_tree_url_delegates_via_repo_subdir_request() {
+    let home = tempfile::TempDir::new().expect("home tempdir");
+    let fake_copilot = tempfile::TempDir::new().expect("copilot tempdir");
+    let repo = tempfile::TempDir::new().expect("repo tempdir");
+    let (copilot_bin, log_path) = fake_copilot_env(&home, &fake_copilot);
+
+    let output = cpm_bin()
+        .args([
+            "add",
+            "https://github.com/github/awesome-copilot/tree/main/plugins/software-engineering-team",
+            "--plugin",
+        ])
+        .env("HOME", home.path())
+        .env("USERPROFILE", home.path())
+        .env("APPDATA", home.path().join("AppData").join("Roaming"))
+        .env("CPM_COPILOT_BIN", &copilot_bin)
+        .env("CPM_TEST_LOG", &log_path)
+        .current_dir(repo.path())
+        .output()
+        .expect("run cpm add plugin");
+
+    assert!(
+        output.status.success(),
+        "stderr: {}",
+        String::from_utf8_lossy(&output.stderr)
+    );
+    let log = std::fs::read_to_string(&log_path).unwrap_or_default();
+    assert!(
+        log.contains("plugin install github/awesome-copilot:plugins/software-engineering-team"),
+        "github tree plugin add should delegate via owner/repo:path; log: {log}"
+    );
+    assert!(
+        !repo
+            .path()
+            .join(".github")
+            .join("plugins")
+            .join("software-engineering-team")
+            .exists(),
+        "delegated GitHub plugin add should not materialize repo plugin files"
+    );
+
+    let lock = load_lockfile(&repo.path().join("cpm.lock")).expect("load lock");
+    assert_eq!(lock.plugins.len(), 1);
+    assert_eq!(lock.plugins[0].name, "software-engineering-team");
+    assert_eq!(lock.plugins[0].scope, Scope::Global);
+    assert_eq!(lock.plugins[0].source.scope, Scope::Global);
+    let meta = lock.plugins[0].plugin_meta.as_ref().expect("plugin meta");
+    assert_eq!(meta.registry, None);
+    assert_eq!(meta.plugin_version.as_deref(), Some("1.0.0"));
+
+    let manifest =
+        cpm_core::project::load_manifest(&repo.path().join("cpm.toml")).expect("load manifest");
+    let plugin = manifest
+        .plugins
+        .get("software-engineering-team")
+        .expect("plugin source");
+    assert_eq!(plugin.scope, Scope::Global);
+    assert_eq!(
+        plugin.url.as_deref(),
+        Some(
+            "https://github.com/github/awesome-copilot/tree/main/plugins/software-engineering-team"
+        )
+    );
+}
+
+#[test]
+fn add_plugin_github_tree_url_verbose_output_shows_delegate_strategy() {
+    let home = tempfile::TempDir::new().expect("home tempdir");
+    let fake_copilot = tempfile::TempDir::new().expect("copilot tempdir");
+    let repo = tempfile::TempDir::new().expect("repo tempdir");
+    let (copilot_bin, log_path) = fake_copilot_env(&home, &fake_copilot);
+
+    let output = cpm_bin()
+        .args([
+            "-v",
+            "add",
+            "https://github.com/github/awesome-copilot/tree/main/plugins/software-engineering-team",
+            "--plugin",
+        ])
+        .env("HOME", home.path())
+        .env("USERPROFILE", home.path())
+        .env("APPDATA", home.path().join("AppData").join("Roaming"))
+        .env("CPM_COPILOT_BIN", &copilot_bin)
+        .env("CPM_TEST_LOG", &log_path)
+        .current_dir(repo.path())
+        .output()
+        .expect("run verbose cpm add plugin");
+
+    assert!(
+        output.status.success(),
+        "stderr: {}",
+        String::from_utf8_lossy(&output.stderr)
+    );
+    let stderr = String::from_utf8_lossy(&output.stderr);
+    assert!(stderr.contains("strategy=delegate"), "stderr: {stderr}");
+    assert!(
+        stderr.contains(
+            "source=https://github.com/github/awesome-copilot/tree/main/plugins/software-engineering-team"
+        ),
+        "stderr: {stderr}"
+    );
+    assert!(
+        stderr.contains(
+            "normalized_request=github/awesome-copilot:plugins/software-engineering-team"
+        ),
+        "stderr: {stderr}"
+    );
+    assert!(
+        stderr.contains(
+            "command=copilot plugin install github/awesome-copilot:plugins/software-engineering-team"
+        ),
+        "stderr: {stderr}"
+    );
+}
+
+#[test]
 fn add_plugin_tree_source_installs_natively_without_delegate() {
     let home = tempfile::TempDir::new().expect("home tempdir");
     let fake_copilot = tempfile::TempDir::new().expect("copilot tempdir");
@@ -1251,6 +1422,113 @@ fn sync_plugin_tree_source_installs_natively_without_delegate() {
         !lock.plugins[0].files.is_empty(),
         "native plugin should track files"
     );
+}
+
+#[test]
+fn sync_plugin_tree_source_verbose_output_shows_native_strategy() {
+    let home = tempfile::TempDir::new().expect("home tempdir");
+    let fake_copilot = tempfile::TempDir::new().expect("copilot tempdir");
+    let repo = tempfile::TempDir::new().expect("repo tempdir");
+    let plugin_dir = join_portable_path(repo.path(), "plugins/testing-automation");
+    let (copilot_bin, log_path) = fake_copilot_env(&home, &fake_copilot);
+
+    std::fs::create_dir_all(join_portable_path(&plugin_dir, ".github/plugin"))
+        .expect("mkdir plugin");
+    std::fs::write(plugin_dir.join("README.md"), "# Testing Automation\n").expect("write readme");
+    std::fs::write(
+        join_portable_path(&plugin_dir, ".github/plugin/plugin.json"),
+        r#"{"name":"testing-automation","version":"1.0.0"}"#,
+    )
+    .expect("write plugin json");
+    write_plugin_path_manifest(
+        repo.path(),
+        "testing-automation",
+        "plugins/testing-automation",
+    );
+
+    let output = cpm_bin()
+        .args(["-v", "sync"])
+        .env("HOME", home.path())
+        .env("USERPROFILE", home.path())
+        .env("APPDATA", home.path().join("AppData").join("Roaming"))
+        .env("CPM_COPILOT_BIN", &copilot_bin)
+        .env("CPM_TEST_LOG", &log_path)
+        .current_dir(repo.path())
+        .output()
+        .expect("run verbose cpm sync");
+
+    assert!(
+        output.status.success(),
+        "stderr: {}",
+        String::from_utf8_lossy(&output.stderr)
+    );
+    let stderr = String::from_utf8_lossy(&output.stderr);
+    assert!(stderr.contains("strategy=native"), "stderr: {stderr}");
+    assert!(
+        stderr.contains("source=plugins/testing-automation"),
+        "stderr: {stderr}"
+    );
+    assert!(
+        stderr.contains("copilot_registration=false"),
+        "stderr: {stderr}"
+    );
+    assert!(
+        stderr.contains("materialize_target=./.github/plugins/testing-automation"),
+        "stderr: {stderr}"
+    );
+}
+
+#[test]
+fn sync_plugin_github_tree_url_delegates_via_repo_subdir_request() {
+    let home = tempfile::TempDir::new().expect("home tempdir");
+    let fake_copilot = tempfile::TempDir::new().expect("copilot tempdir");
+    let repo = tempfile::TempDir::new().expect("repo tempdir");
+    let (copilot_bin, log_path) = fake_copilot_env(&home, &fake_copilot);
+
+    write_plugin_manifest(
+        repo.path(),
+        "software-engineering-team",
+        "https://github.com/github/awesome-copilot/tree/main/plugins/software-engineering-team",
+    );
+
+    let output = cpm_bin()
+        .args(["sync", "--scope", "global"])
+        .env("HOME", home.path())
+        .env("USERPROFILE", home.path())
+        .env("APPDATA", home.path().join("AppData").join("Roaming"))
+        .env("CPM_COPILOT_BIN", &copilot_bin)
+        .env("CPM_TEST_LOG", &log_path)
+        .current_dir(repo.path())
+        .output()
+        .expect("run cpm sync");
+
+    assert!(
+        output.status.success(),
+        "stderr: {}",
+        String::from_utf8_lossy(&output.stderr)
+    );
+    let log = std::fs::read_to_string(&log_path).expect("read log");
+    assert!(
+        log.contains("plugin install github/awesome-copilot:plugins/software-engineering-team"),
+        "sync should delegate GitHub tree plugin URLs via owner/repo:path; log: {log}"
+    );
+    assert!(
+        !repo
+            .path()
+            .join(".github")
+            .join("plugins")
+            .join("software-engineering-team")
+            .exists(),
+        "delegated GitHub plugin sync should not materialize repo plugin files"
+    );
+
+    let lock = load_lockfile(&repo.path().join("cpm.lock")).expect("load lock");
+    assert_eq!(lock.plugins.len(), 1);
+    assert_eq!(lock.plugins[0].scope, Scope::Global);
+    assert_eq!(lock.plugins[0].source.scope, Scope::Global);
+    let meta = lock.plugins[0].plugin_meta.as_ref().expect("plugin meta");
+    assert_eq!(meta.registry, None);
+    assert_eq!(meta.plugin_version.as_deref(), Some("1.0.0"));
 }
 
 // ── cpm doctor ────────────────────────────────────────────────────────────────

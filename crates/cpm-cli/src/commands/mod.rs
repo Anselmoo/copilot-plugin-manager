@@ -1,6 +1,12 @@
 //! All CLI subcommands for `cpm`.
 
-use std::{collections::HashSet, fmt::Display, io::IsTerminal, path::Path};
+use std::{
+    collections::HashSet,
+    fmt::Display,
+    io::IsTerminal,
+    path::Path,
+    sync::atomic::{AtomicBool, Ordering},
+};
 
 use crate::progress::{OperationKind, OperationStatus, ProgressReporter};
 use chrono::Utc;
@@ -23,7 +29,7 @@ use cpm_core::{
         apply_manifest, install_resolved_asset, load_lockfile, load_manifest, write_lockfile,
         write_manifest, ApplyOptions,
     },
-    source::normalize_asset_source,
+    source::{normalize_asset_source, parse_github_source},
     CpmError,
 };
 use cpm_types::{
@@ -101,6 +107,8 @@ Maintenance:
   auth      Manage authentication tokens
   scope     Get or set the default install scope";
 
+static VERBOSE_ENABLED: AtomicBool = AtomicBool::new(false);
+
 /// cpm — GitHub Copilot asset manager
 #[derive(Debug, Parser)]
 #[command(
@@ -112,6 +120,10 @@ Maintenance:
     styles = CLI_STYLES,
 )]
 pub struct Cli {
+    /// Print additional strategy details for delegated vs native operations.
+    #[arg(short, long, global = true)]
+    verbose: bool,
+
     #[command(subcommand)]
     command: Commands,
 }
@@ -214,6 +226,7 @@ enum Commands {
 impl Cli {
     /// Dispatch the parsed command to its handler.
     pub async fn run(self) -> Result<(), cpm_core::CpmError> {
+        set_verbose_enabled(self.verbose);
         match self.command {
             Commands::Init(args) => init::run(args).await,
             Commands::Add(args) => add::run(args).await,
@@ -267,6 +280,20 @@ impl Cli {
             Commands::Auth(AuthArgs { command }) => auth::run(command).await,
             Commands::Scope(ScopeArgs { command }) => scope::run(command).await,
         }
+    }
+}
+
+fn set_verbose_enabled(enabled: bool) {
+    VERBOSE_ENABLED.store(enabled, Ordering::Relaxed);
+}
+
+pub(super) fn verbose_enabled() -> bool {
+    VERBOSE_ENABLED.load(Ordering::Relaxed)
+}
+
+pub(super) fn print_verbose_line(message: impl Display) {
+    if verbose_enabled() {
+        eprintln!("[verbose] {message}");
     }
 }
 
@@ -1082,16 +1109,71 @@ fn render_plugin_summary(summary: PluginOperationSummary, colors_enabled: bool) 
     )
 }
 
+pub(super) fn plugin_source_display(name: &str, source: &AssetSource) -> String {
+    if let Some(path) = source.path.as_ref() {
+        return portable_path_string(path.as_std_path());
+    }
+
+    if let Some(url) = source.url.as_deref() {
+        return url.to_owned();
+    }
+
+    name.to_owned()
+}
+
+pub(super) fn log_delegated_plugin_strategy(
+    action: &str,
+    name: &str,
+    source: &str,
+    normalized_request: &str,
+) {
+    print_verbose_line(format!("plugin_{action} name={name} strategy=delegate"));
+    print_verbose_line(format!("source={source}"));
+    print_verbose_line(format!("normalized_request={normalized_request}"));
+    print_verbose_line(format!(
+        "command=copilot plugin install {normalized_request}"
+    ));
+}
+
+pub(super) fn log_native_plugin_strategy(
+    action: &str,
+    name: &str,
+    source: &str,
+    materialize_target: &Path,
+) {
+    print_verbose_line(format!("plugin_{action} name={name} strategy=native"));
+    print_verbose_line(format!("source={source}"));
+    print_verbose_line("copilot_registration=false");
+    print_verbose_line(format!(
+        "materialize_target={}",
+        portable_path_string(materialize_target)
+    ));
+}
+
 pub(super) fn plugin_requested_spec(name: &str, source: &AssetSource) -> String {
-    source.url.clone().unwrap_or_else(|| name.to_owned())
+    if let Some(path) = source.path.as_ref() {
+        return portable_path_string(path.as_std_path());
+    }
+
+    if let Some(url) = source.url.as_deref() {
+        if let Some(github) = parse_github_source(url) {
+            return format!("{}/{}:{}", github.owner, github.repo, github.path);
+        }
+
+        return url.to_owned();
+    }
+
+    name.to_owned()
 }
 
 pub(super) fn plugin_request_is_native(request: &str) -> bool {
-    normalize_asset_source(AssetKind::Plugin, request).is_ok()
+    normalize_asset_source(AssetKind::Plugin, request)
+        .map(|normalized| normalized.path.is_some())
+        .unwrap_or(false)
 }
 
 pub(super) fn plugin_source_is_native(source: &AssetSource) -> bool {
-    source.path.is_some() || source.url.as_deref().is_some_and(plugin_request_is_native)
+    source.path.is_some()
 }
 
 pub(super) fn plugin_asset_is_delegated(asset: &ResolvedAsset) -> bool {
@@ -1345,6 +1427,39 @@ mod tests {
     fn derive_plugin_name_strips_registry_suffix() {
         assert_eq!(derive_plugin_name("pptx@awesome-copilot"), "pptx");
         assert_eq!(derive_plugin_name("nested/pptx@registry"), "pptx");
+    }
+
+    #[test]
+    fn plugin_request_is_not_native_for_github_tree_urls() {
+        assert!(!plugin_request_is_native(
+            "https://github.com/github/awesome-copilot/tree/main/plugins/software-engineering-team"
+        ));
+    }
+
+    #[test]
+    fn plugin_requested_spec_maps_github_tree_urls_to_repo_subdir_requests() {
+        let spec = plugin_requested_spec(
+            "software-engineering-team",
+            &AssetSource {
+                url: Some(
+                    "https://github.com/github/awesome-copilot/tree/main/plugins/software-engineering-team"
+                        .into(),
+                ),
+                rev: None,
+                path: None,
+                groups: "default".into(),
+                scope: Scope::Local,
+                transport: None,
+                env: vec![],
+                args: vec![],
+                engine: None,
+            },
+        );
+
+        assert_eq!(
+            spec,
+            "github/awesome-copilot:plugins/software-engineering-team"
+        );
     }
 
     #[test]
