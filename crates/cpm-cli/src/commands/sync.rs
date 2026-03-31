@@ -6,7 +6,7 @@ use clap::Args;
 use cpm_core::{
     auth,
     config::{build_http_client, load_runtime_config},
-    installer::remove_asset,
+    installer::{install_dir, remove_asset},
     license::enforce_license_policy,
     plugin_index::read_installed_plugins,
     project::{
@@ -22,8 +22,9 @@ use crate::progress::{OperationKind, OperationStatus, ProgressReporter};
 
 use super::{
     collect_plugin_lock_entries, discovered_plugin_request, effective_asset_scope,
-    effective_plugin_scope, merge_delegated_plugin_lock_entries, plugin_asset_is_delegated,
-    plugin_requested_spec, plugin_source_is_native, print_plugin_summary, run_plugin_operations,
+    effective_plugin_scope, log_delegated_plugin_strategy, log_native_plugin_strategy,
+    merge_delegated_plugin_lock_entries, plugin_asset_is_delegated, plugin_requested_spec,
+    plugin_source_display, plugin_source_is_native, print_plugin_summary, run_plugin_operations,
     strip_delegated_plugins_from_manifest, style_success, PluginOperation,
 };
 
@@ -161,10 +162,14 @@ pub async fn run(args: SyncArgs) -> Result<(), CpmError> {
                     && !installed_names.contains(&asset.name)
             })
             .map(|asset| {
-                PluginOperation::install(
+                let requested_spec = plugin_requested_spec(&asset.name, &asset.source);
+                log_delegated_plugin_strategy(
+                    "sync",
                     &asset.name,
-                    plugin_requested_spec(&asset.name, &asset.source),
-                )
+                    &plugin_source_display(&asset.name, &asset.source),
+                    &requested_spec,
+                );
+                PluginOperation::install(&asset.name, requested_spec)
             })
             .collect();
         let plugin_summary = run_plugin_operations(plugin_ops).await?;
@@ -224,6 +229,16 @@ pub async fn run(args: SyncArgs) -> Result<(), CpmError> {
                 asset.scope,
             )
     }) {
+        if asset.kind == AssetKind::Plugin {
+            let materialize_target =
+                install_dir(asset.kind, asset.scope, repo_root).join(&asset.name);
+            log_native_plugin_strategy(
+                "sync",
+                &asset.name,
+                &plugin_source_display(&asset.name, &asset.source),
+                &materialize_target,
+            );
+        }
         enforce_license_policy(asset, &runtime.settings)?;
         let mut handle = reporter.begin_operation(
             OperationKind::Install,
@@ -254,11 +269,17 @@ pub async fn run(args: SyncArgs) -> Result<(), CpmError> {
         .collect();
     let mut plugin_ops = Vec::new();
     for (name, source) in &selected_plugins {
-        if !plugin_source_is_native(source) && !installed_names.contains(name) {
-            plugin_ops.push(PluginOperation::install(
+        if !plugin_source_is_native(source) {
+            let requested_spec = plugin_requested_spec(name, source);
+            log_delegated_plugin_strategy(
+                "sync",
                 name,
-                plugin_requested_spec(name, source),
-            ));
+                &plugin_source_display(name, source),
+                &requested_spec,
+            );
+            if !installed_names.contains(name) {
+                plugin_ops.push(PluginOperation::install(name, requested_spec));
+            }
         }
     }
     for name in previously_managed_plugin_names.difference(&selected_plugin_names) {

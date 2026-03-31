@@ -341,10 +341,11 @@ fn describe_global_issue(issue: &GlobalClaimIssue) -> String {
         GlobalClaimIssue::ConflictingClaim {
             claimed_by,
             claimed_rev,
+            claimed_hash,
             ..
         } => format!(
-            "machine-local claim from {} records revision {}",
-            claimed_by, claimed_rev
+            "machine-local claim from {} records revision {} with hash {}",
+            claimed_by, claimed_rev, claimed_hash
         ),
     }
 }

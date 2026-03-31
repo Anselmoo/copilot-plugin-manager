@@ -221,11 +221,12 @@ fn global_issue_error(issue: GlobalClaimIssue) -> DoctorError {
             asset,
             claimed_by,
             claimed_rev,
+            claimed_hash,
         } => DoctorError {
             name: asset.name,
             path: "~/.copilot/cpm.lock".to_owned(),
-            expected: asset.resolved_rev,
-            actual: format!("{claimed_rev} ({claimed_by})"),
+            expected: format!("rev {} / {}", asset.resolved_rev, asset.hash),
+            actual: format!("rev {claimed_rev} / {claimed_hash} ({claimed_by})"),
         },
     }
 }
@@ -467,5 +468,60 @@ mod tests {
         assert_eq!(errors.len(), 1);
         assert_eq!(errors[0].name, "shared");
         assert_eq!(errors[0].actual, "<missing>");
+    }
+
+    #[test]
+    fn doctor_reports_conflicting_global_claim_with_hash_context() {
+        let dir = TempDir::new().expect("tempdir");
+        let mut lf = Lockfile::new();
+        let mut asset = ResolvedAsset {
+            name: "shared".to_owned(),
+            kind: AssetKind::Plugin,
+            source: AssetSource {
+                url: Some("https://example.com".into()),
+                rev: None,
+                path: None,
+                groups: "default".into(),
+                scope: Scope::Global,
+                transport: None,
+                env: vec![],
+                args: vec![],
+                engine: None,
+            },
+            resolved_rev: "a".repeat(40),
+            resolved_date: chrono::Utc::now(),
+            hash: "sha256:repo".into(),
+            scope: Scope::Global,
+            ownership: AssetOwnership::Upstream,
+            files: vec![],
+            executable: vec![],
+            file_hashes: Default::default(),
+            git: None,
+            sub_assets: vec![],
+            license: None,
+            bin_path: None,
+            compiled_path: None,
+            plugin_meta: None,
+        };
+        lf.plugins.push(asset.clone());
+
+        asset.hash = "sha256:global".into();
+        let mut global_lock = GlobalLockfile::new();
+        global_lock.claims.push(cpm_types::GlobalClaim::new(
+            camino::Utf8PathBuf::from("/tmp/other-repo"),
+            asset,
+        ));
+
+        let errors =
+            run_doctor_with_global_lock(&lf, &global_lock, dir.path(), false).expect("doctor");
+        assert_eq!(errors.len(), 1);
+        assert_eq!(
+            errors[0].expected,
+            format!("rev {} / sha256:repo", "a".repeat(40))
+        );
+        assert_eq!(
+            errors[0].actual,
+            format!("rev {} / sha256:global (/tmp/other-repo)", "a".repeat(40))
+        );
     }
 }

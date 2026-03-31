@@ -6,6 +6,7 @@ use clap::Args;
 use cpm_core::{
     auth,
     config::{build_http_client, load_runtime_config},
+    installer::install_dir,
     plugin_index::find_installed_plugin_by_name,
     project::{
         add_single_asset, load_global_lockfile, load_lockfile, load_manifest,
@@ -25,7 +26,8 @@ use crate::progress::{OperationKind, OperationStatus, ProgressReporter};
 
 use super::{
     build_locked_plugin_asset, derive_plugin_name, find_manifest_asset_mut,
-    plugin_request_is_native, print_plugin_summary, remove_manifest_asset, report_skipped_plugin,
+    log_delegated_plugin_strategy, log_native_plugin_strategy, plugin_request_is_native,
+    plugin_requested_spec, print_plugin_summary, remove_manifest_asset, report_skipped_plugin,
     run_plugin_operations, style_success, upsert_plugin_lock_entry, PluginAction, PluginOperation,
 };
 
@@ -164,11 +166,13 @@ pub async fn run(args: AddArgs) -> Result<(), CpmError> {
         };
         let installed_before = cpm_core::plugin_index::read_installed_plugins()?;
         let mut summary = Default::default();
+        let requested_spec = plugin_requested_spec(&name, &asset_source);
+        log_delegated_plugin_strategy("add", &name, &requested, &requested_spec);
         if find_installed_plugin_by_name(&installed_before, &name).is_some() {
             report_skipped_plugin(PluginAction::Install, &name);
         } else {
-            summary =
-                run_plugin_operations(vec![PluginOperation::install(&name, &requested)]).await?;
+            summary = run_plugin_operations(vec![PluginOperation::install(&name, requested_spec)])
+                .await?;
         }
 
         let replaced = insert_asset(
@@ -212,7 +216,7 @@ pub async fn run(args: AddArgs) -> Result<(), CpmError> {
         print_plugin_summary(summary);
         let action = if replaced { "Updated" } else { "Added" };
         println!(
-            "{} {action} plugin '{name}' in {} and reconciled it with Copilot",
+            "{} {action} plugin '{name}' in {} and registered it with Copilot",
             style_success("✓"),
             manifest_path.display()
         );
@@ -273,6 +277,10 @@ pub async fn run(args: AddArgs) -> Result<(), CpmError> {
     };
 
     let asset_source = relativize_asset_source(asset_source, Path::new("."));
+    if kind == AssetKind::Plugin {
+        let materialize_target = install_dir(kind, asset_source.scope, Path::new(".")).join(&name);
+        log_native_plugin_strategy("add", &name, requested_source, &materialize_target);
+    }
     // Clone before moving into the manifest so we can pass a reference to
     // add_single_asset without re-borrowing from the manifest.
     let replaced = insert_asset(&mut manifest, kind, name.clone(), asset_source.clone()).is_some();
@@ -316,10 +324,17 @@ pub async fn run(args: AddArgs) -> Result<(), CpmError> {
     write_lockfile(lockfile_path, &lockfile)?;
 
     let action = if replaced { "Updated" } else { "Added" };
-    println!(
-        "✓ {action} {kind} '{name}' in {} and materialized it on disk",
-        manifest_path.display()
-    );
+    if kind == AssetKind::Plugin {
+        println!(
+            "✓ {action} plugin '{name}' in {} and materialized its bundle on disk",
+            manifest_path.display()
+        );
+    } else {
+        println!(
+            "✓ {action} {kind} '{name}' in {} and materialized it on disk",
+            manifest_path.display()
+        );
+    }
     if let Some(McpTransport::Docker { image, .. }) = asset_source.transport.as_ref() {
         if docker_image_pin(image).is_none() {
             eprintln!(

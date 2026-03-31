@@ -212,7 +212,9 @@ pub enum CpmError {
     CopilotNotFound,
 
     /// A `copilot plugin` sub-command exited with a non-zero status.
-    #[error("copilot plugin {operation} `{name}` failed (exit {code}): {stderr}")]
+    #[error(
+        "copilot plugin {operation} `{name}` failed (exit {code})\nstdout: {stdout}\nstderr: {stderr}"
+    )]
     #[diagnostic(code(cpm::plugin_command_failed))]
     PluginCommandFailed {
         /// The sub-command that failed (`install`, `uninstall`, or `update`).

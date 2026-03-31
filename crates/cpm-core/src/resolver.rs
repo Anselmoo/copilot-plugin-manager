@@ -80,6 +80,8 @@ pub enum GlobalClaimIssue {
         claimed_by: Utf8PathBuf,
         /// Revision currently recorded in the machine-local global lockfile.
         claimed_rev: String,
+        /// Hash currently recorded in the machine-local global lockfile.
+        claimed_hash: String,
     },
 }
 
@@ -100,7 +102,7 @@ pub fn detect_global_install_conflicts<'a>(
             continue;
         };
 
-        if claim.claimed_by != repo_path && claim.asset != *asset {
+        if claim.claimed_by != repo_path && !claim_asset_matches(&claim.asset, asset) {
             return Err(CpmError::GlobalInstallConflict {
                 name: asset.name.clone(),
                 kind: asset.kind,
@@ -132,11 +134,12 @@ pub fn inspect_global_claims(
             None => issues.push(GlobalClaimIssue::MissingClaim {
                 asset: asset.clone(),
             }),
-            Some(claim) if claim.asset != *asset => {
+            Some(claim) if !claim_asset_matches(&claim.asset, asset) => {
                 issues.push(GlobalClaimIssue::ConflictingClaim {
                     asset: asset.clone(),
                     claimed_by: claim.claimed_by.clone(),
                     claimed_rev: claim.asset.resolved_rev.clone(),
+                    claimed_hash: claim.asset.hash.clone(),
                 });
             }
             Some(claim) if claim.claimed_by != repo_path => {
@@ -370,6 +373,14 @@ fn find_claim<'a>(
         .find(|claim| claim.asset.name == asset.name && claim.asset.kind == asset.kind)
 }
 
+fn claim_asset_matches(claimed: &ResolvedAsset, expected: &ResolvedAsset) -> bool {
+    claimed.name == expected.name
+        && claimed.kind == expected.kind
+        && claimed.scope == expected.scope
+        && claimed.resolved_rev == expected.resolved_rev
+        && claimed.hash == expected.hash
+}
+
 #[cfg(test)]
 mod tests {
     use super::*;
@@ -502,6 +513,30 @@ mod tests {
         assert_eq!(reconciled.claims.len(), 1);
         assert_eq!(reconciled.claims[0].claimed_by, repo_path);
         assert_eq!(reconciled.claims[0].asset.name, "shared");
+    }
+
+    #[test]
+    fn inspect_global_claims_ignores_metadata_only_differences() {
+        let dir = TempDir::new().expect("tempdir");
+        let repo_path = canonical_repo_root(dir.path()).expect("canonical repo path");
+        let mut repo_lock = Lockfile::new();
+        let repo_asset = make_resolved("shared", AssetKind::Plugin, Scope::Global);
+        repo_lock.plugins.push(repo_asset.clone());
+
+        let mut claimed_asset = repo_asset.clone();
+        claimed_asset.source.url = Some("https://mirror.example.com/shared".to_owned());
+        claimed_asset.resolved_date = chrono::Utc::now() + chrono::Duration::seconds(5);
+
+        let mut global_lock = GlobalLockfile::new();
+        global_lock
+            .claims
+            .push(GlobalClaim::new(repo_path, claimed_asset));
+
+        let issues = inspect_global_claims(&repo_lock, &global_lock, dir.path()).expect("inspect");
+        assert!(
+            issues.is_empty(),
+            "metadata-only differences should not conflict"
+        );
     }
 
     #[test]
