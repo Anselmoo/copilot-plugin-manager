@@ -28,6 +28,30 @@ use super::{
     strip_delegated_plugins_from_manifest, style_success, PluginOperation,
 };
 
+fn print_sync_selection_summary(
+    install_group: Option<&str>,
+    auto_groups: &[String],
+    scope_filter: Option<Scope>,
+) {
+    let scope_text = scope_filter
+        .map(|scope| scope.to_string())
+        .unwrap_or_else(|| "all".to_owned());
+    let group_text = install_group.unwrap_or("default");
+    println!(
+        "{} active group='{}' scope='{}'",
+        style_success("✓"),
+        group_text,
+        scope_text
+    );
+    if !auto_groups.is_empty() {
+        println!(
+            "{} auto-groups: {}",
+            style_success("✓"),
+            auto_groups.join(", ")
+        );
+    }
+}
+
 /// Arguments for `cpm sync`.
 #[derive(Debug, Args)]
 pub struct SyncArgs {
@@ -59,6 +83,11 @@ pub async fn run(args: SyncArgs) -> Result<(), CpmError> {
     let existing_lock = load_lockfile(lockfile_path).unwrap_or_default();
     let runtime = load_runtime_config(&manifest)?;
     let scope_filter = args.scope.map(Into::into);
+    print_sync_selection_summary(
+        args.group.as_deref(),
+        &runtime.settings.auto_groups,
+        scope_filter,
+    );
     let selected_plugins: Vec<_> = manifest
         .effective_section(AssetKind::Plugin)
         .into_iter()
@@ -313,6 +342,23 @@ pub async fn run(args: SyncArgs) -> Result<(), CpmError> {
         style_success("✓"),
         lockfile_path.display()
     );
+    println!(
+        "{} selected {} native asset(s) for installation",
+        style_success("✓"),
+        lockfile
+            .all_assets()
+            .filter(|asset| {
+                !plugin_asset_is_delegated(asset)
+                    && should_install(
+                        &asset.source.groups,
+                        args.group.as_deref(),
+                        &runtime.settings.auto_groups,
+                        scope_filter,
+                        asset.scope,
+                    )
+            })
+            .count()
+    );
     Ok(())
 }
 
@@ -422,6 +468,7 @@ mod tests {
                 transport: None,
                 env: vec![],
                 args: vec![],
+                tools: vec![],
                 engine: None,
             },
             resolved_rev: "abc123".to_owned(),

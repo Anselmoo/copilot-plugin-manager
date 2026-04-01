@@ -638,6 +638,9 @@ pub struct AssetSource {
     /// Extra command-line arguments for the MCP server.
     #[serde(default)]
     pub args: Vec<String>,
+    /// Optional MCP tool filters for cloud-agent style exports.
+    #[serde(default, skip_serializing_if = "Vec::is_empty")]
+    pub tools: Vec<String>,
     /// Workflow engine override (workflow assets only).
     #[serde(default, skip_serializing_if = "Option::is_none")]
     pub engine: Option<WorkflowEngine>,

@@ -41,6 +41,7 @@ mod add;
 mod auth;
 mod cache;
 mod doctor;
+mod export;
 mod init;
 mod list;
 mod lock;
@@ -59,6 +60,7 @@ pub use add::AddArgs;
 pub use auth::AuthArgs;
 pub use cache::CacheArgs;
 pub use doctor::DoctorArgs;
+pub use export::ExportArgs;
 pub use init::InitArgs;
 pub use list::ListArgs;
 pub use lock::LockArgs;
@@ -96,6 +98,7 @@ Inspect & diagnose:
   overview  See the combined manifest, lockfile, and disk view
   list      List installed assets
   show      Show details for one asset
+  export    Emit derived runtime config artifacts
   tree      Show the dependency tree
   doctor    Verify installed file hashes
   status    Show manifest/lockfile/disk drift
@@ -197,6 +200,9 @@ enum Commands {
     /// Show full details of a single asset.
     #[command(display_order = 22)]
     Show(ShowArgs),
+    /// Export derived runtime config artifacts.
+    #[command(display_order = 22)]
+    Export(ExportArgs),
     /// Show the dependency tree.
     #[command(display_order = 23)]
     Tree(TreeArgs),
@@ -271,6 +277,7 @@ impl Cli {
             Commands::Overview(args) => overview::run(args).await,
             Commands::List(args) => list::run(args).await,
             Commands::Show(args) => show::run(args).await,
+            Commands::Export(ExportArgs { command }) => export::run(command).await,
             Commands::Tree(args) => tree::run(args).await,
             Commands::Doctor(args) => doctor::run(args).await,
             Commands::Status(args) => status::run(args).await,
@@ -1452,6 +1459,7 @@ mod tests {
                 transport: None,
                 env: vec![],
                 args: vec![],
+                tools: vec![],
                 engine: None,
             },
         );
@@ -1482,6 +1490,7 @@ mod tests {
                 transport: None,
                 env: vec![],
                 args: vec![],
+                tools: vec![],
                 engine: None,
             },
             &InstalledPlugin {
@@ -1531,6 +1540,7 @@ mod tests {
                 transport: None,
                 env: vec![],
                 args: vec![],
+                tools: vec![],
                 engine: None,
             },
             resolved_rev: "rev-default".to_owned(),

@@ -370,6 +370,7 @@ mod tests {
             transport: None,
             env: vec![],
             args: vec![],
+            tools: vec![],
             engine: None,
         }
     }

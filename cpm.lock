@@ -1,2 +1,14 @@
 version = 1
-generated = "2026-03-25T21:55:01.183810Z"
+generated = "2026-04-01T10:54:09.736154Z"
+
+[[mcp]]
+name = "serena"
+resolved = "2026-04-01T10:54:08.762889Z"
+hash = "sha256:86c1ae3fa6ebad47abb0991c958dd7a4bce12840280dfab013638909bc4656a2"
+scope = "local"
+groups = ["default"]
+transport = "uvx"
+package = "git+https://github.com/oraios/serena"
+entrypoint = "serena"
+args = ["start-mcp-server"]
+tools = ["*"]

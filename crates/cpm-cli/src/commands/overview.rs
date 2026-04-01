@@ -963,6 +963,7 @@ mod tests {
             transport: None,
             env: vec![],
             args: vec![],
+            tools: vec![],
             engine: None,
         }
     }
@@ -1292,6 +1293,7 @@ path = "skills/tracked-skill"
                 transport: None,
                 env: vec![],
                 args: vec![],
+                tools: vec![],
                 engine: None,
             },
             resolved_rev: "aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa".to_owned(),

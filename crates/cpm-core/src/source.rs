@@ -241,13 +241,19 @@ pub async fn resolve_package_transport_version(
         )
         .await
         .map(Some),
-        cpm_types::McpTransport::Uvx { package, .. } => resolve_cached_text(
-            &format!("pypi:{package}"),
-            Duration::from_secs(300),
-            || async move { resolve_pypi_version(client, package, source_rules).await },
-        )
-        .await
-        .map(Some),
+        cpm_types::McpTransport::Uvx { package, .. } => {
+            if package.starts_with("git+https://") || package.starts_with("git+http://") {
+                Ok(None)
+            } else {
+                resolve_cached_text(
+                    &format!("pypi:{package}"),
+                    Duration::from_secs(300),
+                    || async move { resolve_pypi_version(client, package, source_rules).await },
+                )
+                .await
+                .map(Some)
+            }
+        }
         _ => Ok(None),
     }
 }

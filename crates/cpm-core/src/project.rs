@@ -222,6 +222,8 @@ struct LockfileRecord {
     env: Vec<cpm_types::EnvSpec>,
     #[serde(default, skip_serializing_if = "Vec::is_empty")]
     args: Vec<String>,
+    #[serde(default, skip_serializing_if = "Vec::is_empty")]
+    tools: Vec<String>,
     #[serde(skip_serializing_if = "Option::is_none")]
     engine: Option<WorkflowEngine>,
     #[serde(skip_serializing_if = "Option::is_none")]
@@ -861,6 +863,7 @@ fn parse_asset_source(
             transport: None,
             env: Vec::new(),
             args: Vec::new(),
+            tools: vec![],
             engine: None,
         });
     }
@@ -893,6 +896,11 @@ fn parse_asset_source(
     let args = table
         .get("args")
         .map(|value| parse_string_array(value, &format!("{context}.args")))
+        .transpose()?
+        .unwrap_or_default();
+    let tools = table
+        .get("tools")
+        .map(|value| parse_string_array(value, &format!("{context}.tools")))
         .transpose()?
         .unwrap_or_default();
     let env = table
@@ -958,6 +966,7 @@ fn parse_asset_source(
         transport,
         env,
         args,
+        tools,
         engine,
     })
 }
@@ -1069,6 +1078,7 @@ fn is_short_form_asset(source: &AssetSource, default_group_name: &str) -> bool {
         && source.transport.is_none()
         && source.env.is_empty()
         && source.args.is_empty()
+        && source.tools.is_empty()
         && source.engine.is_none()
 }
 
@@ -1265,6 +1275,12 @@ fn render_mcp_source_parts(
         parts.push(format!(
             "args = {}",
             render_toml_value(source.args.clone())?
+        ));
+    }
+    if !source.tools.is_empty() {
+        parts.push(format!(
+            "tools = {}",
+            render_toml_value(source.tools.clone())?
         ));
     }
     Ok(parts)
@@ -1491,6 +1507,7 @@ fn same_asset_except_groups(left: &AssetSource, right: &AssetSource) -> bool {
         && left.transport == right.transport
         && left.env == right.env
         && left.args == right.args
+        && left.tools == right.tools
         && left.engine == right.engine
 }
 
@@ -3379,7 +3396,8 @@ fn github_raw_url(owner: &str, repo: &str, rev: &str, path: &str) -> String {
     format!("https://raw.githubusercontent.com/{owner}/{repo}/{rev}/{path}")
 }
 
-fn rewrite_mcp_source(
+/// Apply runtime source-rule rewrites to MCP transports that carry remote URLs.
+pub fn rewrite_mcp_source(
     source: &AssetSource,
     source_rules: &IndexMap<String, SourceRule>,
 ) -> AssetSource {
@@ -3582,6 +3600,7 @@ impl From<&ResolvedAsset> for LockfileRecord {
             command,
             env: asset.source.env.clone(),
             args,
+            tools: asset.source.tools.clone(),
             engine: asset.source.engine,
             bin_path: asset.bin_path.clone(),
             compiled_path: asset.compiled_path.clone(),
@@ -3657,6 +3676,7 @@ impl LockfileRecord {
             transport,
             env: self.env,
             args: self.args,
+            tools: self.tools,
             engine: self.engine,
         };
         let git = match (
@@ -3776,6 +3796,7 @@ mod tests {
                 transport: None,
                 env: vec![],
                 args: vec![],
+                tools: vec![],
                 engine: None,
             },
         );
@@ -3871,6 +3892,7 @@ mod tests {
                 transport: None,
                 env: vec![],
                 args: vec![],
+                tools: vec![],
                 engine: None,
             },
         );
@@ -3947,6 +3969,7 @@ mod tests {
                 transport: None,
                 env: vec![],
                 args: vec![],
+                tools: vec![],
                 engine: None,
             },
         );
@@ -4002,6 +4025,7 @@ mod tests {
                 transport: None,
                 env: vec![],
                 args: vec![],
+                tools: vec![],
                 engine: None,
             },
         );
@@ -4059,6 +4083,7 @@ mod tests {
                 transport: None,
                 env: vec![],
                 args: vec![],
+                tools: vec![],
                 engine: None,
             },
             resolved_rev: "abc123deadbeef".to_owned(),
@@ -4090,6 +4115,7 @@ mod tests {
             }),
             env: vec![],
             args: vec![],
+            tools: vec![],
             engine: None,
         };
 
@@ -4147,6 +4173,7 @@ mod tests {
             }),
             env: vec![],
             args: vec![],
+            tools: vec![],
             engine: None,
         };
 
@@ -4192,6 +4219,7 @@ mod tests {
             }),
             env: vec![],
             args: vec![],
+            tools: vec![],
             engine: None,
         };
 
@@ -4291,6 +4319,7 @@ mod tests {
             transport: None,
             env: vec![],
             args: vec![],
+            tools: vec![],
             engine: None,
         };
         let mut manifest = Manifest::default();
@@ -4365,6 +4394,7 @@ mod tests {
             }),
             env: vec![],
             args: vec![],
+            tools: vec![],
             engine: None,
         };
         let mut manifest = Manifest::default();
@@ -4432,6 +4462,7 @@ mod tests {
                 transport: None,
                 env: vec![],
                 args: vec![],
+                tools: vec![],
                 engine: None,
             },
             resolved_rev: String::new(),
@@ -4492,6 +4523,7 @@ mod tests {
                 transport: None,
                 env: vec![],
                 args: vec![],
+                tools: vec![],
                 engine: None,
             },
         );
@@ -4510,6 +4542,7 @@ mod tests {
                 transport: None,
                 env: vec![],
                 args: vec![],
+                tools: vec![],
                 engine: None,
             },
         );
@@ -4562,6 +4595,7 @@ mod tests {
                 }),
                 env: vec![],
                 args: vec![],
+                tools: vec![],
                 engine: None,
             },
         );
@@ -4599,6 +4633,7 @@ mod tests {
             }),
             env: vec![],
             args: vec![],
+            tools: vec![],
             engine: None,
         };
         manifest.mcps.insert("zen".into(), default_entry.clone());
@@ -4675,6 +4710,7 @@ args = []
                 }),
                 env: vec![],
                 args: vec![],
+                tools: vec![],
                 engine: None,
             },
         );
@@ -4713,6 +4749,7 @@ args = []
                 transport: None,
                 env: vec![],
                 args: vec![],
+                tools: vec![],
                 engine: None,
             },
             resolved_rev: "a".repeat(40),
@@ -4863,6 +4900,7 @@ shared = { path = "skills/shared", groups = ["default", "dev"] }
                     "$GITHUB_TOKEN",
                 )],
                 args: vec![],
+                tools: vec![],
                 engine: None,
             },
             resolved_rev: "1.4.2".into(),
@@ -4918,6 +4956,7 @@ shared = { path = "skills/shared", groups = ["default", "dev"] }
                     transport: None,
                     env: vec![],
                     args: vec![],
+                    tools: vec![],
                     engine: None,
                 },
                 resolved_rev: "a".repeat(40),
@@ -4990,6 +5029,7 @@ shared = { path = "skills/shared", groups = ["default", "dev"] }
             transport: None,
             env: vec![],
             args: vec![],
+            tools: vec![],
             engine: None,
         };
 
@@ -5024,6 +5064,7 @@ shared = { path = "skills/shared", groups = ["default", "dev"] }
                 transport: None,
                 env: vec![],
                 args: vec![],
+                tools: vec![],
                 engine: None,
             },
             resolved_rev: "a".repeat(40),
@@ -5073,6 +5114,7 @@ shared = { path = "skills/shared", groups = ["default", "dev"] }
                 transport: None,
                 env: vec![],
                 args: vec![],
+                tools: vec![],
                 engine: None,
             },
             resolved_rev: "a".repeat(40),
@@ -5147,6 +5189,7 @@ shared = { path = "skills/shared", groups = ["default", "dev"] }
                     transport: None,
                     env: vec![],
                     args: vec![],
+                    tools: vec![],
                     engine: None,
                 },
                 resolved_rev: "a".repeat(40),
@@ -5252,6 +5295,7 @@ shared = { path = "skills/shared", groups = ["default", "dev"] }
                 transport: None,
                 env: vec![],
                 args: vec![],
+                tools: vec![],
                 engine: None,
             },
             resolved_rev: "a".repeat(40),
@@ -5352,6 +5396,7 @@ shared = { path = "skills/shared", groups = ["default", "dev"] }
                 transport: None,
                 env: vec![],
                 args: vec![],
+                tools: vec![],
                 engine: None,
             },
             resolved_rev: "a".repeat(40),
@@ -5448,6 +5493,7 @@ transport = { npx = { package = "@modelcontextprotocol/server-github", args = ["
                 transport: None,
                 env: vec![],
                 args: vec![],
+                tools: vec![],
                 engine: None,
             },
             resolved_rev: "c6a75d7e0923ec0a754e5554b1c52ef76f0d75f8".into(),
@@ -5529,6 +5575,7 @@ transport = { npx = { package = "@modelcontextprotocol/server-github", args = ["
                 transport: None,
                 env: vec![],
                 args: vec![],
+                tools: vec![],
                 engine: None,
             },
             resolved_rev: "a".repeat(40),
@@ -5595,6 +5642,7 @@ transport = { npx = { package = "@modelcontextprotocol/server-github", args = ["
                 transport: None,
                 env: vec![],
                 args: vec![],
+                tools: vec![],
                 engine: None,
             },
             resolved_rev: String::new(),
@@ -5708,6 +5756,7 @@ url = "https://example.com/legacy"
                 transport: None,
                 env: vec![],
                 args: vec![],
+                tools: vec![],
                 engine: None,
             },
             resolved_rev: String::new(),
@@ -5840,6 +5889,7 @@ url = "https://example.com/legacy"
             transport: None,
             env: vec![],
             args: vec![],
+            tools: vec![],
             engine: None,
         };
         let source_v2 = AssetSource {
@@ -5920,6 +5970,7 @@ url = "https://example.com/legacy"
             transport: None,
             env: vec![],
             args: vec![],
+            tools: vec![],
             engine: None,
         };
         let dev_source = AssetSource {

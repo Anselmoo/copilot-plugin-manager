@@ -347,6 +347,7 @@ mod tests {
                 transport: None,
                 env: vec![],
                 args: vec![],
+                tools: vec![],
                 engine: None,
             },
             resolved_rev: format!("rev-{name}"),

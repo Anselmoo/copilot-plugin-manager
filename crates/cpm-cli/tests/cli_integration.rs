@@ -63,6 +63,7 @@ fn make_global_claim(claimed_by: &Path, hash: &str) -> GlobalClaim {
                 transport: None,
                 env: vec![],
                 args: vec![],
+                tools: vec![],
                 engine: None,
             },
             resolved_rev: "aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa".into(),
@@ -93,6 +94,7 @@ fn make_source(path: &str) -> AssetSource {
         transport: None,
         env: vec![],
         args: vec![],
+        tools: vec![],
         engine: None,
     }
 }
@@ -142,6 +144,7 @@ fn make_instruction_source(path: &str) -> AssetSource {
         transport: None,
         env: vec![],
         args: vec![],
+        tools: vec![],
         engine: None,
     }
 }
@@ -181,6 +184,7 @@ fn write_reporting_fixture(dir: &tempfile::TempDir) {
             transport: None,
             env: vec![],
             args: vec![],
+            tools: vec![],
             engine: None,
         },
     );
@@ -204,6 +208,7 @@ fn write_plugin_manifest(repo_root: &Path, name: &str, url: &str) {
             transport: None,
             env: vec![],
             args: vec![],
+            tools: vec![],
             engine: None,
         },
     );
@@ -223,6 +228,7 @@ fn write_plugin_path_manifest(repo_root: &Path, name: &str, path: &str) {
             transport: None,
             env: vec![],
             args: vec![],
+            tools: vec![],
             engine: None,
         },
     );
@@ -243,6 +249,7 @@ fn seed_plugin_lock(repo_root: &Path, name: &str, url: &str, version: &str, revi
             transport: None,
             env: vec![],
             args: vec![],
+            tools: vec![],
             engine: None,
         },
         resolved_rev: revision.to_owned(),
@@ -860,6 +867,7 @@ fn requested_dev_group_examples_round_trip_in_manifest() {
         transport: None,
         env: vec![],
         args: vec![],
+        tools: vec![],
         engine: None,
     };
 
@@ -892,6 +900,7 @@ fn requested_dev_group_examples_round_trip_in_manifest() {
             }),
             env: vec![],
             args: vec![],
+            tools: vec![],
             engine: None,
         },
     );
@@ -910,6 +919,7 @@ fn requested_dev_group_examples_round_trip_in_manifest() {
             }),
             env: vec![],
             args: vec![],
+            tools: vec![],
             engine: None,
         },
     );
@@ -2110,6 +2120,7 @@ fn status_json_reports_unlocked_assets() {
             transport: None,
             env: vec![],
             args: vec![],
+            tools: vec![],
             engine: None,
         },
     );
@@ -2269,6 +2280,7 @@ fn reset_drops_global_claim_via_canonicalized_repo_path() {
                 transport: None,
                 env: vec![],
                 args: vec![],
+                tools: vec![],
                 engine: None,
             },
             resolved_rev: "aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa".to_owned(),
@@ -2766,6 +2778,151 @@ fn overview_reports_unmanaged_global_mcp_entries_from_config() {
         normalized_path_string(&join_portable_path(home.path(), ".copilot/mcp-config.json"))
             + "#external-server"
     );
+}
+
+#[test]
+fn export_mcp_cloud_emits_local_runner_shape() {
+    let repo = tempfile::TempDir::new().expect("repo tempdir");
+    std::fs::write(
+        repo.path().join("cpm.toml"),
+        r#"
+[mcps]
+serena = { type = "stdio", runner = "uvx", package = "git+https://github.com/oraios/serena", entrypoint = "serena", args = ["start-mcp-server"], tools = ["*"] }
+"#,
+    )
+    .expect("write manifest");
+
+    let lock_output = cpm_bin()
+        .args(["lock"])
+        .current_dir(repo.path())
+        .output()
+        .expect("lock");
+    assert!(
+        lock_output.status.success(),
+        "lock stderr: {}",
+        String::from_utf8_lossy(&lock_output.stderr)
+    );
+
+    let export_output = cpm_bin()
+        .args(["export", "mcp-cloud"])
+        .current_dir(repo.path())
+        .output()
+        .expect("export");
+    assert!(
+        export_output.status.success(),
+        "export stderr: {}",
+        String::from_utf8_lossy(&export_output.stderr)
+    );
+
+    let json: Value = serde_json::from_slice(&export_output.stdout).expect("parse export json");
+    assert_eq!(json["mcpServers"]["serena"]["type"], "local");
+    assert_eq!(json["mcpServers"]["serena"]["command"], "uvx");
+    assert_eq!(json["mcpServers"]["serena"]["tools"][0], "*");
+}
+
+#[test]
+fn export_mcp_cloud_applies_source_rewrites_and_preserves_remote_tools() {
+    let home = tempfile::TempDir::new().expect("home tempdir");
+    let repo = tempfile::TempDir::new().expect("repo tempdir");
+    std::fs::create_dir_all(home.path().join(".config").join("cpm")).expect("mkdir config");
+    std::fs::create_dir_all(
+        home.path()
+            .join("Library")
+            .join("Application Support")
+            .join("cpm"),
+    )
+    .expect("mkdir mac config");
+    let config_contents = r#"
+[sources.mirror]
+url = "https://mirror.example.com/api"
+replace = "https://upstream.example.com/api"
+"#;
+    std::fs::write(
+        home.path().join(".config").join("cpm").join("config.toml"),
+        config_contents,
+    )
+    .expect("write unix user config");
+    std::fs::write(
+        home.path()
+            .join("Library")
+            .join("Application Support")
+            .join("cpm")
+            .join("config.toml"),
+        config_contents,
+    )
+    .expect("write mac user config");
+    std::fs::write(
+        repo.path().join("cpm.toml"),
+        r#"
+[mcps]
+remote = { type = "http", url = "https://upstream.example.com/api/service", tools = ["fetch"] }
+"#,
+    )
+    .expect("write manifest");
+
+    let lock_output = set_isolated_home(
+        cpm_bin().args(["lock"]).current_dir(repo.path()),
+        home.path(),
+    )
+    .output()
+    .expect("lock");
+    assert!(
+        lock_output.status.success(),
+        "lock stderr: {}",
+        String::from_utf8_lossy(&lock_output.stderr)
+    );
+
+    let export_output = set_isolated_home(
+        cpm_bin()
+            .args(["export", "mcp-cloud"])
+            .current_dir(repo.path()),
+        home.path(),
+    )
+    .output()
+    .expect("export");
+    assert!(
+        export_output.status.success(),
+        "export stderr: {}",
+        String::from_utf8_lossy(&export_output.stderr)
+    );
+
+    let json: Value = serde_json::from_slice(&export_output.stdout).expect("parse export json");
+    assert_eq!(json["mcpServers"]["remote"]["type"], "http");
+    assert_eq!(
+        json["mcpServers"]["remote"]["url"],
+        "https://mirror.example.com/api/service"
+    );
+    assert_eq!(json["mcpServers"]["remote"]["tools"][0], "fetch");
+}
+
+#[test]
+fn add_mcp_feedback_does_not_claim_group_activation() {
+    let repo = tempfile::TempDir::new().expect("repo tempdir");
+    std::fs::write(repo.path().join("cpm.toml"), "[mcps]\n").expect("write manifest");
+    std::fs::write(repo.path().join("cpm.lock"), "version = 1\n").expect("write lock");
+
+    let output = cpm_bin()
+        .args([
+            "add",
+            "--mcp",
+            "--url",
+            "https://example.com/mcp",
+            "--group",
+            "research",
+        ])
+        .current_dir(repo.path())
+        .output()
+        .expect("cpm add");
+
+    assert!(
+        output.status.success(),
+        "stderr: {}",
+        String::from_utf8_lossy(&output.stderr)
+    );
+
+    let stdout = String::from_utf8_lossy(&output.stdout);
+    assert!(stdout.contains("added this MCP to group 'research'"));
+    assert!(!stdout.contains("activated group 'research'"));
 }
 
 // ── cpm cache ────────────────────────────────────────────────────────────────
