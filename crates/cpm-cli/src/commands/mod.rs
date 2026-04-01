@@ -38,6 +38,7 @@ use cpm_types::{
 };
 
 mod add;
+mod activate;
 mod auth;
 mod cache;
 mod doctor;
@@ -56,6 +57,7 @@ mod sync;
 mod tree;
 mod update;
 
+pub use activate::ActivateArgs;
 pub use add::AddArgs;
 pub use auth::AuthArgs;
 pub use cache::CacheArgs;
@@ -227,6 +229,9 @@ enum Commands {
     /// Get or set the default scope.
     #[command(display_order = 34)]
     Scope(ScopeArgs),
+    /// Set or clear the active group used by `cpm sync` without `--group`.
+    #[command(display_order = 4)]
+    Activate(ActivateArgs),
 }
 
 impl Cli {
@@ -286,6 +291,7 @@ impl Cli {
             Commands::Run(args) => run::run(args).await,
             Commands::Auth(AuthArgs { command }) => auth::run(command).await,
             Commands::Scope(ScopeArgs { command }) => scope::run(command).await,
+            Commands::Activate(args) => activate::run(args).await,
         }
     }
 }
@@ -1314,7 +1320,10 @@ pub(super) fn build_locked_plugin_asset(
         .clone()
         .unwrap_or_else(|| sha256_hex(fallback_hash_input.as_bytes()));
     let plugin_meta = PluginMeta {
-        registry: installed.registry.clone(),
+        registry: installed
+            .registry
+            .clone()
+            .filter(|r| !r.trim().is_empty()),
         plugin_version: installed.version.clone(),
         source_url: installed.source.clone(),
         plugin_json_hash,

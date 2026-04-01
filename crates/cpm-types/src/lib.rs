@@ -303,6 +303,10 @@ pub struct PartialSettings {
     /// Whether `cpm sync` should compile workflow markdown into `.lock.yml` files.
     #[serde(default, skip_serializing_if = "Option::is_none")]
     pub auto_compile_workflows: Option<bool>,
+    /// The currently active group to use when `cpm sync` is run without `--group`.
+    /// Set via `cpm activate <group>` and cleared via `cpm activate --clear`.
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub active_group: Option<String>,
 }
 
 impl PartialSettings {
@@ -317,6 +321,7 @@ impl PartialSettings {
             && self.auto_groups.is_none()
             && self.verify_on_sync.is_none()
             && self.auto_compile_workflows.is_none()
+            && self.active_group.is_none()
     }
 }
 

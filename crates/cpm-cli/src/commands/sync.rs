@@ -16,7 +16,7 @@ use cpm_core::{
     resolver::{check_lock_freshness, detect_global_install_conflicts, reconcile_global_lockfile},
     CpmError,
 };
-use cpm_types::{AssetKind, Lockfile, ResolvedAsset, Scope};
+use cpm_types::{AssetKind, GlobalLockfile, Lockfile, ResolvedAsset, Scope, SourceRule};
 
 use crate::progress::{OperationKind, OperationStatus, ProgressReporter};
 
@@ -83,8 +83,14 @@ pub async fn run(args: SyncArgs) -> Result<(), CpmError> {
     let existing_lock = load_lockfile(lockfile_path).unwrap_or_default();
     let runtime = load_runtime_config(&manifest)?;
     let scope_filter = args.scope.map(Into::into);
+    // Use the CLI `--group` flag first; fall back to the persisted active group
+    // from settings (set via `cpm activate <group>`).
+    let install_group: Option<String> = args
+        .group
+        .clone()
+        .or_else(|| runtime.settings.active_group.clone());
     print_sync_selection_summary(
-        args.group.as_deref(),
+        install_group.as_deref(),
         &runtime.settings.auto_groups,
         scope_filter,
     );
@@ -94,7 +100,7 @@ pub async fn run(args: SyncArgs) -> Result<(), CpmError> {
         .filter(|(_, source)| {
             should_install(
                 &source.groups,
-                args.group.as_deref(),
+                install_group.as_deref(),
                 &runtime.settings.auto_groups,
                 scope_filter,
                 effective_plugin_scope(source),
@@ -118,7 +124,7 @@ pub async fn run(args: SyncArgs) -> Result<(), CpmError> {
         .filter(|asset| {
             should_install(
                 &asset.source.groups,
-                args.group.as_deref(),
+                install_group.as_deref(),
                 &runtime.settings.auto_groups,
                 scope_filter,
                 effective_asset_scope(asset),
@@ -142,7 +148,7 @@ pub async fn run(args: SyncArgs) -> Result<(), CpmError> {
             asset.kind != AssetKind::Plugin
                 && should_install(
                     &asset.source.groups,
-                    args.group.as_deref(),
+                    install_group.as_deref(),
                     &runtime.settings.auto_groups,
                     scope_filter,
                     asset.scope,
@@ -183,7 +189,7 @@ pub async fn run(args: SyncArgs) -> Result<(), CpmError> {
                 plugin_asset_is_delegated(asset)
                     && should_install(
                         &asset.source.groups,
-                        args.group.as_deref(),
+                        install_group.as_deref(),
                         &runtime.settings.auto_groups,
                         scope_filter,
                         effective_asset_scope(asset),
@@ -241,7 +247,7 @@ pub async fn run(args: SyncArgs) -> Result<(), CpmError> {
     for stale in stale_natively_managed_assets(
         &existing_lock,
         &lockfile,
-        args.group.as_deref(),
+        install_group.as_deref(),
         &runtime.settings.auto_groups,
         scope_filter,
     ) {
@@ -252,7 +258,7 @@ pub async fn run(args: SyncArgs) -> Result<(), CpmError> {
         !plugin_asset_is_delegated(asset)
             && should_install(
                 &asset.source.groups,
-                args.group.as_deref(),
+                install_group.as_deref(),
                 &runtime.settings.auto_groups,
                 scope_filter,
                 asset.scope,
@@ -335,8 +341,30 @@ pub async fn run(args: SyncArgs) -> Result<(), CpmError> {
     if reconciled != global_lockfile {
         write_global_lockfile(&reconciled)?;
     }
+
+    // Seed global-scope assets from the global lockfile (claimed by any repo)
+    // into the current environment.  This ensures that a fresh project or
+    // machine gets all globally-managed assets even if they were originally
+    // added from a different repository.
+    let global_seeded = install_global_claims(
+        &global_lockfile,
+        &lockfile,
+        repo_root,
+        &client,
+        token.as_deref(),
+        &runtime.source_rules,
+        &reporter,
+    )
+    .await?;
+
     write_lockfile(lockfile_path, &lockfile)?;
     print_plugin_summary(plugin_summary);
+    if global_seeded > 0 {
+        println!(
+            "{} seeded {global_seeded} global asset(s) from ~/.copilot/cpm.lock",
+            style_success("✓"),
+        );
+    }
     println!(
         "{} synced and wrote {}",
         style_success("✓"),
@@ -351,7 +379,7 @@ pub async fn run(args: SyncArgs) -> Result<(), CpmError> {
                 !plugin_asset_is_delegated(asset)
                     && should_install(
                         &asset.source.groups,
-                        args.group.as_deref(),
+                        install_group.as_deref(),
                         &runtime.settings.auto_groups,
                         scope_filter,
                         asset.scope,
@@ -447,6 +475,82 @@ impl From<ScopeArg> for Scope {
             ScopeArg::Global => Scope::Global,
         }
     }
+}
+
+/// Materialize globally-claimed assets from other repositories into the
+/// current environment.
+///
+/// Iterates over all `[[claim]]` entries in the global lockfile and installs
+/// any **global-scope** asset that is not already covered by the local
+/// lockfile.  This is the inverse of `reconcile_global_lockfile` (which writes
+/// local claims *into* the global lock) and ensures that a fresh project or a
+/// freshly-provisioned machine gets all globally-managed assets even when they
+/// were originally added from a different repository.
+///
+/// Returns the number of assets that were newly seeded.
+async fn install_global_claims(
+    global_lockfile: &GlobalLockfile,
+    local_lockfile: &Lockfile,
+    repo_root: &std::path::Path,
+    client: &reqwest::Client,
+    token: Option<&str>,
+    source_rules: &indexmap::IndexMap<String, SourceRule>,
+    reporter: &ProgressReporter,
+) -> Result<usize, CpmError> {
+    // Build a set of (name, kind) keys already present in the local lockfile
+    // so we don't re-install them.
+    let local_keys: HashSet<(String, AssetKind)> = local_lockfile
+        .all_assets()
+        .map(|a| (a.name.clone(), a.kind))
+        .collect();
+
+    // Collect unique global-scope assets across all claims, deduplicating by
+    // (name, kind).
+    let mut seen: HashSet<(String, AssetKind)> = HashSet::new();
+    let mut to_seed: Vec<ResolvedAsset> = Vec::new();
+
+    for claim in &global_lockfile.claims {
+        let asset = &claim.asset;
+        if asset.scope != Scope::Global {
+            continue;
+        }
+        let key = (asset.name.clone(), asset.kind);
+        if local_keys.contains(&key) || !seen.insert(key) {
+            continue;
+        }
+        to_seed.push(asset.clone());
+    }
+
+    if to_seed.is_empty() {
+        return Ok(0);
+    }
+
+    let mut seeded = 0;
+    for asset in &to_seed {
+        let mut handle = reporter.begin_operation(
+            OperationKind::Install,
+            format!("global:{}:{}", asset.kind, asset.name),
+        );
+        handle.set_status(OperationStatus::Running);
+        let result = install_resolved_asset(
+            asset,
+            client,
+            token,
+            repo_root,
+            Some(reporter),
+            source_rules,
+        )
+        .await;
+        handle.finish(if result.is_ok() {
+            OperationStatus::Succeeded
+        } else {
+            OperationStatus::Failed
+        });
+        result?;
+        seeded += 1;
+    }
+
+    Ok(seeded)
 }
 
 #[cfg(test)]

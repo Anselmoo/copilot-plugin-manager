@@ -33,6 +33,9 @@ pub struct EffectiveSettings {
     pub verify_on_sync: bool,
     /// Whether workflow markdown should be compiled into `.lock.yml` outputs.
     pub auto_compile_workflows: bool,
+    /// The currently active group, set via `cpm activate`.
+    /// When set, `cpm sync` without `--group` will use this group.
+    pub active_group: Option<String>,
 }
 
 impl Default for EffectiveSettings {
@@ -47,6 +50,7 @@ impl Default for EffectiveSettings {
             auto_groups: vec!["default".to_owned()],
             verify_on_sync: false,
             auto_compile_workflows: false,
+            active_group: None,
         }
     }
 }
@@ -174,6 +178,10 @@ pub fn resolve_settings(
             .or(repo_settings.auto_compile_workflows)
             .or(user_settings.auto_compile_workflows)
             .unwrap_or(defaults.auto_compile_workflows),
+        active_group: std::env::var("CPM_ACTIVE_GROUP").ok()
+            .filter(|s| !s.trim().is_empty())
+            .or_else(|| repo_settings.active_group.clone())
+            .or_else(|| user_settings.active_group.clone()),
     })
 }
 

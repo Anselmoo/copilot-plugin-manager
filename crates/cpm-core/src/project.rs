@@ -1371,6 +1371,18 @@ fn write_settings(output: &mut String, settings: &PartialSettings) -> Result<(),
             render_toml_value(verify_on_sync)?
         ));
     }
+    if let Some(auto_compile_workflows) = settings.auto_compile_workflows {
+        output.push_str(&format!(
+            "auto_compile_workflows = {}\n",
+            render_toml_value(auto_compile_workflows)?
+        ));
+    }
+    if let Some(active_group) = &settings.active_group {
+        output.push_str(&format!(
+            "active_group = {}\n",
+            render_toml_value(active_group.clone())?
+        ));
+    }
     output.push('\n');
     Ok(())
 }
