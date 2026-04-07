@@ -168,6 +168,10 @@ cmd = "ruff format --check python tests"
 help = "Hook-friendly Python format check with fix guidance"
 shell = "ruff format --check python tests || { echo; echo \"Python formatting issues found in the staged snapshot.\"; echo \"Run: uv run --group dev poe format\"; echo \"Then restage the changes: git add -u python tests\"; exit 1; }"
 
+[tool.poe.tasks.python-format-hook]
+help = "Pre-commit Python formatting: autofix locally, check-only in CI"
+shell = "if [ -n \"${CI:-}\" ]; then ruff format --check python tests; else ruff format python tests && git add -u python tests && echo \"Autoformatted Python files and restaged them.\"; fi"
+
 # ── Linting ────────────────────────────────────────────────────────────────
 [tool.poe.tasks.ruff-check]
 help = "Lint Python sources with ruff"
@@ -238,6 +242,10 @@ cmd = "cargo fmt --all -- --check"
 [tool.poe.tasks.rust-fmt-check-hook]
 help = "Hook-friendly Rust format check with fix guidance"
 shell = "cargo fmt --all -- --check || { echo; echo \"Rust formatting issues found in the staged snapshot.\"; echo \"Run: uv run --group dev poe rust-fmt\"; echo \"Then restage the changes: git add -u crates\"; exit 1; }"
+
+[tool.poe.tasks.rust-fmt-hook]
+help = "Pre-commit Rust formatting: autofix locally, check-only in CI"
+shell = "if [ -n \"${CI:-}\" ]; then cargo fmt --all -- --check; else cargo fmt --all && git add -u crates && echo \"Autoformatted Rust files and restaged them.\"; fi"
 
 [tool.poe.tasks.rust-clippy]
 help = "Run clippy lints on the Rust workspace"

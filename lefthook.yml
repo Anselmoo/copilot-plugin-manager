@@ -1,9 +1,9 @@
 pre-commit:
-  parallel: true
+  parallel: false
   commands:
     python-format:
       glob: "{python,tests}/**/*.py"
-      run: uv run --group dev poe python-format-check-hook
+      run: uv run --group dev poe python-format-hook
     python-lint:
       glob: "{python,tests}/**/*.py"
       run: uv run ruff check {staged_files}
@@ -12,7 +12,7 @@ pre-commit:
       run: uv run ty check python tests
     rust-format:
       glob: "crates/**/*.rs"
-      run: uv run --group dev poe rust-fmt-check-hook
+      run: uv run --group dev poe rust-fmt-hook
     manifest-toml:
       glob: "{cpm.toml,cpm-reference.toml,scripts/check_committed_toml.py}"
       run: uv run --group dev poe manifests-check

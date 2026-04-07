@@ -6,7 +6,9 @@ use cpm_core::{
     project::{load_global_lockfile, load_lockfile},
     CpmError,
 };
-use cpm_types::{AssetKind, GlobalLockfile, LockedFile, Lockfile, ResolvedAsset, SubAsset, SubAssetOwnership};
+use cpm_types::{
+    AssetKind, GlobalLockfile, LockedFile, Lockfile, ResolvedAsset, SubAsset, SubAssetOwnership,
+};
 use serde::Serialize;
 use std::collections::HashSet;
 

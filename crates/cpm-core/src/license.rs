@@ -170,8 +170,15 @@ async fn detect_github_license(
     // back to the repo root.
     if !repo.path.is_empty() {
         let subdir = repo.path.join("/");
-        if let Some(license) =
-            fetch_raw_license(repo, resolved_rev, client, token, source_rules, Some(&subdir)).await
+        if let Some(license) = fetch_raw_license(
+            repo,
+            resolved_rev,
+            client,
+            token,
+            source_rules,
+            Some(&subdir),
+        )
+        .await
         {
             return license;
         }
@@ -550,8 +557,7 @@ mod tests {
 
     #[test]
     fn parse_github_repo_plain_url_has_empty_path() {
-        let repo = parse_github_repo("https://github.com/owner/repo")
-            .expect("should parse");
+        let repo = parse_github_repo("https://github.com/owner/repo").expect("should parse");
         assert_eq!(repo.owner, "owner");
         assert_eq!(repo.repo, "repo");
         assert!(repo.path.is_empty());
@@ -559,10 +565,8 @@ mod tests {
 
     #[test]
     fn parse_github_repo_raw_url_has_empty_path() {
-        let repo = parse_github_repo(
-            "https://raw.githubusercontent.com/owner/repo/main/file.md",
-        )
-        .expect("should parse");
+        let repo = parse_github_repo("https://raw.githubusercontent.com/owner/repo/main/file.md")
+            .expect("should parse");
         assert_eq!(repo.owner, "owner");
         assert_eq!(repo.repo, "repo");
         assert!(repo.path.is_empty());
@@ -572,8 +576,8 @@ mod tests {
     fn parse_github_repo_non_tree_extra_segments_captured() {
         // A URL like github.com/owner/repo/skills/canvas keeps the extra
         // segments as path (no tree/blob prefix).
-        let repo = parse_github_repo("https://github.com/owner/repo/skills/canvas")
-            .expect("should parse");
+        let repo =
+            parse_github_repo("https://github.com/owner/repo/skills/canvas").expect("should parse");
         assert_eq!(repo.path, vec!["skills", "canvas"]);
     }
 }

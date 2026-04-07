@@ -178,7 +178,8 @@ pub fn resolve_settings(
             .or(repo_settings.auto_compile_workflows)
             .or(user_settings.auto_compile_workflows)
             .unwrap_or(defaults.auto_compile_workflows),
-        active_group: std::env::var("CPM_ACTIVE_GROUP").ok()
+        active_group: std::env::var("CPM_ACTIVE_GROUP")
+            .ok()
             .filter(|s| !s.trim().is_empty())
             .or_else(|| repo_settings.active_group.clone())
             .or_else(|| user_settings.active_group.clone()),

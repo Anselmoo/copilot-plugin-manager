@@ -352,7 +352,13 @@ pub async fn run(args: SyncArgs) -> Result<(), CpmError> {
         repo_root,
         &client,
         token.as_deref(),
+        scope_filter,
+        &runtime.settings,
         &runtime.source_rules,
+        &installed_plugins
+            .iter()
+            .filter_map(|plugin| plugin.name.clone())
+            .collect(),
         &reporter,
     )
     .await?;
@@ -428,6 +434,15 @@ fn stale_natively_managed_assets(
     let new_map: HashMap<(String, AssetKind), Scope> = new_lock
         .all_assets()
         .filter(|asset| !plugin_asset_is_delegated(asset))
+        .filter(|asset| {
+            should_install(
+                &asset.source.groups,
+                install_group,
+                auto_groups,
+                scope_filter,
+                asset.scope,
+            )
+        })
         .map(|a| ((a.name.clone(), a.kind), a.scope))
         .collect();
 
@@ -435,13 +450,9 @@ fn stale_natively_managed_assets(
         .all_assets()
         .filter(|asset| !plugin_asset_is_delegated(asset))
         .filter(|a| {
-            should_install(
-                &a.source.groups,
-                install_group,
-                auto_groups,
-                scope_filter,
-                a.scope,
-            )
+            scope_filter
+                .map(|requested| requested == a.scope)
+                .unwrap_or(true)
         })
         .filter(|a| match new_map.get(&(a.name.clone(), a.kind)) {
             None => true,               // Removed from manifest.
@@ -494,9 +505,16 @@ async fn install_global_claims(
     repo_root: &std::path::Path,
     client: &reqwest::Client,
     token: Option<&str>,
+    scope_filter: Option<Scope>,
+    settings: &cpm_core::config::EffectiveSettings,
     source_rules: &indexmap::IndexMap<String, SourceRule>,
+    installed_plugin_names: &HashSet<String>,
     reporter: &ProgressReporter,
 ) -> Result<usize, CpmError> {
+    if scope_filter == Some(Scope::Local) {
+        return Ok(0);
+    }
+
     // Build a set of (name, kind) keys already present in the local lockfile
     // so we don't re-install them.
     let local_keys: HashSet<(String, AssetKind)> = local_lockfile
@@ -526,7 +544,25 @@ async fn install_global_claims(
     }
 
     let mut seeded = 0;
+    let mut plugin_ops = Vec::new();
     for asset in &to_seed {
+        if plugin_asset_is_delegated(asset) {
+            if installed_plugin_names.contains(&asset.name) {
+                continue;
+            }
+            enforce_license_policy(asset, settings)?;
+            let requested_spec = plugin_requested_spec(&asset.name, &asset.source);
+            log_delegated_plugin_strategy(
+                "sync",
+                &asset.name,
+                &plugin_source_display(&asset.name, &asset.source),
+                &requested_spec,
+            );
+            plugin_ops.push(PluginOperation::install(&asset.name, requested_spec));
+            continue;
+        }
+
+        enforce_license_policy(asset, settings)?;
         let mut handle = reporter.begin_operation(
             OperationKind::Install,
             format!("global:{}:{}", asset.kind, asset.name),
@@ -548,6 +584,10 @@ async fn install_global_claims(
         });
         result?;
         seeded += 1;
+    }
+
+    if !plugin_ops.is_empty() {
+        seeded += run_plugin_operations(plugin_ops).await?.installed;
     }
 
     Ok(seeded)
@@ -697,5 +737,20 @@ mod tests {
         let stale = stale_non_plugin_assets(&existing, &new_lock, None, &[], Some(Scope::Global));
         assert_eq!(stale.len(), 1);
         assert_eq!(stale[0].name, "global-skill");
+    }
+
+    #[test]
+    fn stale_assets_include_previously_active_group_after_group_switch() {
+        let mut existing = Lockfile::new();
+        let mut dev_skill = make_test_asset("dev-skill", AssetKind::Skill, Scope::Local);
+        dev_skill.source.groups = "dev".into();
+        existing.skills.push(dev_skill.clone());
+
+        let mut new_lock = Lockfile::new();
+        new_lock.skills.push(dev_skill);
+
+        let stale = stale_non_plugin_assets(&existing, &new_lock, Some("research"), &[], None);
+        assert_eq!(stale.len(), 1);
+        assert_eq!(stale[0].name, "dev-skill");
     }
 }

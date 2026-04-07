@@ -1,9 +1,10 @@
 version = 1
-generated = "2026-04-01T10:54:09.736154Z"
+generated = "2026-04-07T19:51:40.433214Z"
 
 [[mcp]]
 name = "serena"
-resolved = "2026-04-01T10:54:08.762889Z"
+rev = "946fdd558f7153c88cd648dd611f95ebb63951e5"
+resolved = "2026-04-07T19:51:40.433214Z"
 hash = "sha256:86c1ae3fa6ebad47abb0991c958dd7a4bce12840280dfab013638909bc4656a2"
 scope = "local"
 groups = ["default"]

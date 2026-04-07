@@ -903,6 +903,12 @@ fn parse_asset_source(
         .map(|value| parse_string_array(value, &format!("{context}.tools")))
         .transpose()?
         .unwrap_or_default();
+    if !tools.is_empty() && kind != AssetKind::Mcp {
+        return Err(CpmError::Parse {
+            file: "cpm.toml".to_owned(),
+            msg: format!("{context}.tools is only supported for MCP sources"),
+        });
+    }
     let env = table
         .get("env")
         .map(|value| parse_env_specs(value, &format!("{context}.env")))
@@ -2594,13 +2600,15 @@ async fn prepare_mcp_asset(
         Some(rev) => rev.to_owned(),
         None => match source.transport.as_ref() {
             Some(transport @ (McpTransport::Npx { .. } | McpTransport::Uvx { .. })) => {
-                if let Some(rev) = source.rev.clone() {
-                    rev
-                } else {
-                    resolve_package_transport_version(client, transport, source_rules)
-                        .await?
-                        .unwrap_or_default()
-                }
+                resolve_package_transport_version(
+                    client,
+                    transport,
+                    token,
+                    source.rev.as_deref(),
+                    source_rules,
+                )
+                .await?
+                .unwrap_or_default()
             }
             Some(McpTransport::Docker { image, .. }) => source
                 .rev
@@ -3786,6 +3794,8 @@ mod tests {
     use super::*;
     use crate::paths::join_portable_path;
     use tempfile::TempDir;
+    use wiremock::matchers::{method, path};
+    use wiremock::{Mock, MockServer, ResponseTemplate};
 
     #[tokio::test]
     async fn apply_manifest_materializes_local_skill_and_populates_lock() {
@@ -4212,6 +4222,79 @@ mod tests {
         assert_eq!(lockfile.mcps.len(), 1);
         assert_eq!(lockfile.mcps[0].resolved_rev, "1.2.3");
         assert_eq!(lockfile.mcps[0].source.rev.as_deref(), Some("1.2.3"));
+    }
+
+    #[tokio::test]
+    async fn add_single_git_backed_package_mcp_resolves_commit_sha() {
+        let repo = TempDir::new().expect("tempdir");
+        let server = MockServer::start().await;
+        Mock::given(method("GET"))
+            .and(path("/api/repos/oraios/serena"))
+            .respond_with(ResponseTemplate::new(200).set_body_json(serde_json::json!({
+                "default_branch": "main"
+            })))
+            .mount(&server)
+            .await;
+        Mock::given(method("GET"))
+            .and(path("/api/repos/oraios/serena/commits/main"))
+            .respond_with(ResponseTemplate::new(200).set_body_json(serde_json::json!({
+                "sha": "fedcba9876543210fedcba9876543210fedcba98"
+            })))
+            .mount(&server)
+            .await;
+
+        let client = reqwest::Client::new();
+        let mut source_rules = IndexMap::new();
+        source_rules.insert(
+            "github-api".to_owned(),
+            SourceRule {
+                url: format!("{}/api", server.uri()),
+                token_env: None,
+                replace: Some("https://api.github.com".to_owned()),
+            },
+        );
+        let mcp_source = AssetSource {
+            url: None,
+            rev: None,
+            path: None,
+            groups: "default".into(),
+            scope: Scope::Local,
+            transport: Some(McpTransport::Uvx {
+                package: "git+https://github.com/oraios/serena".to_owned(),
+                entrypoint: Some("serena".to_owned()),
+                args: vec!["start-mcp-server".to_owned()],
+            }),
+            env: vec![],
+            args: vec![],
+            tools: vec!["*".to_owned()],
+            engine: None,
+        };
+
+        let lockfile = add_single_asset(
+            AssetKind::Mcp,
+            "serena",
+            &mcp_source,
+            &client,
+            None,
+            ApplyOptions {
+                repo_root: repo.path(),
+                install: false,
+                install_group: None,
+                install_scope: None,
+                settings: &crate::config::EffectiveSettings::default(),
+                source_rules: &source_rules,
+                existing_lock: None,
+                download_progress: None,
+            },
+        )
+        .await
+        .expect("git-backed package MCP add should resolve a commit SHA");
+
+        assert_eq!(lockfile.mcps.len(), 1);
+        assert_eq!(
+            lockfile.mcps[0].resolved_rev,
+            "fedcba9876543210fedcba9876543210fedcba98"
+        );
     }
 
     #[tokio::test]
@@ -4883,6 +4966,26 @@ shared = { path = "skills/shared", groups = ["default", "dev"] }
             Vec::from(manifest.skills["shared"].groups.clone()),
             vec!["default".to_owned(), "dev".to_owned()]
         );
+    }
+
+    #[test]
+    fn load_manifest_rejects_tools_on_non_mcp_sources() {
+        let dir = TempDir::new().expect("tempdir");
+        let path = dir.path().join("cpm.toml");
+        std::fs::write(
+            &path,
+            r#"
+[plugins]
+demo = { url = "https://example.com/plugin", tools = ["fetch"] }
+"#,
+        )
+        .expect("write manifest");
+
+        let err = load_manifest(&path).expect_err("non-MCP tools should fail at parse time");
+        assert!(matches!(err, CpmError::Parse { .. }));
+        if let CpmError::Parse { msg, .. } = err {
+            assert!(msg.contains("plugins.demo.tools is only supported for MCP sources"));
+        }
     }
 
     #[test]

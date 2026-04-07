@@ -13,8 +13,9 @@ use cpm_core::project::{
 };
 use cpm_core::resolver::canonical_repo_root;
 use cpm_types::{
-    AssetKind, AssetOwnership, AssetSource, GlobalClaim, GlobalLockfile, Lockfile, Manifest,
-    ManifestGroup, McpTransport, PluginMeta, ResolvedAsset, Scope, SubAsset, SubAssetOwnership,
+    AssetKind, AssetOwnership, AssetSource, GlobalClaim, GlobalLockfile, LicenseInfo, Lockfile,
+    Manifest, ManifestGroup, McpTransport, PluginMeta, ResolvedAsset, Scope, SubAsset,
+    SubAssetOwnership,
 };
 use serde_json::Value;
 
@@ -45,12 +46,8 @@ fn write_global_skill_manifest(repo_root: &Path, asset_path: &Path) {
 }
 
 fn make_global_claim(claimed_by: &Path, hash: &str) -> GlobalClaim {
-    GlobalClaim::new(
-        if claimed_by.exists() {
-            canonical_repo_root(claimed_by).expect("canonical claimed_by")
-        } else {
-            Utf8PathBuf::from(portable_path_string(claimed_by))
-        },
+    make_global_claim_from_asset(
+        claimed_by,
         ResolvedAsset {
             name: "shared".into(),
             kind: AssetKind::Skill,
@@ -72,6 +69,94 @@ fn make_global_claim(claimed_by: &Path, hash: &str) -> GlobalClaim {
             scope: Scope::Global,
             ownership: AssetOwnership::Upstream,
             files: vec![Utf8PathBuf::from("shared/SKILL.md").into()],
+            executable: vec![],
+            file_hashes: Default::default(),
+            git: None,
+            sub_assets: vec![],
+            license: None,
+            bin_path: None,
+            compiled_path: None,
+            plugin_meta: None,
+        },
+    )
+}
+
+fn canonical_claimed_by(claimed_by: &Path) -> Utf8PathBuf {
+    if claimed_by.exists() {
+        canonical_repo_root(claimed_by).expect("canonical claimed_by")
+    } else {
+        Utf8PathBuf::from(portable_path_string(claimed_by))
+    }
+}
+
+fn make_global_claim_from_asset(claimed_by: &Path, asset: ResolvedAsset) -> GlobalClaim {
+    GlobalClaim::new(canonical_claimed_by(claimed_by), asset)
+}
+
+fn make_global_local_skill_claim(
+    claimed_by: &Path,
+    source_path: &Path,
+    license: Option<LicenseInfo>,
+) -> GlobalClaim {
+    make_global_claim_from_asset(
+        claimed_by,
+        ResolvedAsset {
+            name: "shared".into(),
+            kind: AssetKind::Skill,
+            source: AssetSource {
+                url: None,
+                rev: None,
+                path: Some(Utf8PathBuf::from(normalized_path_string(source_path))),
+                groups: "default".into(),
+                scope: Scope::Global,
+                transport: None,
+                env: vec![],
+                args: vec![],
+                tools: vec![],
+                engine: None,
+            },
+            resolved_rev: "aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa".into(),
+            resolved_date: chrono::Utc::now(),
+            hash: "sha256:shared".into(),
+            scope: Scope::Global,
+            ownership: AssetOwnership::Upstream,
+            files: vec![Utf8PathBuf::from("shared/SKILL.md").into()],
+            executable: vec![],
+            file_hashes: Default::default(),
+            git: None,
+            sub_assets: vec![],
+            license,
+            bin_path: None,
+            compiled_path: None,
+            plugin_meta: None,
+        },
+    )
+}
+
+fn make_global_delegated_plugin_claim(claimed_by: &Path, name: &str, request: &str) -> GlobalClaim {
+    make_global_claim_from_asset(
+        claimed_by,
+        ResolvedAsset {
+            name: name.to_owned(),
+            kind: AssetKind::Plugin,
+            source: AssetSource {
+                url: Some(request.to_owned()),
+                rev: None,
+                path: None,
+                groups: "default".into(),
+                scope: Scope::Global,
+                transport: None,
+                env: vec![],
+                args: vec![],
+                tools: vec![],
+                engine: None,
+            },
+            resolved_rev: "rev-install".to_owned(),
+            resolved_date: chrono::Utc::now(),
+            hash: "sha256:delegated-plugin".to_owned(),
+            scope: Scope::Global,
+            ownership: AssetOwnership::Upstream,
+            files: vec![],
             executable: vec![],
             file_hashes: Default::default(),
             git: None,
@@ -1685,6 +1770,147 @@ fn sync_plugin_delegates_install_and_writes_lock() {
     assert_eq!(lock.plugins[0].resolved_rev, "rev-install");
 }
 
+#[test]
+fn sync_scope_local_does_not_seed_global_claims() {
+    let home = tempfile::TempDir::new().expect("home tempdir");
+    let repo = tempfile::TempDir::new().expect("repo tempdir");
+    let source_skill = join_portable_path(repo.path(), "shared-source");
+    std::fs::create_dir_all(&source_skill).expect("mkdir source");
+    std::fs::write(source_skill.join("SKILL.md"), "# Shared\n").expect("write source skill");
+    write_manifest(&repo.path().join("cpm.toml"), &Manifest::default()).expect("write manifest");
+    write_lockfile(&repo.path().join("cpm.lock"), &Lockfile::new()).expect("write lock");
+
+    let mut global_lock = GlobalLockfile::new();
+    global_lock.claims.push(make_global_local_skill_claim(
+        Path::new("/tmp/other-repo"),
+        &source_skill,
+        None,
+    ));
+    write_global_lockfile_to(
+        &join_portable_path(home.path(), ".copilot/cpm.lock"),
+        &global_lock,
+    )
+    .expect("write global lock");
+
+    let output = cpm_bin()
+        .args(["sync", "--scope", "local"])
+        .env("HOME", home.path())
+        .env("USERPROFILE", home.path())
+        .env("APPDATA", home.path().join("AppData").join("Roaming"))
+        .current_dir(repo.path())
+        .output()
+        .expect("sync");
+    assert!(
+        output.status.success(),
+        "stderr: {}",
+        String::from_utf8_lossy(&output.stderr)
+    );
+
+    assert!(
+        !join_portable_path(home.path(), ".copilot/skills/shared/SKILL.md").exists(),
+        "local-only sync must not seed global assets"
+    );
+}
+
+#[test]
+fn sync_blocks_seeded_global_assets_that_violate_license_policy() {
+    let home = tempfile::TempDir::new().expect("home tempdir");
+    let repo = tempfile::TempDir::new().expect("repo tempdir");
+    let source_skill = join_portable_path(repo.path(), "shared-source");
+    std::fs::create_dir_all(&source_skill).expect("mkdir source");
+    std::fs::write(source_skill.join("SKILL.md"), "# Shared\n").expect("write source skill");
+    std::fs::write(
+        repo.path().join("cpm.toml"),
+        r#"
+[settings]
+license_policy = "allow-list"
+allowed_licenses = ["MIT"]
+
+[skills]
+"#,
+    )
+    .expect("write manifest");
+    write_lockfile(&repo.path().join("cpm.lock"), &Lockfile::new()).expect("write lock");
+
+    let mut global_lock = GlobalLockfile::new();
+    global_lock.claims.push(make_global_local_skill_claim(
+        Path::new("/tmp/other-repo"),
+        &source_skill,
+        Some(LicenseInfo {
+            spdx: "GPL-3.0-only".to_owned(),
+            url: None,
+            verified: false,
+        }),
+    ));
+    write_global_lockfile_to(
+        &join_portable_path(home.path(), ".copilot/cpm.lock"),
+        &global_lock,
+    )
+    .expect("write global lock");
+
+    let output = cpm_bin()
+        .args(["sync"])
+        .env("HOME", home.path())
+        .env("USERPROFILE", home.path())
+        .env("APPDATA", home.path().join("AppData").join("Roaming"))
+        .current_dir(repo.path())
+        .output()
+        .expect("sync");
+    assert!(
+        !output.status.success(),
+        "license violation should fail sync"
+    );
+    let stderr = String::from_utf8_lossy(&output.stderr);
+    assert!(
+        stderr.contains("license policy violation"),
+        "expected license-policy failure, got: {stderr}"
+    );
+}
+
+#[test]
+fn sync_seeds_delegated_global_plugins_via_copilot_install() {
+    let home = tempfile::TempDir::new().expect("home tempdir");
+    let fake_copilot = tempfile::TempDir::new().expect("copilot tempdir");
+    let repo = tempfile::TempDir::new().expect("repo tempdir");
+    let (copilot_bin, log_path) = fake_copilot_env(&home, &fake_copilot);
+    write_manifest(&repo.path().join("cpm.toml"), &Manifest::default()).expect("write manifest");
+    write_lockfile(&repo.path().join("cpm.lock"), &Lockfile::new()).expect("write lock");
+
+    let mut global_lock = GlobalLockfile::new();
+    global_lock.claims.push(make_global_delegated_plugin_claim(
+        Path::new("/tmp/other-repo"),
+        "pptx",
+        "pptx@awesome-copilot",
+    ));
+    write_global_lockfile_to(
+        &join_portable_path(home.path(), ".copilot/cpm.lock"),
+        &global_lock,
+    )
+    .expect("write global lock");
+
+    let output = cpm_bin()
+        .args(["sync"])
+        .env("HOME", home.path())
+        .env("USERPROFILE", home.path())
+        .env("APPDATA", home.path().join("AppData").join("Roaming"))
+        .env("CPM_COPILOT_BIN", &copilot_bin)
+        .env("CPM_TEST_LOG", &log_path)
+        .current_dir(repo.path())
+        .output()
+        .expect("sync");
+    assert!(
+        output.status.success(),
+        "stderr: {}",
+        String::from_utf8_lossy(&output.stderr)
+    );
+
+    let log = std::fs::read_to_string(&log_path).expect("read log");
+    assert!(
+        log.contains("plugin install pptx@awesome-copilot"),
+        "expected delegated plugin seeding to use Copilot install\n{log}"
+    );
+}
+
 // ── cpm list ──────────────────────────────────────────────────────────────────
 
 #[test]
@@ -2787,7 +3013,7 @@ fn export_mcp_cloud_emits_local_runner_shape() {
         repo.path().join("cpm.toml"),
         r#"
 [mcps]
-serena = { type = "stdio", runner = "uvx", package = "git+https://github.com/oraios/serena", entrypoint = "serena", args = ["start-mcp-server"], tools = ["*"] }
+serena = { rev = "946fdd558f7153c88cd648dd611f95ebb63951e5", type = "stdio", runner = "uvx", package = "git+https://github.com/oraios/serena", entrypoint = "serena", args = ["start-mcp-server"], tools = ["*"] }
 "#,
     )
     .expect("write manifest");
@@ -2923,6 +3149,77 @@ fn add_mcp_feedback_does_not_claim_group_activation() {
     let stdout = String::from_utf8_lossy(&output.stdout);
     assert!(stdout.contains("added this MCP to group 'research'"));
     assert!(!stdout.contains("activated group 'research'"));
+}
+
+#[test]
+fn sync_removes_assets_from_previous_active_group_after_switch() {
+    let home = tempfile::TempDir::new().expect("home tempdir");
+    let repo = tempfile::TempDir::new().expect("repo tempdir");
+    let skill_dir = join_portable_path(repo.path(), "skills/dev-shared");
+    std::fs::create_dir_all(&skill_dir).expect("mkdir");
+    std::fs::write(skill_dir.join("SKILL.md"), "# Dev skill\n").expect("write skill");
+    std::fs::write(
+        repo.path().join("cpm.toml"),
+        format!(
+            "[skills]\ndev_shared = {{ path = \"{}\", groups = [\"dev\"] }}\n",
+            normalized_path_string(&skill_dir)
+        ),
+    )
+    .expect("write manifest");
+    std::fs::write(repo.path().join("cpm.lock"), "version = 1\n").expect("write lock");
+
+    let activate_dev = cpm_bin()
+        .args(["activate", "dev"])
+        .env("HOME", home.path())
+        .env("USERPROFILE", home.path())
+        .env("APPDATA", home.path().join("AppData").join("Roaming"))
+        .current_dir(repo.path())
+        .output()
+        .expect("activate dev");
+    assert!(activate_dev.status.success(), "activate dev failed");
+
+    let sync_dev = cpm_bin()
+        .args(["sync"])
+        .env("HOME", home.path())
+        .env("USERPROFILE", home.path())
+        .env("APPDATA", home.path().join("AppData").join("Roaming"))
+        .current_dir(repo.path())
+        .output()
+        .expect("sync dev");
+    assert!(sync_dev.status.success(), "sync dev failed");
+
+    let installed_file = join_portable_path(repo.path(), ".github/skills/dev_shared/SKILL.md");
+    assert!(
+        installed_file.exists(),
+        "dev-group asset should be installed"
+    );
+
+    let activate_research = cpm_bin()
+        .args(["activate", "research"])
+        .env("HOME", home.path())
+        .env("USERPROFILE", home.path())
+        .env("APPDATA", home.path().join("AppData").join("Roaming"))
+        .current_dir(repo.path())
+        .output()
+        .expect("activate research");
+    assert!(
+        activate_research.status.success(),
+        "activate research failed"
+    );
+
+    let sync_research = cpm_bin()
+        .args(["sync"])
+        .env("HOME", home.path())
+        .env("USERPROFILE", home.path())
+        .env("APPDATA", home.path().join("AppData").join("Roaming"))
+        .current_dir(repo.path())
+        .output()
+        .expect("sync research");
+    assert!(sync_research.status.success(), "sync research failed");
+    assert!(
+        !installed_file.exists(),
+        "switching active groups should remove assets from the previous group"
+    );
 }
 
 // ── cpm cache ────────────────────────────────────────────────────────────────

@@ -1,0 +1,21 @@
+{
+    "lspServers": {
+        "pyright": {
+            "command": "pyright-langserver",
+            "args": [
+                "--stdio"
+            ],
+            "fileExtensions": {
+                ".py": "python",
+                ".pyi": "python"
+            }
+        },
+        "rust-analyzer": {
+            "command": "rust-analyzer",
+            "args": [],
+            "fileExtensions": {
+                ".rs": "rust"
+            }
+        }
+    }
+}

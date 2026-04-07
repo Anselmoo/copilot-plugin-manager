@@ -37,8 +37,8 @@ use cpm_types::{
     SubAsset, SubAssetOwnership,
 };
 
-mod add;
 mod activate;
+mod add;
 mod auth;
 mod cache;
 mod doctor;
@@ -1320,10 +1320,7 @@ pub(super) fn build_locked_plugin_asset(
         .clone()
         .unwrap_or_else(|| sha256_hex(fallback_hash_input.as_bytes()));
     let plugin_meta = PluginMeta {
-        registry: installed
-            .registry
-            .clone()
-            .filter(|r| !r.trim().is_empty()),
+        registry: installed.registry.clone().filter(|r| !r.trim().is_empty()),
         plugin_version: installed.version.clone(),
         source_url: installed.source.clone(),
         plugin_json_hash,
