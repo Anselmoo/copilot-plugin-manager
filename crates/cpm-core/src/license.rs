@@ -165,10 +165,57 @@ async fn detect_github_license(
         return license;
     }
 
+    // When the source URL points into a subdirectory, check that subdirectory
+    // for a LICENSE file first (e.g. `skills/canvas-design/LICENSE`), then fall
+    // back to the repo root.
+    if !repo.path.is_empty() {
+        let subdir = repo.path.join("/");
+        if let Some(license) = fetch_raw_license(
+            repo,
+            resolved_rev,
+            client,
+            token,
+            source_rules,
+            Some(&subdir),
+        )
+        .await
+        {
+            return license;
+        }
+    }
+
+    // Try the repo root.
+    if let Some(license) =
+        fetch_raw_license(repo, resolved_rev, client, token, source_rules, None).await
+    {
+        return license;
+    }
+
+    LicenseInfo {
+        spdx: UNKNOWN_LICENSE.into(),
+        url: None,
+        verified: false,
+    }
+}
+
+/// Try to fetch a LICENSE file from `subdir` (or the root when `None`) via
+/// `raw.githubusercontent.com`.  Returns `None` if no candidate was found.
+async fn fetch_raw_license(
+    repo: &GitHubRepo,
+    resolved_rev: &str,
+    client: &reqwest::Client,
+    token: Option<&str>,
+    source_rules: &IndexMap<String, SourceRule>,
+    subdir: Option<&str>,
+) -> Option<LicenseInfo> {
     for candidate in LICENSE_CANDIDATES {
+        let path = match subdir {
+            Some(prefix) => format!("{prefix}/{candidate}"),
+            None => candidate.to_owned(),
+        };
         let raw_url = format!(
             "https://raw.githubusercontent.com/{}/{}/{}/{}",
-            repo.owner, repo.repo, resolved_rev, candidate
+            repo.owner, repo.repo, resolved_rev, path
         );
         let target = rewrite_source_url(&raw_url, source_rules);
         let mut request = client
@@ -191,21 +238,16 @@ async fn detect_github_license(
             continue;
         };
         let (spdx, verified) = parse_license_text(&text);
-        return LicenseInfo {
+        return Some(LicenseInfo {
             spdx,
             url: Some(format!(
                 "https://github.com/{}/{}/blob/{}/{}",
-                repo.owner, repo.repo, resolved_rev, candidate
+                repo.owner, repo.repo, resolved_rev, path
             )),
             verified,
-        };
+        });
     }
-
-    LicenseInfo {
-        spdx: UNKNOWN_LICENSE.into(),
-        url: None,
-        verified: false,
-    }
+    None
 }
 
 async fn detect_github_license_via_api(
@@ -359,6 +401,9 @@ fn spdx_tokens(spdx: &str) -> Vec<String> {
 struct GitHubRepo {
     owner: String,
     repo: String,
+    /// Path segments after the repository name (e.g. `["skills", "canvas-design"]`
+    /// for `github.com/owner/repo/tree/main/skills/canvas-design`).
+    path: Vec<String>,
 }
 
 fn parse_github_repo(url: &str) -> Option<GitHubRepo> {
@@ -369,9 +414,28 @@ fn parse_github_repo(url: &str) -> Option<GitHubRepo> {
         .unwrap_or_default();
 
     match parsed.host_str()? {
-        "github.com" | "raw.githubusercontent.com" if segments.len() >= 2 => Some(GitHubRepo {
+        "github.com" if segments.len() >= 2 => {
+            // Strip optional tree/<ref> or blob/<ref> prefix from extra segments.
+            let extra: Vec<String> = if segments.len() > 2
+                && matches!(segments[2], "tree" | "blob")
+                && segments.len() > 3
+            {
+                segments[4..].iter().map(|s| s.to_string()).collect()
+            } else {
+                segments[2..].iter().map(|s| s.to_string()).collect()
+            };
+            Some(GitHubRepo {
+                owner: segments[0].to_owned(),
+                repo: segments[1].to_owned(),
+                path: extra,
+            })
+        }
+        "raw.githubusercontent.com" if segments.len() >= 2 => Some(GitHubRepo {
             owner: segments[0].to_owned(),
             repo: segments[1].to_owned(),
+            // raw URLs carry <owner>/<repo>/<ref>/path… — no extra path needed
+            // for license detection (we search from repo root for raw URLs).
+            path: vec![],
         }),
         _ => None,
     }
@@ -404,6 +468,7 @@ mod tests {
             auto_groups: vec!["default".into()],
             verify_on_sync: false,
             auto_compile_workflows: false,
+            active_group: None,
         }
     }
 
@@ -420,6 +485,7 @@ mod tests {
                 transport: None,
                 env: vec![],
                 args: vec![],
+                tools: vec![],
                 engine: None,
             },
             resolved_rev: "a".repeat(40),
@@ -476,5 +542,42 @@ mod tests {
 
         let err = enforce_license_policy(&asset, &settings).expect_err("unknown should fail");
         assert!(matches!(err, CpmError::LicenseViolation { .. }));
+    }
+
+    #[test]
+    fn parse_github_repo_captures_subdirectory_path() {
+        let repo = parse_github_repo(
+            "https://github.com/anthropics/skills/tree/main/skills/canvas-design",
+        )
+        .expect("should parse");
+        assert_eq!(repo.owner, "anthropics");
+        assert_eq!(repo.repo, "skills");
+        assert_eq!(repo.path, vec!["skills", "canvas-design"]);
+    }
+
+    #[test]
+    fn parse_github_repo_plain_url_has_empty_path() {
+        let repo = parse_github_repo("https://github.com/owner/repo").expect("should parse");
+        assert_eq!(repo.owner, "owner");
+        assert_eq!(repo.repo, "repo");
+        assert!(repo.path.is_empty());
+    }
+
+    #[test]
+    fn parse_github_repo_raw_url_has_empty_path() {
+        let repo = parse_github_repo("https://raw.githubusercontent.com/owner/repo/main/file.md")
+            .expect("should parse");
+        assert_eq!(repo.owner, "owner");
+        assert_eq!(repo.repo, "repo");
+        assert!(repo.path.is_empty());
+    }
+
+    #[test]
+    fn parse_github_repo_non_tree_extra_segments_captured() {
+        // A URL like github.com/owner/repo/skills/canvas keeps the extra
+        // segments as path (no tree/blob prefix).
+        let repo =
+            parse_github_repo("https://github.com/owner/repo/skills/canvas").expect("should parse");
+        assert_eq!(repo.path, vec!["skills", "canvas"]);
     }
 }

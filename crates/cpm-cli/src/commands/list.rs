@@ -7,7 +7,8 @@ use cpm_core::{
     CpmError,
 };
 use cpm_types::{
-    AssetKind, GlobalLockfile, Lockfile, ResolvedAsset, Scope, SubAsset, SubAssetOwnership,
+    AssetKind, GlobalLockfile, LockedFile, Lockfile, ResolvedAsset, Scope, SubAsset,
+    SubAssetOwnership,
 };
 use serde::Serialize;
 use std::collections::HashSet;
@@ -188,6 +189,12 @@ fn print_asset(entry: &ListedAsset) {
     if !asset.resolved_rev.is_empty() {
         println!("  {} {}", style_label("rev"), asset.resolved_rev);
     }
+    if !asset.files.is_empty() {
+        println!("  {} {}", style_label("files"), asset.files.len());
+        for file in sorted_locked_files(&asset.files) {
+            println!("    {}", format_locked_file(file));
+        }
+    }
     if !asset.sub_assets.is_empty() {
         println!("  {} {}", style_label("sub-assets"), asset.sub_assets.len());
         for sub_asset in sorted_sub_assets(&asset.sub_assets) {
@@ -222,6 +229,7 @@ struct ListAssetRow {
     install_target: String,
     source_url: Option<String>,
     source_path: Option<String>,
+    files: Vec<ListFileRow>,
     sub_assets: Vec<ListSubAssetRow>,
 }
 
@@ -239,10 +247,33 @@ impl ListAssetRow {
             install_target: asset_install_target(asset),
             source_url: asset_source_url(asset).map(ToOwned::to_owned),
             source_path: asset_source_path(asset).map(ToOwned::to_owned),
+            files: sorted_locked_files(&asset.files)
+                .into_iter()
+                .map(ListFileRow::from_locked_file)
+                .collect(),
             sub_assets: sorted_sub_assets(&asset.sub_assets)
                 .into_iter()
                 .map(ListSubAssetRow::from_sub_asset)
                 .collect(),
+        }
+    }
+}
+
+#[derive(Debug, Serialize)]
+struct ListFileRow {
+    path: String,
+    #[serde(skip_serializing_if = "Option::is_none")]
+    sha256: Option<String>,
+    #[serde(skip_serializing_if = "std::ops::Not::not")]
+    executable: bool,
+}
+
+impl ListFileRow {
+    fn from_locked_file(file: &LockedFile) -> Self {
+        Self {
+            path: file.path.to_string(),
+            sha256: file.sha256.clone(),
+            executable: file.executable,
         }
     }
 }
@@ -299,6 +330,19 @@ fn sorted_sub_assets(sub_assets: &[SubAsset]) -> Vec<&SubAsset> {
     sub_assets
 }
 
+fn sorted_locked_files(files: &[LockedFile]) -> Vec<&LockedFile> {
+    let mut files: Vec<_> = files.iter().collect();
+    files.sort_by(|left, right| left.path.cmp(&right.path));
+    files
+}
+
+fn format_locked_file(file: &LockedFile) -> String {
+    match &file.sha256 {
+        Some(sha) => format!("↳ {} (sha256:{})", file.path, sha),
+        None => format!("↳ {}", file.path),
+    }
+}
+
 fn format_sub_asset(asset: &SubAsset) -> String {
     format!("↳ {}", format_sub_asset_summary(asset))
 }
@@ -347,6 +391,7 @@ mod tests {
                 transport: None,
                 env: vec![],
                 args: vec![],
+                tools: vec![],
                 engine: None,
             },
             resolved_rev: format!("rev-{name}"),

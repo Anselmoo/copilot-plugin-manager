@@ -31,6 +31,7 @@ fn make_source(url: &str) -> AssetSource {
         transport: None,
         env: vec![],
         args: vec![],
+        tools: vec![],
         engine: None,
     }
 }

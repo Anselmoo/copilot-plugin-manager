@@ -6,7 +6,9 @@ use cpm_core::{
     project::{load_global_lockfile, load_lockfile},
     CpmError,
 };
-use cpm_types::{AssetKind, GlobalLockfile, Lockfile, ResolvedAsset, SubAsset, SubAssetOwnership};
+use cpm_types::{
+    AssetKind, GlobalLockfile, LockedFile, Lockfile, ResolvedAsset, SubAsset, SubAssetOwnership,
+};
 use serde::Serialize;
 use std::collections::HashSet;
 
@@ -114,6 +116,18 @@ pub async fn run(args: TreeArgs) -> Result<(), CpmError> {
             if let Some(path) = asset_source_path(asset) {
                 println!("    {} {path}", style_label("source-path"));
             }
+            if !asset.files.is_empty() {
+                println!("    {}", style_label("files"));
+                let sorted_files = sorted_locked_files(&asset.files);
+                for (index, file) in sorted_files.iter().enumerate() {
+                    let branch = if index + 1 == sorted_files.len() {
+                        "└──"
+                    } else {
+                        "├──"
+                    };
+                    println!("        {branch} {}", format_locked_file(file));
+                }
+            }
             if !asset.sub_assets.is_empty() {
                 println!("    {}", style_label("sub-assets"));
                 for (index, sub_asset) in
@@ -198,6 +212,7 @@ struct TreeAssetRow {
     install_target: String,
     source_url: Option<String>,
     source_path: Option<String>,
+    files: Vec<TreeFileRow>,
     sub_assets: Vec<TreeSubAssetRow>,
 }
 
@@ -215,10 +230,33 @@ impl TreeAssetRow {
             install_target: asset_install_target(asset),
             source_url: asset_source_url(asset).map(ToOwned::to_owned),
             source_path: asset_source_path(asset).map(ToOwned::to_owned),
+            files: sorted_locked_files(&asset.files)
+                .into_iter()
+                .map(TreeFileRow::from_locked_file)
+                .collect(),
             sub_assets: sorted_sub_assets(&asset.sub_assets)
                 .into_iter()
                 .map(TreeSubAssetRow::from_sub_asset)
                 .collect(),
+        }
+    }
+}
+
+#[derive(Debug, Serialize)]
+struct TreeFileRow {
+    path: String,
+    #[serde(skip_serializing_if = "Option::is_none")]
+    sha256: Option<String>,
+    #[serde(skip_serializing_if = "std::ops::Not::not")]
+    executable: bool,
+}
+
+impl TreeFileRow {
+    fn from_locked_file(file: &LockedFile) -> Self {
+        Self {
+            path: file.path.to_string(),
+            sha256: file.sha256.clone(),
+            executable: file.executable,
         }
     }
 }
@@ -266,6 +304,19 @@ fn sorted_sub_assets(sub_assets: &[SubAsset]) -> Vec<&SubAsset> {
     sub_assets
 }
 
+fn sorted_locked_files(files: &[LockedFile]) -> Vec<&LockedFile> {
+    let mut files: Vec<_> = files.iter().collect();
+    files.sort_by(|left, right| left.path.cmp(&right.path));
+    files
+}
+
+fn format_locked_file(file: &LockedFile) -> String {
+    match &file.sha256 {
+        Some(sha) => format!("{} (sha256:{})", file.path, sha),
+        None => file.path.to_string(),
+    }
+}
+
 fn format_ownership(ownership: SubAssetOwnership) -> &'static str {
     match ownership {
         SubAssetOwnership::Parent => "parent",
@@ -298,6 +349,7 @@ mod tests {
                 transport: None,
                 env: vec![],
                 args: vec![],
+                tools: vec![],
                 engine: None,
             },
             resolved_rev: format!("rev-{name}"),

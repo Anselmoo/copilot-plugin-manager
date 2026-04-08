@@ -222,6 +222,8 @@ struct LockfileRecord {
     env: Vec<cpm_types::EnvSpec>,
     #[serde(default, skip_serializing_if = "Vec::is_empty")]
     args: Vec<String>,
+    #[serde(default, skip_serializing_if = "Vec::is_empty")]
+    tools: Vec<String>,
     #[serde(skip_serializing_if = "Option::is_none")]
     engine: Option<WorkflowEngine>,
     #[serde(skip_serializing_if = "Option::is_none")]
@@ -861,6 +863,7 @@ fn parse_asset_source(
             transport: None,
             env: Vec::new(),
             args: Vec::new(),
+            tools: vec![],
             engine: None,
         });
     }
@@ -895,6 +898,17 @@ fn parse_asset_source(
         .map(|value| parse_string_array(value, &format!("{context}.args")))
         .transpose()?
         .unwrap_or_default();
+    let tools = table
+        .get("tools")
+        .map(|value| parse_string_array(value, &format!("{context}.tools")))
+        .transpose()?
+        .unwrap_or_default();
+    if !tools.is_empty() && kind != AssetKind::Mcp {
+        return Err(CpmError::Parse {
+            file: "cpm.toml".to_owned(),
+            msg: format!("{context}.tools is only supported for MCP sources"),
+        });
+    }
     let env = table
         .get("env")
         .map(|value| parse_env_specs(value, &format!("{context}.env")))
@@ -958,6 +972,7 @@ fn parse_asset_source(
         transport,
         env,
         args,
+        tools,
         engine,
     })
 }
@@ -1069,6 +1084,7 @@ fn is_short_form_asset(source: &AssetSource, default_group_name: &str) -> bool {
         && source.transport.is_none()
         && source.env.is_empty()
         && source.args.is_empty()
+        && source.tools.is_empty()
         && source.engine.is_none()
 }
 
@@ -1267,6 +1283,12 @@ fn render_mcp_source_parts(
             render_toml_value(source.args.clone())?
         ));
     }
+    if !source.tools.is_empty() {
+        parts.push(format!(
+            "tools = {}",
+            render_toml_value(source.tools.clone())?
+        ));
+    }
     Ok(parts)
 }
 
@@ -1353,6 +1375,18 @@ fn write_settings(output: &mut String, settings: &PartialSettings) -> Result<(),
         output.push_str(&format!(
             "verify_on_sync = {}\n",
             render_toml_value(verify_on_sync)?
+        ));
+    }
+    if let Some(auto_compile_workflows) = settings.auto_compile_workflows {
+        output.push_str(&format!(
+            "auto_compile_workflows = {}\n",
+            render_toml_value(auto_compile_workflows)?
+        ));
+    }
+    if let Some(active_group) = &settings.active_group {
+        output.push_str(&format!(
+            "active_group = {}\n",
+            render_toml_value(active_group.clone())?
         ));
     }
     output.push('\n');
@@ -1491,6 +1525,7 @@ fn same_asset_except_groups(left: &AssetSource, right: &AssetSource) -> bool {
         && left.transport == right.transport
         && left.env == right.env
         && left.args == right.args
+        && left.tools == right.tools
         && left.engine == right.engine
 }
 
@@ -2565,13 +2600,15 @@ async fn prepare_mcp_asset(
         Some(rev) => rev.to_owned(),
         None => match source.transport.as_ref() {
             Some(transport @ (McpTransport::Npx { .. } | McpTransport::Uvx { .. })) => {
-                if let Some(rev) = source.rev.clone() {
-                    rev
-                } else {
-                    resolve_package_transport_version(client, transport, source_rules)
-                        .await?
-                        .unwrap_or_default()
-                }
+                resolve_package_transport_version(
+                    client,
+                    transport,
+                    token,
+                    source.rev.as_deref(),
+                    source_rules,
+                )
+                .await?
+                .unwrap_or_default()
             }
             Some(McpTransport::Docker { image, .. }) => source
                 .rev
@@ -3379,7 +3416,8 @@ fn github_raw_url(owner: &str, repo: &str, rev: &str, path: &str) -> String {
     format!("https://raw.githubusercontent.com/{owner}/{repo}/{rev}/{path}")
 }
 
-fn rewrite_mcp_source(
+/// Apply runtime source-rule rewrites to MCP transports that carry remote URLs.
+pub fn rewrite_mcp_source(
     source: &AssetSource,
     source_rules: &IndexMap<String, SourceRule>,
 ) -> AssetSource {
@@ -3582,6 +3620,7 @@ impl From<&ResolvedAsset> for LockfileRecord {
             command,
             env: asset.source.env.clone(),
             args,
+            tools: asset.source.tools.clone(),
             engine: asset.source.engine,
             bin_path: asset.bin_path.clone(),
             compiled_path: asset.compiled_path.clone(),
@@ -3657,6 +3696,7 @@ impl LockfileRecord {
             transport,
             env: self.env,
             args: self.args,
+            tools: self.tools,
             engine: self.engine,
         };
         let git = match (
@@ -3754,6 +3794,8 @@ mod tests {
     use super::*;
     use crate::paths::join_portable_path;
     use tempfile::TempDir;
+    use wiremock::matchers::{method, path};
+    use wiremock::{Mock, MockServer, ResponseTemplate};
 
     #[tokio::test]
     async fn apply_manifest_materializes_local_skill_and_populates_lock() {
@@ -3776,6 +3818,7 @@ mod tests {
                 transport: None,
                 env: vec![],
                 args: vec![],
+                tools: vec![],
                 engine: None,
             },
         );
@@ -3871,6 +3914,7 @@ mod tests {
                 transport: None,
                 env: vec![],
                 args: vec![],
+                tools: vec![],
                 engine: None,
             },
         );
@@ -3947,6 +3991,7 @@ mod tests {
                 transport: None,
                 env: vec![],
                 args: vec![],
+                tools: vec![],
                 engine: None,
             },
         );
@@ -4002,6 +4047,7 @@ mod tests {
                 transport: None,
                 env: vec![],
                 args: vec![],
+                tools: vec![],
                 engine: None,
             },
         );
@@ -4059,6 +4105,7 @@ mod tests {
                 transport: None,
                 env: vec![],
                 args: vec![],
+                tools: vec![],
                 engine: None,
             },
             resolved_rev: "abc123deadbeef".to_owned(),
@@ -4090,6 +4137,7 @@ mod tests {
             }),
             env: vec![],
             args: vec![],
+            tools: vec![],
             engine: None,
         };
 
@@ -4147,6 +4195,7 @@ mod tests {
             }),
             env: vec![],
             args: vec![],
+            tools: vec![],
             engine: None,
         };
 
@@ -4176,6 +4225,79 @@ mod tests {
     }
 
     #[tokio::test]
+    async fn add_single_git_backed_package_mcp_resolves_commit_sha() {
+        let repo = TempDir::new().expect("tempdir");
+        let server = MockServer::start().await;
+        Mock::given(method("GET"))
+            .and(path("/api/repos/oraios/serena"))
+            .respond_with(ResponseTemplate::new(200).set_body_json(serde_json::json!({
+                "default_branch": "main"
+            })))
+            .mount(&server)
+            .await;
+        Mock::given(method("GET"))
+            .and(path("/api/repos/oraios/serena/commits/main"))
+            .respond_with(ResponseTemplate::new(200).set_body_json(serde_json::json!({
+                "sha": "fedcba9876543210fedcba9876543210fedcba98"
+            })))
+            .mount(&server)
+            .await;
+
+        let client = reqwest::Client::new();
+        let mut source_rules = IndexMap::new();
+        source_rules.insert(
+            "github-api".to_owned(),
+            SourceRule {
+                url: format!("{}/api", server.uri()),
+                token_env: None,
+                replace: Some("https://api.github.com".to_owned()),
+            },
+        );
+        let mcp_source = AssetSource {
+            url: None,
+            rev: None,
+            path: None,
+            groups: "default".into(),
+            scope: Scope::Local,
+            transport: Some(McpTransport::Uvx {
+                package: "git+https://github.com/oraios/serena".to_owned(),
+                entrypoint: Some("serena".to_owned()),
+                args: vec!["start-mcp-server".to_owned()],
+            }),
+            env: vec![],
+            args: vec![],
+            tools: vec!["*".to_owned()],
+            engine: None,
+        };
+
+        let lockfile = add_single_asset(
+            AssetKind::Mcp,
+            "serena",
+            &mcp_source,
+            &client,
+            None,
+            ApplyOptions {
+                repo_root: repo.path(),
+                install: false,
+                install_group: None,
+                install_scope: None,
+                settings: &crate::config::EffectiveSettings::default(),
+                source_rules: &source_rules,
+                existing_lock: None,
+                download_progress: None,
+            },
+        )
+        .await
+        .expect("git-backed package MCP add should resolve a commit SHA");
+
+        assert_eq!(lockfile.mcps.len(), 1);
+        assert_eq!(
+            lockfile.mcps[0].resolved_rev,
+            "fedcba9876543210fedcba9876543210fedcba98"
+        );
+    }
+
+    #[tokio::test]
     async fn add_single_docker_mcp_uses_image_tag_as_resolved_rev() {
         let repo = TempDir::new().expect("tempdir");
         let client = reqwest::Client::new();
@@ -4192,6 +4314,7 @@ mod tests {
             }),
             env: vec![],
             args: vec![],
+            tools: vec![],
             engine: None,
         };
 
@@ -4291,6 +4414,7 @@ mod tests {
             transport: None,
             env: vec![],
             args: vec![],
+            tools: vec![],
             engine: None,
         };
         let mut manifest = Manifest::default();
@@ -4365,6 +4489,7 @@ mod tests {
             }),
             env: vec![],
             args: vec![],
+            tools: vec![],
             engine: None,
         };
         let mut manifest = Manifest::default();
@@ -4432,6 +4557,7 @@ mod tests {
                 transport: None,
                 env: vec![],
                 args: vec![],
+                tools: vec![],
                 engine: None,
             },
             resolved_rev: String::new(),
@@ -4492,6 +4618,7 @@ mod tests {
                 transport: None,
                 env: vec![],
                 args: vec![],
+                tools: vec![],
                 engine: None,
             },
         );
@@ -4510,6 +4637,7 @@ mod tests {
                 transport: None,
                 env: vec![],
                 args: vec![],
+                tools: vec![],
                 engine: None,
             },
         );
@@ -4562,6 +4690,7 @@ mod tests {
                 }),
                 env: vec![],
                 args: vec![],
+                tools: vec![],
                 engine: None,
             },
         );
@@ -4599,6 +4728,7 @@ mod tests {
             }),
             env: vec![],
             args: vec![],
+            tools: vec![],
             engine: None,
         };
         manifest.mcps.insert("zen".into(), default_entry.clone());
@@ -4675,6 +4805,7 @@ args = []
                 }),
                 env: vec![],
                 args: vec![],
+                tools: vec![],
                 engine: None,
             },
         );
@@ -4713,6 +4844,7 @@ args = []
                 transport: None,
                 env: vec![],
                 args: vec![],
+                tools: vec![],
                 engine: None,
             },
             resolved_rev: "a".repeat(40),
@@ -4837,6 +4969,26 @@ shared = { path = "skills/shared", groups = ["default", "dev"] }
     }
 
     #[test]
+    fn load_manifest_rejects_tools_on_non_mcp_sources() {
+        let dir = TempDir::new().expect("tempdir");
+        let path = dir.path().join("cpm.toml");
+        std::fs::write(
+            &path,
+            r#"
+[plugins]
+demo = { url = "https://example.com/plugin", tools = ["fetch"] }
+"#,
+        )
+        .expect("write manifest");
+
+        let err = load_manifest(&path).expect_err("non-MCP tools should fail at parse time");
+        assert!(matches!(err, CpmError::Parse { .. }));
+        if let CpmError::Parse { msg, .. } = err {
+            assert!(msg.contains("plugins.demo.tools is only supported for MCP sources"));
+        }
+    }
+
+    #[test]
     fn lockfile_writer_emits_canonical_mcp_transport_shape() {
         let dir = TempDir::new().expect("tempdir");
         let path = dir.path().join("cpm.lock");
@@ -4863,6 +5015,7 @@ shared = { path = "skills/shared", groups = ["default", "dev"] }
                     "$GITHUB_TOKEN",
                 )],
                 args: vec![],
+                tools: vec![],
                 engine: None,
             },
             resolved_rev: "1.4.2".into(),
@@ -4918,6 +5071,7 @@ shared = { path = "skills/shared", groups = ["default", "dev"] }
                     transport: None,
                     env: vec![],
                     args: vec![],
+                    tools: vec![],
                     engine: None,
                 },
                 resolved_rev: "a".repeat(40),
@@ -4990,6 +5144,7 @@ shared = { path = "skills/shared", groups = ["default", "dev"] }
             transport: None,
             env: vec![],
             args: vec![],
+            tools: vec![],
             engine: None,
         };
 
@@ -5024,6 +5179,7 @@ shared = { path = "skills/shared", groups = ["default", "dev"] }
                 transport: None,
                 env: vec![],
                 args: vec![],
+                tools: vec![],
                 engine: None,
             },
             resolved_rev: "a".repeat(40),
@@ -5073,6 +5229,7 @@ shared = { path = "skills/shared", groups = ["default", "dev"] }
                 transport: None,
                 env: vec![],
                 args: vec![],
+                tools: vec![],
                 engine: None,
             },
             resolved_rev: "a".repeat(40),
@@ -5147,6 +5304,7 @@ shared = { path = "skills/shared", groups = ["default", "dev"] }
                     transport: None,
                     env: vec![],
                     args: vec![],
+                    tools: vec![],
                     engine: None,
                 },
                 resolved_rev: "a".repeat(40),
@@ -5252,6 +5410,7 @@ shared = { path = "skills/shared", groups = ["default", "dev"] }
                 transport: None,
                 env: vec![],
                 args: vec![],
+                tools: vec![],
                 engine: None,
             },
             resolved_rev: "a".repeat(40),
@@ -5352,6 +5511,7 @@ shared = { path = "skills/shared", groups = ["default", "dev"] }
                 transport: None,
                 env: vec![],
                 args: vec![],
+                tools: vec![],
                 engine: None,
             },
             resolved_rev: "a".repeat(40),
@@ -5448,6 +5608,7 @@ transport = { npx = { package = "@modelcontextprotocol/server-github", args = ["
                 transport: None,
                 env: vec![],
                 args: vec![],
+                tools: vec![],
                 engine: None,
             },
             resolved_rev: "c6a75d7e0923ec0a754e5554b1c52ef76f0d75f8".into(),
@@ -5529,6 +5690,7 @@ transport = { npx = { package = "@modelcontextprotocol/server-github", args = ["
                 transport: None,
                 env: vec![],
                 args: vec![],
+                tools: vec![],
                 engine: None,
             },
             resolved_rev: "a".repeat(40),
@@ -5595,6 +5757,7 @@ transport = { npx = { package = "@modelcontextprotocol/server-github", args = ["
                 transport: None,
                 env: vec![],
                 args: vec![],
+                tools: vec![],
                 engine: None,
             },
             resolved_rev: String::new(),
@@ -5708,6 +5871,7 @@ url = "https://example.com/legacy"
                 transport: None,
                 env: vec![],
                 args: vec![],
+                tools: vec![],
                 engine: None,
             },
             resolved_rev: String::new(),
@@ -5840,6 +6004,7 @@ url = "https://example.com/legacy"
             transport: None,
             env: vec![],
             args: vec![],
+            tools: vec![],
             engine: None,
         };
         let source_v2 = AssetSource {
@@ -5920,6 +6085,7 @@ url = "https://example.com/legacy"
             transport: None,
             env: vec![],
             args: vec![],
+            tools: vec![],
             engine: None,
         };
         let dev_source = AssetSource {

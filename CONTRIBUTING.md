@@ -28,7 +28,7 @@ Optional but recommended local extras:
 lefthook install
 ```
 
-The installed `lefthook` setup keeps pre-commit checks lightweight; heavier validation runs on push and in CI/CD.
+The installed `lefthook` setup keeps pre-commit checks lightweight and will auto-format Python/Rust files locally before restaging them; heavier validation still runs on push and in CI/CD, where formatting remains check-only.
 
 ## Running the CLI locally
 

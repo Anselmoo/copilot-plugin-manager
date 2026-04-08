@@ -37,10 +37,12 @@ use cpm_types::{
     SubAsset, SubAssetOwnership,
 };
 
+mod activate;
 mod add;
 mod auth;
 mod cache;
 mod doctor;
+mod export;
 mod init;
 mod list;
 mod lock;
@@ -55,10 +57,12 @@ mod sync;
 mod tree;
 mod update;
 
+pub use activate::ActivateArgs;
 pub use add::AddArgs;
 pub use auth::AuthArgs;
 pub use cache::CacheArgs;
 pub use doctor::DoctorArgs;
+pub use export::ExportArgs;
 pub use init::InitArgs;
 pub use list::ListArgs;
 pub use lock::LockArgs;
@@ -96,6 +100,7 @@ Inspect & diagnose:
   overview  See the combined manifest, lockfile, and disk view
   list      List installed assets
   show      Show details for one asset
+  export    Emit derived runtime config artifacts
   tree      Show the dependency tree
   doctor    Verify installed file hashes
   status    Show manifest/lockfile/disk drift
@@ -197,6 +202,9 @@ enum Commands {
     /// Show full details of a single asset.
     #[command(display_order = 22)]
     Show(ShowArgs),
+    /// Export derived runtime config artifacts.
+    #[command(display_order = 22)]
+    Export(ExportArgs),
     /// Show the dependency tree.
     #[command(display_order = 23)]
     Tree(TreeArgs),
@@ -221,6 +229,9 @@ enum Commands {
     /// Get or set the default scope.
     #[command(display_order = 34)]
     Scope(ScopeArgs),
+    /// Set or clear the active group used by `cpm sync` without `--group`.
+    #[command(display_order = 4)]
+    Activate(ActivateArgs),
 }
 
 impl Cli {
@@ -271,6 +282,7 @@ impl Cli {
             Commands::Overview(args) => overview::run(args).await,
             Commands::List(args) => list::run(args).await,
             Commands::Show(args) => show::run(args).await,
+            Commands::Export(ExportArgs { command }) => export::run(command).await,
             Commands::Tree(args) => tree::run(args).await,
             Commands::Doctor(args) => doctor::run(args).await,
             Commands::Status(args) => status::run(args).await,
@@ -279,6 +291,7 @@ impl Cli {
             Commands::Run(args) => run::run(args).await,
             Commands::Auth(AuthArgs { command }) => auth::run(command).await,
             Commands::Scope(ScopeArgs { command }) => scope::run(command).await,
+            Commands::Activate(args) => activate::run(args).await,
         }
     }
 }
@@ -1307,7 +1320,7 @@ pub(super) fn build_locked_plugin_asset(
         .clone()
         .unwrap_or_else(|| sha256_hex(fallback_hash_input.as_bytes()));
     let plugin_meta = PluginMeta {
-        registry: installed.registry.clone(),
+        registry: installed.registry.clone().filter(|r| !r.trim().is_empty()),
         plugin_version: installed.version.clone(),
         source_url: installed.source.clone(),
         plugin_json_hash,
@@ -1452,6 +1465,7 @@ mod tests {
                 transport: None,
                 env: vec![],
                 args: vec![],
+                tools: vec![],
                 engine: None,
             },
         );
@@ -1482,6 +1496,7 @@ mod tests {
                 transport: None,
                 env: vec![],
                 args: vec![],
+                tools: vec![],
                 engine: None,
             },
             &InstalledPlugin {
@@ -1531,6 +1546,7 @@ mod tests {
                 transport: None,
                 env: vec![],
                 args: vec![],
+                tools: vec![],
                 engine: None,
             },
             resolved_rev: "rev-default".to_owned(),

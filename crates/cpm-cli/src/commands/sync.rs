@@ -16,7 +16,7 @@ use cpm_core::{
     resolver::{check_lock_freshness, detect_global_install_conflicts, reconcile_global_lockfile},
     CpmError,
 };
-use cpm_types::{AssetKind, Lockfile, ResolvedAsset, Scope};
+use cpm_types::{AssetKind, GlobalLockfile, Lockfile, ResolvedAsset, Scope, SourceRule};
 
 use crate::progress::{OperationKind, OperationStatus, ProgressReporter};
 
@@ -27,6 +27,30 @@ use super::{
     plugin_source_display, plugin_source_is_native, print_plugin_summary, run_plugin_operations,
     strip_delegated_plugins_from_manifest, style_success, PluginOperation,
 };
+
+fn print_sync_selection_summary(
+    install_group: Option<&str>,
+    auto_groups: &[String],
+    scope_filter: Option<Scope>,
+) {
+    let scope_text = scope_filter
+        .map(|scope| scope.to_string())
+        .unwrap_or_else(|| "all".to_owned());
+    let group_text = install_group.unwrap_or("default");
+    println!(
+        "{} active group='{}' scope='{}'",
+        style_success("✓"),
+        group_text,
+        scope_text
+    );
+    if !auto_groups.is_empty() {
+        println!(
+            "{} auto-groups: {}",
+            style_success("✓"),
+            auto_groups.join(", ")
+        );
+    }
+}
 
 /// Arguments for `cpm sync`.
 #[derive(Debug, Args)]
@@ -59,13 +83,24 @@ pub async fn run(args: SyncArgs) -> Result<(), CpmError> {
     let existing_lock = load_lockfile(lockfile_path).unwrap_or_default();
     let runtime = load_runtime_config(&manifest)?;
     let scope_filter = args.scope.map(Into::into);
+    // Use the CLI `--group` flag first; fall back to the persisted active group
+    // from settings (set via `cpm activate <group>`).
+    let install_group: Option<String> = args
+        .group
+        .clone()
+        .or_else(|| runtime.settings.active_group.clone());
+    print_sync_selection_summary(
+        install_group.as_deref(),
+        &runtime.settings.auto_groups,
+        scope_filter,
+    );
     let selected_plugins: Vec<_> = manifest
         .effective_section(AssetKind::Plugin)
         .into_iter()
         .filter(|(_, source)| {
             should_install(
                 &source.groups,
-                args.group.as_deref(),
+                install_group.as_deref(),
                 &runtime.settings.auto_groups,
                 scope_filter,
                 effective_plugin_scope(source),
@@ -89,7 +124,7 @@ pub async fn run(args: SyncArgs) -> Result<(), CpmError> {
         .filter(|asset| {
             should_install(
                 &asset.source.groups,
-                args.group.as_deref(),
+                install_group.as_deref(),
                 &runtime.settings.auto_groups,
                 scope_filter,
                 effective_asset_scope(asset),
@@ -113,7 +148,7 @@ pub async fn run(args: SyncArgs) -> Result<(), CpmError> {
             asset.kind != AssetKind::Plugin
                 && should_install(
                     &asset.source.groups,
-                    args.group.as_deref(),
+                    install_group.as_deref(),
                     &runtime.settings.auto_groups,
                     scope_filter,
                     asset.scope,
@@ -154,7 +189,7 @@ pub async fn run(args: SyncArgs) -> Result<(), CpmError> {
                 plugin_asset_is_delegated(asset)
                     && should_install(
                         &asset.source.groups,
-                        args.group.as_deref(),
+                        install_group.as_deref(),
                         &runtime.settings.auto_groups,
                         scope_filter,
                         effective_asset_scope(asset),
@@ -212,7 +247,7 @@ pub async fn run(args: SyncArgs) -> Result<(), CpmError> {
     for stale in stale_natively_managed_assets(
         &existing_lock,
         &lockfile,
-        args.group.as_deref(),
+        install_group.as_deref(),
         &runtime.settings.auto_groups,
         scope_filter,
     ) {
@@ -223,7 +258,7 @@ pub async fn run(args: SyncArgs) -> Result<(), CpmError> {
         !plugin_asset_is_delegated(asset)
             && should_install(
                 &asset.source.groups,
-                args.group.as_deref(),
+                install_group.as_deref(),
                 &runtime.settings.auto_groups,
                 scope_filter,
                 asset.scope,
@@ -306,12 +341,61 @@ pub async fn run(args: SyncArgs) -> Result<(), CpmError> {
     if reconciled != global_lockfile {
         write_global_lockfile(&reconciled)?;
     }
+
+    // Seed global-scope assets from the global lockfile (claimed by any repo)
+    // into the current environment.  This ensures that a fresh project or
+    // machine gets all globally-managed assets even if they were originally
+    // added from a different repository.
+    let installed_plugin_names: HashSet<String> = installed_plugins
+        .iter()
+        .filter_map(|plugin| plugin.name.clone())
+        .collect();
+    let global_seed_context = GlobalSeedContext {
+        repo_root,
+        client: &client,
+        token: token.as_deref(),
+        settings: &runtime.settings,
+        source_rules: &runtime.source_rules,
+        installed_plugin_names: &installed_plugin_names,
+        reporter: &reporter,
+    };
+    let global_seeded = install_global_claims(
+        &global_lockfile,
+        &lockfile,
+        scope_filter,
+        &global_seed_context,
+    )
+    .await?;
+
     write_lockfile(lockfile_path, &lockfile)?;
     print_plugin_summary(plugin_summary);
+    if global_seeded > 0 {
+        println!(
+            "{} seeded {global_seeded} global asset(s) from ~/.copilot/cpm.lock",
+            style_success("✓"),
+        );
+    }
     println!(
         "{} synced and wrote {}",
         style_success("✓"),
         lockfile_path.display()
+    );
+    println!(
+        "{} selected {} native asset(s) for installation",
+        style_success("✓"),
+        lockfile
+            .all_assets()
+            .filter(|asset| {
+                !plugin_asset_is_delegated(asset)
+                    && should_install(
+                        &asset.source.groups,
+                        install_group.as_deref(),
+                        &runtime.settings.auto_groups,
+                        scope_filter,
+                        asset.scope,
+                    )
+            })
+            .count()
     );
     Ok(())
 }
@@ -354,6 +438,15 @@ fn stale_natively_managed_assets(
     let new_map: HashMap<(String, AssetKind), Scope> = new_lock
         .all_assets()
         .filter(|asset| !plugin_asset_is_delegated(asset))
+        .filter(|asset| {
+            should_install(
+                &asset.source.groups,
+                install_group,
+                auto_groups,
+                scope_filter,
+                asset.scope,
+            )
+        })
         .map(|a| ((a.name.clone(), a.kind), a.scope))
         .collect();
 
@@ -361,13 +454,9 @@ fn stale_natively_managed_assets(
         .all_assets()
         .filter(|asset| !plugin_asset_is_delegated(asset))
         .filter(|a| {
-            should_install(
-                &a.source.groups,
-                install_group,
-                auto_groups,
-                scope_filter,
-                a.scope,
-            )
+            scope_filter
+                .map(|requested| requested == a.scope)
+                .unwrap_or(true)
         })
         .filter(|a| match new_map.get(&(a.name.clone(), a.kind)) {
             None => true,               // Removed from manifest.
@@ -403,6 +492,115 @@ impl From<ScopeArg> for Scope {
     }
 }
 
+struct GlobalSeedContext<'a> {
+    repo_root: &'a std::path::Path,
+    client: &'a reqwest::Client,
+    token: Option<&'a str>,
+    settings: &'a cpm_core::config::EffectiveSettings,
+    source_rules: &'a indexmap::IndexMap<String, SourceRule>,
+    installed_plugin_names: &'a HashSet<String>,
+    reporter: &'a ProgressReporter,
+}
+
+/// Materialize globally-claimed assets from other repositories into the
+/// current environment.
+///
+/// Iterates over all `[[claim]]` entries in the global lockfile and installs
+/// any **global-scope** asset that is not already covered by the local
+/// lockfile.  This is the inverse of `reconcile_global_lockfile` (which writes
+/// local claims *into* the global lock) and ensures that a fresh project or a
+/// freshly-provisioned machine gets all globally-managed assets even when they
+/// were originally added from a different repository.
+///
+/// Returns the number of assets that were newly seeded.
+async fn install_global_claims(
+    global_lockfile: &GlobalLockfile,
+    local_lockfile: &Lockfile,
+    scope_filter: Option<Scope>,
+    context: &GlobalSeedContext<'_>,
+) -> Result<usize, CpmError> {
+    if scope_filter == Some(Scope::Local) {
+        return Ok(0);
+    }
+
+    // Build a set of (name, kind) keys already present in the local lockfile
+    // so we don't re-install them.
+    let local_keys: HashSet<(String, AssetKind)> = local_lockfile
+        .all_assets()
+        .map(|a| (a.name.clone(), a.kind))
+        .collect();
+
+    // Collect unique global-scope assets across all claims, deduplicating by
+    // (name, kind).
+    let mut seen: HashSet<(String, AssetKind)> = HashSet::new();
+    let mut to_seed: Vec<ResolvedAsset> = Vec::new();
+
+    for claim in &global_lockfile.claims {
+        let asset = &claim.asset;
+        if asset.scope != Scope::Global {
+            continue;
+        }
+        let key = (asset.name.clone(), asset.kind);
+        if local_keys.contains(&key) || !seen.insert(key) {
+            continue;
+        }
+        to_seed.push(asset.clone());
+    }
+
+    if to_seed.is_empty() {
+        return Ok(0);
+    }
+
+    let mut seeded = 0;
+    let mut plugin_ops = Vec::new();
+    for asset in &to_seed {
+        if plugin_asset_is_delegated(asset) {
+            if context.installed_plugin_names.contains(&asset.name) {
+                continue;
+            }
+            enforce_license_policy(asset, context.settings)?;
+            let requested_spec = plugin_requested_spec(&asset.name, &asset.source);
+            log_delegated_plugin_strategy(
+                "sync",
+                &asset.name,
+                &plugin_source_display(&asset.name, &asset.source),
+                &requested_spec,
+            );
+            plugin_ops.push(PluginOperation::install(&asset.name, requested_spec));
+            continue;
+        }
+
+        enforce_license_policy(asset, context.settings)?;
+        let mut handle = context.reporter.begin_operation(
+            OperationKind::Install,
+            format!("global:{}:{}", asset.kind, asset.name),
+        );
+        handle.set_status(OperationStatus::Running);
+        let result = install_resolved_asset(
+            asset,
+            context.client,
+            context.token,
+            context.repo_root,
+            Some(context.reporter),
+            context.source_rules,
+        )
+        .await;
+        handle.finish(if result.is_ok() {
+            OperationStatus::Succeeded
+        } else {
+            OperationStatus::Failed
+        });
+        result?;
+        seeded += 1;
+    }
+
+    if !plugin_ops.is_empty() {
+        seeded += run_plugin_operations(plugin_ops).await?.installed;
+    }
+
+    Ok(seeded)
+}
+
 #[cfg(test)]
 mod tests {
     use cpm_types::{AssetOwnership, AssetSource};
@@ -422,6 +620,7 @@ mod tests {
                 transport: None,
                 env: vec![],
                 args: vec![],
+                tools: vec![],
                 engine: None,
             },
             resolved_rev: "abc123".to_owned(),
@@ -546,5 +745,20 @@ mod tests {
         let stale = stale_non_plugin_assets(&existing, &new_lock, None, &[], Some(Scope::Global));
         assert_eq!(stale.len(), 1);
         assert_eq!(stale[0].name, "global-skill");
+    }
+
+    #[test]
+    fn stale_assets_include_previously_active_group_after_group_switch() {
+        let mut existing = Lockfile::new();
+        let mut dev_skill = make_test_asset("dev-skill", AssetKind::Skill, Scope::Local);
+        dev_skill.source.groups = "dev".into();
+        existing.skills.push(dev_skill.clone());
+
+        let mut new_lock = Lockfile::new();
+        new_lock.skills.push(dev_skill);
+
+        let stale = stale_non_plugin_assets(&existing, &new_lock, Some("research"), &[], None);
+        assert_eq!(stale.len(), 1);
+        assert_eq!(stale[0].name, "dev-skill");
     }
 }

@@ -303,6 +303,10 @@ pub struct PartialSettings {
     /// Whether `cpm sync` should compile workflow markdown into `.lock.yml` files.
     #[serde(default, skip_serializing_if = "Option::is_none")]
     pub auto_compile_workflows: Option<bool>,
+    /// The currently active group to use when `cpm sync` is run without `--group`.
+    /// Set via `cpm activate <group>` and cleared via `cpm activate --clear`.
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub active_group: Option<String>,
 }
 
 impl PartialSettings {
@@ -317,6 +321,7 @@ impl PartialSettings {
             && self.auto_groups.is_none()
             && self.verify_on_sync.is_none()
             && self.auto_compile_workflows.is_none()
+            && self.active_group.is_none()
     }
 }
 
@@ -638,6 +643,9 @@ pub struct AssetSource {
     /// Extra command-line arguments for the MCP server.
     #[serde(default)]
     pub args: Vec<String>,
+    /// Optional MCP tool filters for cloud-agent style exports.
+    #[serde(default, skip_serializing_if = "Vec::is_empty")]
+    pub tools: Vec<String>,
     /// Workflow engine override (workflow assets only).
     #[serde(default, skip_serializing_if = "Option::is_none")]
     pub engine: Option<WorkflowEngine>,

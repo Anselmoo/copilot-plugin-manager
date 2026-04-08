@@ -326,6 +326,178 @@ pub fn mcp_json(asset: &ResolvedAsset) -> Option<Value> {
     Some(json)
 }
 
+/// Build the cloud-agent MCP server entry for one MCP asset.
+///
+/// Local process transports are rendered as `{ "type": "local", "command": ...,
+/// "args": [...], "tools": [...] }` under the top-level `"mcpServers"` map.
+/// Remote transports continue to use their protocol type and URL.
+pub fn cloud_agent_mcp_server_entry(asset: &ResolvedAsset) -> Option<Value> {
+    let transport = asset.source.transport.as_ref()?;
+
+    let env_obj: serde_json::Map<String, Value> = asset
+        .source
+        .env
+        .iter()
+        .map(|spec| {
+            let v = match &spec.value {
+                EnvValue::Literal(v) => v.clone(),
+                EnvValue::FromEnv(var) => format!("${{env:{var}}}"),
+            };
+            (spec.key.clone(), Value::String(v))
+        })
+        .collect();
+    let tools: Vec<Value> = if asset.source.tools.is_empty() {
+        vec![Value::String("*".into())]
+    } else {
+        asset
+            .source
+            .tools
+            .iter()
+            .cloned()
+            .map(Value::String)
+            .collect()
+    };
+
+    let entry = match transport {
+        McpTransport::Http { url } => {
+            if env_obj.is_empty() {
+                json!({ "type": "http", "url": url, "tools": tools })
+            } else {
+                json!({ "type": "http", "url": url, "tools": tools, "env": env_obj })
+            }
+        }
+        McpTransport::Sse { url } => {
+            if env_obj.is_empty() {
+                json!({ "type": "sse", "url": url, "tools": tools })
+            } else {
+                json!({ "type": "sse", "url": url, "tools": tools, "env": env_obj })
+            }
+        }
+        McpTransport::Npx {
+            package,
+            entrypoint,
+            args,
+        } => {
+            let mut full_args: Vec<Value> = vec![Value::String("-y".into())];
+            if let Some(entrypoint) = entrypoint {
+                full_args.push(Value::String("--package".into()));
+                full_args.push(Value::String(package.clone()));
+                full_args.push(Value::String(entrypoint.clone()));
+            } else {
+                full_args.push(Value::String(package.clone()));
+            }
+            full_args.extend(args.iter().cloned().map(Value::String));
+            json!({
+                "type": "local",
+                "command": "npx",
+                "args": full_args,
+                "tools": tools,
+                "env": env_obj,
+            })
+        }
+        McpTransport::Uvx {
+            package,
+            entrypoint,
+            args,
+        } => {
+            let mut full_args: Vec<Value> = if let Some(entrypoint) = entrypoint {
+                vec![
+                    Value::String("--from".into()),
+                    Value::String(package.clone()),
+                    Value::String(entrypoint.clone()),
+                ]
+            } else {
+                vec![Value::String(package.clone())]
+            };
+            full_args.extend(args.iter().cloned().map(Value::String));
+            json!({
+                "type": "local",
+                "command": "uvx",
+                "args": full_args,
+                "tools": tools,
+                "env": env_obj,
+            })
+        }
+        McpTransport::Docker { image, args } => {
+            let mut full_args: Vec<Value> = vec![
+                Value::String("run".into()),
+                Value::String("--rm".into()),
+                Value::String("-i".into()),
+                Value::String(image.clone()),
+            ];
+            full_args.extend(args.iter().cloned().map(Value::String));
+            json!({
+                "type": "local",
+                "command": "docker",
+                "args": full_args,
+                "tools": tools,
+                "env": env_obj,
+            })
+        }
+        McpTransport::Binary { args, .. } => {
+            let cmd = asset.bin_path.as_deref()?;
+            json!({
+                "type": "local",
+                "command": cmd,
+                "args": args,
+                "tools": tools,
+                "env": env_obj,
+            })
+        }
+        McpTransport::Path { path, args } => {
+            let cmd = path.to_string_lossy().into_owned();
+            json!({
+                "type": "local",
+                "command": cmd,
+                "args": args,
+                "tools": tools,
+                "env": env_obj,
+            })
+        }
+        McpTransport::Script { command, args } => {
+            if args.is_empty() {
+                json!({
+                    "type": "local",
+                    "command": "sh",
+                    "args": ["-c", command],
+                    "tools": tools,
+                    "env": env_obj,
+                })
+            } else {
+                json!({
+                    "type": "local",
+                    "command": command,
+                    "args": args,
+                    "tools": tools,
+                    "env": env_obj,
+                })
+            }
+        }
+    };
+
+    Some(entry)
+}
+
+/// Build a cloud-agent configuration document for a set of MCP assets.
+pub fn cloud_agent_mcp_config<'a>(
+    assets: impl IntoIterator<Item = &'a ResolvedAsset>,
+) -> Result<Value, CpmError> {
+    let mut servers = serde_json::Map::new();
+    for asset in assets {
+        if asset.kind != AssetKind::Mcp {
+            continue;
+        }
+        let Some(entry) = cloud_agent_mcp_server_entry(asset) else {
+            return Err(CpmError::InvalidConfig {
+                key: format!("mcps.{}", asset.name),
+                reason: "cannot export this MCP to cloud-agent config until its runtime command is fully resolved".to_owned(),
+            });
+        };
+        servers.insert(asset.name.clone(), entry);
+    }
+    Ok(json!({ "mcpServers": servers }))
+}
+
 /// Install a single asset at the given `install_root`.
 ///
 /// For MCP assets the aggregate Copilot config file is updated:
@@ -622,6 +794,7 @@ mod tests {
                 transport: Some(transport),
                 env,
                 args: vec![],
+                tools: vec![],
                 engine: None,
             },
             resolved_rev: "a".repeat(40),
@@ -900,6 +1073,45 @@ mod tests {
     }
 
     #[test]
+    fn cloud_agent_entry_uses_local_type_and_tools() {
+        let mut asset = make_mcp_asset(
+            "serena",
+            McpTransport::Uvx {
+                package: "git+https://github.com/oraios/serena".into(),
+                entrypoint: Some("serena".into()),
+                args: vec!["start-mcp-server".into()],
+            },
+            vec![],
+        );
+        asset.source.tools = vec!["*".into()];
+        let entry = cloud_agent_mcp_server_entry(&asset).expect("entry");
+        assert_eq!(entry["type"], "local");
+        assert_eq!(entry["command"], "uvx");
+        let args = entry["args"].as_array().expect("args");
+        assert_eq!(args[0], "--from");
+        assert_eq!(args[1], "git+https://github.com/oraios/serena");
+        assert_eq!(args[2], "serena");
+        assert_eq!(args[3], "start-mcp-server");
+        assert_eq!(entry["tools"][0], "*");
+    }
+
+    #[test]
+    fn cloud_agent_http_entry_preserves_tools() {
+        let mut asset = make_mcp_asset(
+            "remote-http",
+            McpTransport::Http {
+                url: "https://example.com/mcp".into(),
+            },
+            vec![],
+        );
+        asset.source.tools = vec!["fetch".into()];
+        let entry = cloud_agent_mcp_server_entry(&asset).expect("entry");
+        assert_eq!(entry["type"], "http");
+        assert_eq!(entry["url"], "https://example.com/mcp");
+        assert_eq!(entry["tools"][0], "fetch");
+    }
+
+    #[test]
     fn install_mcp_writes_vscode_mcp_json() {
         let dir = TempDir::new().expect("tempdir");
         let asset = make_mcp_asset(
@@ -1081,6 +1293,7 @@ mod tests {
                 transport: None,
                 env: vec![],
                 args: vec![],
+                tools: vec![],
                 engine: None,
             },
             resolved_rev: "a".repeat(40),

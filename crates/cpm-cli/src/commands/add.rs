@@ -31,6 +31,26 @@ use super::{
     run_plugin_operations, style_success, upsert_plugin_lock_entry, PluginAction, PluginOperation,
 };
 
+fn mcp_install_summary(name: &str, scope: Scope, group: &str) {
+    let scope_name = scope.to_string();
+    println!(
+        "{} added this MCP to group '{}' for {} scope",
+        style_success("✓"),
+        group,
+        scope_name
+    );
+    println!(
+        "{} installed mcp '{}' into {}",
+        style_success("✓"),
+        name,
+        if scope == Scope::Local {
+            ".vscode/mcp.json"
+        } else {
+            "~/.copilot/mcp-config.json"
+        }
+    );
+}
+
 /// Arguments for `cpm add`.
 #[derive(Debug, Args)]
 pub struct AddArgs {
@@ -162,6 +182,7 @@ pub async fn run(args: AddArgs) -> Result<(), CpmError> {
             transport: None,
             env: vec![],
             args: vec![],
+            tools: vec![],
             engine: None,
         };
         let installed_before = cpm_core::plugin_index::read_installed_plugins()?;
@@ -270,6 +291,7 @@ pub async fn run(args: AddArgs) -> Result<(), CpmError> {
                     transport: None,
                     env: vec![],
                     args: vec![],
+                    tools: vec![],
                     engine: None,
                 },
             )
@@ -334,6 +356,9 @@ pub async fn run(args: AddArgs) -> Result<(), CpmError> {
             "✓ {action} {kind} '{name}' in {} and materialized it on disk",
             manifest_path.display()
         );
+        if kind == AssetKind::Mcp {
+            mcp_install_summary(&name, resolved_scope, &args.group);
+        }
     }
     if let Some(McpTransport::Docker { image, .. }) = asset_source.transport.as_ref() {
         if docker_image_pin(image).is_none() {
@@ -641,6 +666,7 @@ fn normalize_mcp_source(
             transport,
             env,
             args: args.command_args.clone(),
+            tools: vec![],
             engine: None,
         },
     ))
@@ -993,6 +1019,7 @@ mod tests {
             transport: None,
             env: vec![],
             args: vec![],
+            tools: vec![],
             engine: None,
         };
 
@@ -1016,6 +1043,7 @@ mod tests {
             transport: None,
             env: vec![],
             args: vec![],
+            tools: vec![],
             engine: None,
         };
 
@@ -1046,6 +1074,7 @@ mod tests {
             }),
             env: vec![],
             args: vec![],
+            tools: vec![],
             engine: None,
         };
 

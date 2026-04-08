@@ -12,10 +12,14 @@ default_scope = "local"
 [agents]
 
 [mcps]
+serena = { rev = "946fdd558f7153c88cd648dd611f95ebb63951e5", type = "stdio", runner = "uvx", package = "git+https://github.com/oraios/serena", entrypoint = "serena", args = [
+    "start-mcp-server",
+], tools = [
+    "*",
+] }
 
 [hooks]
 
 [workflows]
 
 [instructions]
-

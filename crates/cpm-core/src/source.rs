@@ -231,9 +231,35 @@ async fn resolve_pinned_rev_with_api_base(
 pub async fn resolve_package_transport_version(
     client: &reqwest::Client,
     transport: &cpm_types::McpTransport,
+    token: Option<&str>,
+    explicit_rev: Option<&str>,
+    source_rules: &IndexMap<String, SourceRule>,
+) -> Result<Option<String>, CpmError> {
+    resolve_package_transport_version_with_api_base(
+        client,
+        transport,
+        token,
+        explicit_rev,
+        "https://api.github.com",
+        source_rules,
+    )
+    .await
+}
+
+async fn resolve_package_transport_version_with_api_base(
+    client: &reqwest::Client,
+    transport: &cpm_types::McpTransport,
+    token: Option<&str>,
+    explicit_rev: Option<&str>,
+    api_base: &str,
     source_rules: &IndexMap<String, SourceRule>,
 ) -> Result<Option<String>, CpmError> {
     match transport {
+        _ if explicit_rev.is_some()
+            && !matches!(transport, cpm_types::McpTransport::Uvx { package, .. } if is_git_transport_package(package)) =>
+        {
+            Ok(explicit_rev.map(ToOwned::to_owned))
+        }
         cpm_types::McpTransport::Npx { package, .. } => resolve_cached_text(
             &format!("npm:{package}"),
             Duration::from_secs(300),
@@ -241,13 +267,31 @@ pub async fn resolve_package_transport_version(
         )
         .await
         .map(Some),
-        cpm_types::McpTransport::Uvx { package, .. } => resolve_cached_text(
-            &format!("pypi:{package}"),
-            Duration::from_secs(300),
-            || async move { resolve_pypi_version(client, package, source_rules).await },
-        )
-        .await
-        .map(Some),
+        cpm_types::McpTransport::Uvx { package, .. } => {
+            if is_git_transport_package(package) {
+                resolve_git_transport_package_rev(
+                    client,
+                    token,
+                    package,
+                    explicit_rev,
+                    api_base,
+                    source_rules,
+                )
+                .await
+                .map(Some)
+            } else {
+                if let Some(rev) = explicit_rev {
+                    return Ok(Some(rev.to_owned()));
+                }
+                resolve_cached_text(
+                    &format!("pypi:{package}"),
+                    Duration::from_secs(300),
+                    || async move { resolve_pypi_version(client, package, source_rules).await },
+                )
+                .await
+                .map(Some)
+            }
+        }
         _ => Ok(None),
     }
 }
@@ -483,9 +527,58 @@ struct GitHubRepoSource {
     git_ref: String,
 }
 
+#[derive(Debug, Clone, PartialEq, Eq)]
+struct GitHubGitPackageSource {
+    owner: String,
+    repo: String,
+    git_ref: Option<String>,
+}
+
 #[derive(Debug, Deserialize)]
 struct GitHubCommit {
     sha: String,
+}
+
+#[derive(Debug, Deserialize)]
+struct GitHubRepository {
+    default_branch: String,
+}
+
+fn is_git_transport_package(package: &str) -> bool {
+    package.starts_with("git+https://") || package.starts_with("git+http://")
+}
+
+fn github_git_package_source(package: &str) -> Option<GitHubGitPackageSource> {
+    let raw_url = package.strip_prefix("git+")?;
+    let url = Url::parse(raw_url).ok()?;
+    if url.host_str()? != "github.com" {
+        return None;
+    }
+
+    let segments: Vec<_> = url
+        .path_segments()
+        .map(|segments| segments.filter(|segment| !segment.is_empty()).collect())
+        .unwrap_or_default();
+    if segments.len() != 2 {
+        return None;
+    }
+
+    let owner = segments[0].to_owned();
+    let repo_segment = segments[1];
+    let (repo_segment, git_ref) = match repo_segment.split_once('@') {
+        Some((repo, git_ref)) if !git_ref.is_empty() => (repo, Some(git_ref.to_owned())),
+        _ => (repo_segment, None),
+    };
+    let repo = repo_segment.strip_suffix(".git").unwrap_or(repo_segment);
+    if repo.is_empty() {
+        return None;
+    }
+
+    Some(GitHubGitPackageSource {
+        owner,
+        repo: repo.to_owned(),
+        git_ref,
+    })
 }
 
 fn github_repo_source(source: &str) -> Option<GitHubRepoSource> {
@@ -513,6 +606,57 @@ fn github_repo_source(source: &str) -> Option<GitHubRepoSource> {
         }),
         _ => None,
     }
+}
+
+async fn resolve_git_transport_package_rev(
+    client: &reqwest::Client,
+    token: Option<&str>,
+    package: &str,
+    explicit_rev: Option<&str>,
+    api_base: &str,
+    source_rules: &IndexMap<String, SourceRule>,
+) -> Result<String, CpmError> {
+    let Some(repo) = github_git_package_source(package) else {
+        if explicit_rev.is_some_and(is_full_commit_sha) {
+            return Ok(explicit_rev.unwrap_or_default().to_owned());
+        }
+        return Err(CpmError::InvalidSource {
+            input: package.to_owned(),
+            reason: "git-backed uvx packages must point to github.com or specify a full 40-character commit SHA in `rev`".to_owned(),
+        });
+    };
+
+    let requested_ref = match explicit_rev {
+        Some(rev) => rev.to_owned(),
+        None => match repo.git_ref.as_deref() {
+            Some(rev) => rev.to_owned(),
+            None => {
+                resolve_github_default_branch(
+                    client,
+                    token,
+                    api_base,
+                    &repo.owner,
+                    &repo.repo,
+                    source_rules,
+                )
+                .await?
+            }
+        },
+    };
+    if is_full_commit_sha(&requested_ref) {
+        return Ok(requested_ref);
+    }
+
+    resolve_github_commit_sha(
+        client,
+        token,
+        api_base,
+        &repo.owner,
+        &repo.repo,
+        &requested_ref,
+        source_rules,
+    )
+    .await
 }
 
 async fn resolve_github_commit_sha(
@@ -556,6 +700,45 @@ async fn resolve_github_commit_sha(
     let commit: GitHubCommit = response.error_for_status()?.json().await?;
     write_cache_value(&cache_key, &commit.sha)?;
     Ok(commit.sha)
+}
+
+async fn resolve_github_default_branch(
+    client: &reqwest::Client,
+    token: Option<&str>,
+    api_base: &str,
+    owner: &str,
+    repo: &str,
+    source_rules: &IndexMap<String, SourceRule>,
+) -> Result<String, CpmError> {
+    let cache_key = format!("github-default-branch:{owner}/{repo}");
+    if let Some(cached) = read_cache_value(&cache_key, Duration::from_secs(300))? {
+        return Ok(cached);
+    }
+
+    let url = format!("{api_base}/repos/{owner}/{repo}");
+    let target = rewrite_source_url(&url, source_rules);
+    let mut request = client
+        .get(&target.url)
+        .header(header::USER_AGENT, env!("CARGO_PKG_NAME"));
+    if let Some(token) = target.token.as_deref().or(token) {
+        request = request.bearer_auth(token);
+    }
+
+    let response = request.send().await?;
+    let status = response.status();
+    if status == reqwest::StatusCode::UNAUTHORIZED || status == reqwest::StatusCode::FORBIDDEN {
+        return Err(CpmError::AuthRequired { url: target.url });
+    }
+    if status == reqwest::StatusCode::NOT_FOUND {
+        return Err(CpmError::InvalidSource {
+            input: format!("https://github.com/{owner}/{repo}"),
+            reason: "GitHub repository could not be resolved".to_owned(),
+        });
+    }
+
+    let repo: GitHubRepository = response.error_for_status()?.json().await?;
+    write_cache_value(&cache_key, &repo.default_branch)?;
+    Ok(repo.default_branch)
 }
 
 #[derive(Debug, Deserialize)]
@@ -1394,6 +1577,71 @@ mod tests {
             resolved.as_deref(),
             Some("0123456789abcdef0123456789abcdef01234567")
         );
+    }
+
+    #[tokio::test]
+    async fn resolves_git_backed_uvx_package_to_default_branch_commit() {
+        let server = MockServer::start().await;
+        Mock::given(method("GET"))
+            .and(path("/repos/test-org/serena-source-test"))
+            .respond_with(ResponseTemplate::new(200).set_body_json(serde_json::json!({
+                "default_branch": "main"
+            })))
+            .mount(&server)
+            .await;
+        Mock::given(method("GET"))
+            .and(path("/repos/test-org/serena-source-test/commits/main"))
+            .respond_with(ResponseTemplate::new(200).set_body_json(serde_json::json!({
+                "sha": "0123456789abcdef0123456789abcdef01234567"
+            })))
+            .mount(&server)
+            .await;
+
+        let client = reqwest::Client::new();
+        let source_rules = IndexMap::new();
+        let transport = cpm_types::McpTransport::Uvx {
+            package: "git+https://github.com/test-org/serena-source-test".to_owned(),
+            entrypoint: Some("serena".to_owned()),
+            args: vec![],
+        };
+        let resolved = resolve_package_transport_version_with_api_base(
+            &client,
+            &transport,
+            None,
+            None,
+            &server.uri(),
+            &source_rules,
+        )
+        .await
+        .expect("resolve git-backed uvx package");
+
+        assert_eq!(
+            resolved.as_deref(),
+            Some("0123456789abcdef0123456789abcdef01234567")
+        );
+    }
+
+    #[tokio::test]
+    async fn rejects_non_github_git_backed_uvx_without_full_sha() {
+        let client = reqwest::Client::new();
+        let source_rules = IndexMap::new();
+        let transport = cpm_types::McpTransport::Uvx {
+            package: "git+https://example.com/custom/server".to_owned(),
+            entrypoint: Some("server".to_owned()),
+            args: vec![],
+        };
+        let err = resolve_package_transport_version_with_api_base(
+            &client,
+            &transport,
+            None,
+            None,
+            "http://127.0.0.1:9",
+            &source_rules,
+        )
+        .await
+        .expect_err("unsupported git host should fail clearly");
+
+        assert!(matches!(err, CpmError::InvalidSource { .. }));
     }
 
     #[test]
