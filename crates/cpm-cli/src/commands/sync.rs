@@ -346,20 +346,24 @@ pub async fn run(args: SyncArgs) -> Result<(), CpmError> {
     // into the current environment.  This ensures that a fresh project or
     // machine gets all globally-managed assets even if they were originally
     // added from a different repository.
+    let installed_plugin_names: HashSet<String> = installed_plugins
+        .iter()
+        .filter_map(|plugin| plugin.name.clone())
+        .collect();
+    let global_seed_context = GlobalSeedContext {
+        repo_root,
+        client: &client,
+        token: token.as_deref(),
+        settings: &runtime.settings,
+        source_rules: &runtime.source_rules,
+        installed_plugin_names: &installed_plugin_names,
+        reporter: &reporter,
+    };
     let global_seeded = install_global_claims(
         &global_lockfile,
         &lockfile,
-        repo_root,
-        &client,
-        token.as_deref(),
         scope_filter,
-        &runtime.settings,
-        &runtime.source_rules,
-        &installed_plugins
-            .iter()
-            .filter_map(|plugin| plugin.name.clone())
-            .collect(),
-        &reporter,
+        &global_seed_context,
     )
     .await?;
 
@@ -488,6 +492,16 @@ impl From<ScopeArg> for Scope {
     }
 }
 
+struct GlobalSeedContext<'a> {
+    repo_root: &'a std::path::Path,
+    client: &'a reqwest::Client,
+    token: Option<&'a str>,
+    settings: &'a cpm_core::config::EffectiveSettings,
+    source_rules: &'a indexmap::IndexMap<String, SourceRule>,
+    installed_plugin_names: &'a HashSet<String>,
+    reporter: &'a ProgressReporter,
+}
+
 /// Materialize globally-claimed assets from other repositories into the
 /// current environment.
 ///
@@ -502,14 +516,8 @@ impl From<ScopeArg> for Scope {
 async fn install_global_claims(
     global_lockfile: &GlobalLockfile,
     local_lockfile: &Lockfile,
-    repo_root: &std::path::Path,
-    client: &reqwest::Client,
-    token: Option<&str>,
     scope_filter: Option<Scope>,
-    settings: &cpm_core::config::EffectiveSettings,
-    source_rules: &indexmap::IndexMap<String, SourceRule>,
-    installed_plugin_names: &HashSet<String>,
-    reporter: &ProgressReporter,
+    context: &GlobalSeedContext<'_>,
 ) -> Result<usize, CpmError> {
     if scope_filter == Some(Scope::Local) {
         return Ok(0);
@@ -547,10 +555,10 @@ async fn install_global_claims(
     let mut plugin_ops = Vec::new();
     for asset in &to_seed {
         if plugin_asset_is_delegated(asset) {
-            if installed_plugin_names.contains(&asset.name) {
+            if context.installed_plugin_names.contains(&asset.name) {
                 continue;
             }
-            enforce_license_policy(asset, settings)?;
+            enforce_license_policy(asset, context.settings)?;
             let requested_spec = plugin_requested_spec(&asset.name, &asset.source);
             log_delegated_plugin_strategy(
                 "sync",
@@ -562,19 +570,19 @@ async fn install_global_claims(
             continue;
         }
 
-        enforce_license_policy(asset, settings)?;
-        let mut handle = reporter.begin_operation(
+        enforce_license_policy(asset, context.settings)?;
+        let mut handle = context.reporter.begin_operation(
             OperationKind::Install,
             format!("global:{}:{}", asset.kind, asset.name),
         );
         handle.set_status(OperationStatus::Running);
         let result = install_resolved_asset(
             asset,
-            client,
-            token,
-            repo_root,
-            Some(reporter),
-            source_rules,
+            context.client,
+            context.token,
+            context.repo_root,
+            Some(context.reporter),
+            context.source_rules,
         )
         .await;
         handle.finish(if result.is_ok() {

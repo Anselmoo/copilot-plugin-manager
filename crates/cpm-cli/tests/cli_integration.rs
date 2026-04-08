@@ -2490,7 +2490,7 @@ fn reset_drops_global_claim_via_canonicalized_repo_path() {
 
         // Write a minimal manifest with a global skill.
         let manifest_toml =
-            format!("[skills]\nshared = {{ path = \"skills/shared\", scope = \"global\" }}\n");
+            "[skills]\nshared = { path = \"skills/shared\", scope = \"global\" }\n".to_string();
         std::fs::write(real_repo.path().join("cpm.toml"), manifest_toml).expect("write manifest");
 
         // Write a lockfile with the global skill entry so reset has something to remove.
