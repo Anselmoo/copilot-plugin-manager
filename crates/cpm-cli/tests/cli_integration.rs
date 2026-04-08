@@ -31,6 +31,7 @@ fn set_isolated_home<'a>(cmd: &'a mut Command, home: &Path) -> &'a mut Command {
     cmd.env("HOME", home)
         .env("USERPROFILE", home)
         .env("APPDATA", home.join("AppData").join("Roaming"))
+        .env("XDG_CONFIG_HOME", home.join(".config"))
 }
 
 fn normalized_path_string(path: &Path) -> String {
