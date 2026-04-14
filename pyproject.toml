@@ -45,7 +45,7 @@ Repository = "https://github.com/Anselmoo/copilot-plugin-manager"
 [dependency-groups]
 dev = [
   "poethepoet>=0.37,<0.38",
-  "pytest>=8.3,<9",
+  "pytest>=8.3,<10",
   "pytest-cov>=7.1.0",
   "repo-release-tools>=0.1,<0.2",
   "ruff>=0.15,<0.16",
